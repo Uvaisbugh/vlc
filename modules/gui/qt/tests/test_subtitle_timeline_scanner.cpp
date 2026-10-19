@@ -67,7 +67,11 @@ private slots:
         check(result.cues[2], 7, 8.25);
     }
     void readsEmbeddedSubRipThroughAvformat() {
-        if (!module_exists("avformat")) QSKIP("avformat demux unavailable");
+        module_t **demuxers = nullptr;
+        size_t matches = 0;
+        const auto count = vlc_module_match("demux", "avformat", true, &demuxers, &matches);
+        free(demuxers);
+        if (count <= 0) QSKIP("avformat demux unavailable");
         // Two Matroska S_TEXT/UTF8 tracks, without audio or video. Track zero
         // has three overlapping cues; track one has one Unicode cue.
         const auto bytes = QByteArray::fromBase64(
