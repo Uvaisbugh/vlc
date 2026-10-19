@@ -32,12 +32,19 @@ MLFoldersBaseModel::MLFoldersBaseModel( QObject *parent )
             m_mediaLib->unregisterEventListener(cb);
     })
 {
-    connect( this , &MLFoldersBaseModel::onMLEntryPointModified , this , &MLFoldersBaseModel::update );
+    m_refreshTimer.setSingleShot(true);
+    m_refreshTimer.setInterval(100);
+    connect(&m_refreshTimer, &QTimer::timeout, this, &MLFoldersBaseModel::update);
+    connect(this, &MLFoldersBaseModel::onMLEntryPointModified, this, [this] {
+        // Coalesce folder events while the library imports or removes media.
+        m_refreshTimer.start();
+    });
 }
 
 MLFoldersBaseModel::EntryPoint::EntryPoint( const vlc_ml_folder_t& entryPoint)
     : mrl(entryPoint.psz_mrl)
     , banned(entryPoint.b_banned)
+    , containsAudio(entryPoint.i_nb_audio > 0)
 {
 }
 
@@ -76,6 +83,8 @@ QVariant MLFoldersBaseModel::data( const QModelIndex &index ,
             return m_mrls[index.row()].banned;
         case MRL:
             return m_mrls[index.row()].mrl;
+        case ContainsAudio:
+            return m_mrls[index.row()].containsAudio;
         case Qt::DisplayRole:
         case DisplayUrl:
         {
@@ -94,7 +103,8 @@ QHash<int, QByteArray> MLFoldersBaseModel::roleNames() const
     return {
         {DisplayUrl, QByteArrayLiteral("display_url")},
         {Banned, QByteArrayLiteral("banned")},
-        {MRL, QByteArrayLiteral("url")}
+        {MRL, QByteArrayLiteral("url")},
+        {ContainsAudio, QByteArrayLiteral("contains_audio")}
     };
 }
 
@@ -120,7 +130,9 @@ void MLFoldersBaseModel::onMlEvent( void* data , const vlc_ml_event_t* event )
 {
     auto self = static_cast<MLFoldersBaseModel *>( data );
     if ( event->i_type == VLC_ML_EVENT_ENTRY_POINT_ADDED || event->i_type == VLC_ML_EVENT_ENTRY_POINT_REMOVED ||
-         event->i_type == VLC_ML_EVENT_ENTRY_POINT_UNBANNED || event->i_type == VLC_ML_EVENT_ENTRY_POINT_BANNED  )
+         event->i_type == VLC_ML_EVENT_ENTRY_POINT_UNBANNED || event->i_type == VLC_ML_EVENT_ENTRY_POINT_BANNED ||
+         event->i_type == VLC_ML_EVENT_FOLDER_ADDED || event->i_type == VLC_ML_EVENT_FOLDER_UPDATED ||
+         event->i_type == VLC_ML_EVENT_FOLDER_DELETED )
     {
         if (!self->failed( event ))
             emit self->onMLEntryPointModified( QPrivateSignal() );
@@ -129,8 +141,10 @@ void MLFoldersBaseModel::onMlEvent( void* data , const vlc_ml_event_t* event )
 
 void MLFoldersBaseModel::updateImpl(vlc_ml_folder_list_t* (*folderListFunc)( vlc_medialibrary_t* p_ml, const vlc_ml_query_params_t* params ))
 {
-    if (m_updatePending)
+    if (m_updatePending) {
+        m_updateAgain = true;
         return;
+    }
 
     m_updatePending = true;
     struct Ctx {
@@ -147,6 +161,24 @@ void MLFoldersBaseModel::updateImpl(vlc_ml_folder_list_t* (*folderListFunc)( vlc
                 ctx.r.emplace_back( entrypoints->p_items[i] );
             vlc_ml_release( entrypoints );
         }
+        if (folderListFunc == vlc_ml_list_entry_points) {
+            // Use indexed descendants, without reading files or probing drives.
+            ml_unique_ptr<vlc_ml_folder_list_t> audioFolders(
+                vlc_ml_list_folders_by_type(ml, nullptr, VLC_ML_MEDIA_TYPE_AUDIO));
+            if (audioFolders) {
+                for (auto& root : ctx.r) {
+                    const auto rootUrl = QUrl::fromEncoded(root.mrl.toUtf8()).adjusted(QUrl::StripTrailingSlash);
+                    for (const auto& folder : ml_range_iterate<vlc_ml_folder_t>(audioFolders)) {
+                        if (!folder.psz_mrl) continue;
+                        const auto url = QUrl::fromEncoded(folder.psz_mrl).adjusted(QUrl::StripTrailingSlash);
+                        if (url == rootUrl || rootUrl.isParentOf(url)) {
+                            root.containsAudio = true;
+                            break;
+                        }
+                    }
+                }
+            }
+        }
     },
     //UI thread
     [this, publishRoots = folderListFunc == vlc_ml_list_entry_points](quint64, Ctx& ctx)
@@ -159,6 +191,10 @@ void MLFoldersBaseModel::updateImpl(vlc_ml_folder_list_t* (*folderListFunc)( vlc
             QStringList roots;
             for (const auto& entry : m_mrls) if (!entry.banned && !entry.mrl.isEmpty()) roots.append(entry.mrl);
             m_mediaLib->setFolderRoots(std::move(roots));
+        }
+        if (m_updateAgain) {
+            m_updateAgain = false;
+            m_refreshTimer.start();
         }
     });
 }

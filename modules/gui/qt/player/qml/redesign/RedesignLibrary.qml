@@ -32,6 +32,8 @@ RedesignLibraryView {
     property var registeredFolders: []
     readonly property var folderTrail: folderPath.trail(currentFolder, registeredFolders)
     property string musicSection: ""
+    readonly property bool showingSongFolders: category === 2 && musicSection === "Songs" && !currentFolder && !selectedCollection && !homeSection
+    onShowingSongFoldersChanged: refreshFolders()
     property string selectedName: ""
     property var backStack: []
     property var forwardStack: []
@@ -148,6 +150,7 @@ RedesignLibraryView {
     sortFields: {
         if (homeSectionsVisible || category === 2 && !musicSection && !currentFolder) return []
         if (currentFolder) return category === 1 ? ["played", "title", "insertion", "uri"] : ["title", "insertion", "uri"]
+        if (showingSongFolders) return ["title", "uri"]
         if (homeSection === "folders" || category === 1) return ["title", "uri"]
         if (homeSection === "playlists" || homeSection === "artists") return ["title"]
         if (homeSection === "watching") return ["played", "insertion", "title", "uri"]
@@ -179,7 +182,7 @@ RedesignLibraryView {
     ]
     itemCount: homeSectionsVisible ? recentVideo.maximumCount + recentAudio.maximumCount + frequentFolders.count + frequentPlaylists.count + playedArtists.maximumCount : currentFolder ? (folderLoader.item ? folderLoader.item.count : 0) : activeModel && activeModel.count !== undefined ? activeModel.count : libraryMediaCount
     loading: !!currentFolder && !!folderLoader.item && folderLoader.item.watchStatesPending
-    readonly property var activeModel: homeSection ? homeModels[homeSection] : currentFolder ? folderLoader.item : selectedPlaylist ? playlistMedia : selectedCollection ? collectionTracks : category === 4 ? playlists : category === 2 ? (musicSection === "" ? musicCategories : musicSection === "Albums" ? albums : musicSection === "Artists" ? artists : musicSection === "Genres" ? genres : music) : category === 3 ? streams : category === 0 || category === 5 ? recent : folderEntries
+    readonly property var activeModel: homeSection ? homeModels[homeSection] : currentFolder ? folderLoader.item : selectedPlaylist ? playlistMedia : selectedCollection ? collectionTracks : category === 4 ? playlists : category === 2 ? (musicSection === "" ? musicCategories : musicSection === "Albums" ? albums : musicSection === "Artists" ? artists : musicSection === "Genres" ? genres : folderEntries) : category === 3 ? streams : category === 0 || category === 5 ? recent : folderEntries
     mediaModel: activeModel
     breadcrumbs: {
         const result = [{label: [qsTr("Home"), qsTr("Videos"), qsTr("Music"), qsTr("Network streams"), qsTr("Playlists"), qsTr("Recent files")][category], kind: "category"}]
@@ -194,7 +197,7 @@ RedesignLibraryView {
     canGoBack: backStack.length > 0
     canGoForward: forwardStack.length > 0
     defaultItemIcon: homeSection === "artists" ? "artist" : homeSection === "listening" ? "music" : category === 4 && !selectedPlaylist ? "playlist" : category === 2 ? "music" : "video"
-    showingFolders: category === 1 && !currentFolder || homeSection === "folders"
+    showingFolders: category === 1 && !currentFolder || showingSongFolders || homeSection === "folders"
     showAddRow: category > 0 && category < 5 && !selectedCollection && (category !== 1 || !currentFolder || (folderLoader.item && folderLoader.item.directoryCount > 0))
     canEnqueue: !(category === 2 && musicSection === "")
     emptyText: homeSection ? homeSections.find(section => section.key === homeSection).emptyText : selectedPlaylist ? qsTr("This playlist is empty.") : category === 4 ? qsTr("Create a playlist to collect your favorite media.") : category === 3 ? qsTr("Open a network stream to add it here.") : qsTr("Add a folder to your library to see your media here.")
@@ -263,9 +266,9 @@ RedesignLibraryView {
             const isDirectory = folder.get(index, "fileIsDir")
             return pinTarget(isDirectory ? "folder" : "file", folderPath.location(url), folder.get(index, "fileName"), category, isDirectory ? "folder" : category === 2 ? "music" : "video", isDirectory ? "" : folder.get(index, "thumbnail"), "")
         }
-        if (category === 1) {
+        if (category === 1 || showingSongFolders) {
             const item = folderEntries.get(index)
-            return item ? pinTarget("folder", folderPath.location(item.fileUrl), item.fileName, 1, "folder", "", "") : null
+            return item ? pinTarget("folder", folderPath.location(item.fileUrl), item.fileName, category, "folder", "", "") : null
         }
         if (category === 2 && !musicSection) {
             const section = ["Songs", "Albums", "Artists", "Genres"][index]
@@ -314,7 +317,7 @@ RedesignLibraryView {
         currentFolder = folderPath.location(url)
         category = mediaCategory === 1 || mediaCategory === 2 ? mediaCategory : category === 2 ? 2 : 1
         homeSection = ""
-        selectedPlaylist = undefined; selectedCollection = undefined; musicSection = ""
+        selectedPlaylist = undefined; selectedCollection = undefined; musicSection = category === 2 ? "Songs" : ""
         selectedName = nameFromUrl(url)
         visits.record("folders", currentFolder, selectedName)
         searchText = ""
@@ -330,7 +333,7 @@ RedesignLibraryView {
         if (entry.kind === "category") categoryRequested(category)
         else if (entry.kind === "folder") openFolder(entry.url)
         else if (entry.kind === "music") {
-            remember(); selectedCollection = undefined; selectedName = ""; searchText = ""
+            remember(); currentFolder = ""; selectedCollection = undefined; selectedName = ""; searchText = ""
         }
     }
     onCategoryRequested: newCategory => { remember(); resetLocation(newCategory) }
@@ -342,7 +345,7 @@ RedesignLibraryView {
             const url = folderLoader.item.get(index, "fileUrl")
             if (folderLoader.item.get(index, "fileIsDir")) openFolder(url)
             else MediaLib.addAndPlay(url)
-        } else if (category === 1) {
+        } else if (category === 1 || showingSongFolders) {
             openFolder(folderEntries.get(index).fileUrl)
         } else if (category === 2 && musicSection === "") {
             remember(); musicSection = ["Songs", "Albums", "Artists", "Genres"][index]
@@ -356,7 +359,7 @@ RedesignLibraryView {
     onEnqueueRequested: index => {
         if (homeSection) { enqueueHomeItem(homeSection, index); return }
         if (currentFolder) MediaLib.addToPlaylist(folderLoader.item.get(index, "fileUrl"))
-        else if (category === 1) MediaLib.addToPlaylist(folderEntries.get(index).fileUrl)
+        else if (category === 1 || showingSongFolders) MediaLib.addToPlaylist(folderEntries.get(index).fileUrl)
         else MediaLib.addToPlaylist(activeModel.getDataAt(index).id)
     }
     onAddRequested: {
@@ -436,6 +439,7 @@ RedesignLibraryView {
         for (let i = 0; i < libraryFolders.rowCount(); ++i) {
             const url = libraryFolders.data(libraryFolders.index(i, 0), MLFolderModel.MRL).toString()
             roots.push(url)
+            if (showingSongFolders && !libraryFolders.data(libraryFolders.index(i, 0), MLFolderModel.ContainsAudio)) continue
             const name = nameFromUrl(url)
             if (name.toLocaleLowerCase().includes(searchText.toLocaleLowerCase())) rows.push({key: url, name: name})
         }
@@ -507,7 +511,6 @@ RedesignLibraryView {
         ListElement { title: ""; iconName: "library-artist" }
         ListElement { title: ""; iconName: "library-genre" }
     }
-    MLAudioModel { id: music; ml: MediaLib; searchPattern: root.searchText; sortCriteria: root.mediaSortField; sortOrder: root.mediaSortOrder }
     MLAlbumModel { id: albums; ml: MediaLib; searchPattern: root.searchText; sortCriteria: root.mediaSortField; sortOrder: root.mediaSortOrder }
     MLArtistModel { id: artists; ml: MediaLib; searchPattern: root.searchText; sortCriteria: root.mediaSortField; sortOrder: root.mediaSortOrder }
     MLGenreModel { id: genres; ml: MediaLib; searchPattern: root.searchText; sortCriteria: root.mediaSortField; sortOrder: root.mediaSortOrder }

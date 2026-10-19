@@ -28,6 +28,7 @@
 #include "qt.hpp"
 #include <QAbstractListModel>
 #include <QUrl>
+#include <QTimer>
 #include "mlhelper.hpp"
 
 #include <maininterface/mainctx.hpp>
@@ -48,7 +49,8 @@ public:
     {
         Banned = Qt::UserRole + 1,
         DisplayUrl,
-        MRL
+        MRL,
+        ContainsAudio
     };
     Q_ENUM(Roles)
 
@@ -89,6 +91,7 @@ protected:
         EntryPoint(const vlc_ml_folder_t &entryPoint );
         QString mrl;
         bool banned;
+        bool containsAudio;
     };
 
     virtual bool failed( const vlc_ml_event_t* event ) const = 0; // will be called outside the main thread
@@ -105,6 +108,8 @@ protected:
     MainCtx* m_ctx = nullptr;
     EventCallbackPtr m_ml_event_handle;
     bool m_updatePending = false;
+    bool m_updateAgain = false;
+    QTimer m_refreshTimer;
 };
 
 class MLFoldersModel : public MLFoldersBaseModel
