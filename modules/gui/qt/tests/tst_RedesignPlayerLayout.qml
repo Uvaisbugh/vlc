@@ -48,6 +48,36 @@ TestCase {
         compare(layout.location("volume"), {zone: "headerLeft", index: 0})
         compare(layout.layout.zones.footerRight.includes("volume"), false)
     }
+    function test_groupMovesUseOriginalInsertionBoundary() {
+        layout.begin()
+        verify(layout.moveGroup(["mute", "volume"], "footerRight", 6))
+        compare(layout.layout.zones.footerRight, ["audio", "subtitles", "settings", "queue", "mute", "volume"])
+        verify(layout.moveGroup(["mute", "volume"], "footerRight", 0))
+        compare(layout.layout, layout.defaults())
+        verify(layout.moveGroup(["mute", "volume"], "above", 0))
+        compare(layout.layout.zones.above, ["mute", "volume"])
+        verify(layout.removeGroup(["mute", "volume"]))
+        compare(layout.location("mute"), null); compare(layout.location("volume"), null)
+        verify(layout.moveGroup(["mute", "volume"], "headerLeft", 2))
+        const saved = layout.serialize()
+        verify(layout.finish(true))
+        const fresh = createTemporaryObject(layoutComponent, this, {savedLayout: saved})
+        compare(fresh.layout, layout.layout)
+    }
+    function test_invalidGroupOperationsAreAtomic() {
+        layout.begin()
+        const original = layout.serialize()
+        for (const ids of [[], ["mute", "mute"], ["mute", "unknown"], null]) {
+            verify(!layout.moveGroup(ids, "above", 0))
+            verify(!layout.removeGroup(ids))
+            compare(layout.serialize(), original)
+        }
+        verify(!layout.removeGroup(["mute", "favorite"]))
+        compare(layout.serialize(), original)
+        layout.cancel()
+        verify(!layout.moveGroup(["mute", "volume"], "above", 0))
+        verify(!layout.removeGroup(["mute", "volume"]))
+    }
     function test_repeatableSeparators() {
         layout.begin()
         verify(layout.move("divider", "footerLeft", 0))

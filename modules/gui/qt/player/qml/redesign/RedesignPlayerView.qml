@@ -612,7 +612,7 @@ FocusScope {
             anchors.centerIn: parent === header ? header : undefined
             width: parent === header ? Math.max(0, header.width - Math.max(headerLeft.width,
                 windowControls.width - (closeButton.flushToCorner ? theme.dp(6) : 0)) * 2 - theme.dp(32)) : implicitWidth
-            implicitWidth: Math.min(theme.dp(220), titleLabel.implicitWidth)
+            implicitWidth: Math.min(theme.dp(220), titleLabel.implicitWidth + theme.dp(16))
             implicitHeight: theme.dp(36)
             Layout.fillWidth: true
             Text {
@@ -701,10 +701,11 @@ FocusScope {
             visible: !chrome.custom && !chrome.applying
             anchors.fill: parent
             anchors.topMargin: root.controlsHeight - theme.dp(54)
-            anchors.leftMargin: theme.dp(18); anchors.rightMargin: theme.dp(18)
-            spacing: theme.dp(10)
+            anchors.leftMargin: theme.dp(20); anchors.rightMargin: theme.dp(17)
+            spacing: theme.dp(6)
             ChromeButton {
                 id: previousButton
+                Layout.rightMargin: parent === originalToolbar ? theme.dp(2) : 0
                 objectName: "previousButton"
                 scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
                 implicitWidth: theme.dp(30); implicitHeight: theme.dp(28)
@@ -713,6 +714,7 @@ FocusScope {
             }
             ChromeButton {
                 id: playButton
+                Layout.rightMargin: parent === originalToolbar ? theme.dp(2) : 0
                 objectName: "playButton"
                 scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
                 implicitWidth: theme.dp(54); implicitHeight: theme.dp(28)
@@ -731,6 +733,8 @@ FocusScope {
             }
             RowLayout {
                 id: timelineControl
+                Layout.leftMargin: parent === originalToolbar ? theme.dp(6) : 0
+                Layout.rightMargin: parent === originalToolbar ? theme.dp(4) : 0
                 objectName: "timelineControl"
                 Layout.fillWidth: true
                 spacing: theme.dp(10)
@@ -785,6 +789,7 @@ FocusScope {
             }
             ChromeButton {
                 id: muteButton
+                Layout.rightMargin: parent === originalToolbar ? theme.dp(4) : 0
                 objectName: "muteButton"
                 scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
                 implicitWidth: theme.dp(28)
@@ -805,6 +810,7 @@ FocusScope {
             RedesignVolume {
                 focusPolicy: root.presentationOnly ? Qt.NoFocus : Qt.StrongFocus
                 id: volumeSlider
+                Layout.rightMargin: parent === originalToolbar ? theme.dp(9) : 0
                 objectName: "volumeSlider"
                 visible: root.width > theme.dp(750)
                 scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
@@ -834,6 +840,7 @@ FocusScope {
             }
             ChromeButton {
                 id: playbackSettingsButton
+                Layout.rightMargin: parent === originalToolbar ? theme.dp(8) : 0
                 objectName: "playbackSettingsButton"
                 scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
                 iconName: "playback-settings"; text: qsTr("Playback settings")

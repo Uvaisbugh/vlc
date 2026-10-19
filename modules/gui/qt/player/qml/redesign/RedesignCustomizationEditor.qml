@@ -15,7 +15,13 @@ Item {
     readonly property alias opened: panel.visible
     readonly property RedesignPlayerLayout model: player.layoutModel
     readonly property RedesignTheme theme: player.theme
-    readonly property var available: catalog.available(model.layout)
+    readonly property var available: catalog.available(model.layout).filter(row =>
+        row.id !== "mute" || !!model.location("volume"))
+    readonly property bool pairedVolume: {
+        const mute = model.location("mute"), volume = model.location("volume")
+        return !!mute && !!volume && mute.zone === volume.zone && mute.index + 1 === volume.index
+    }
+    readonly property bool groupedVolume: pairedVolume && player.chromeItems.mute.visible && player.chromeItems.volume.visible
     readonly property var paletteLabels: ({
         speed: qsTr("Playback\nSpeed"), forward10: qsTr("Forward\n10s"), backward10: qsTr("Backward\n10s"),
         forward15: qsTr("Forward\n15s"), backward15: qsTr("Backward\n15s"), pip: qsTr("Picture in\nPicture"),
@@ -97,13 +103,67 @@ Item {
         return ids.length
     }
     function queueMove(id, zone, index) {
-        const owner = root, token = generation
+        const owner = root, token = generation, ids = moveIds(id)
         // A move can replace the delegate that owns the current pointer grab.
-        Qt.callLater(() => { if (Qt.isQtObject(owner) && owner.opened && owner.model.editing && !owner.saving && token === owner.generation) owner.model.move(id, zone, index) })
+        Qt.callLater(() => {
+            if (Qt.isQtObject(owner) && owner.opened && owner.model.editing && !owner.saving && token === owner.generation) {
+                if (ids.length > 1) owner.model.moveGroup(ids, zone, index)
+                else owner.model.move(id, zone, index)
+            }
+        })
     }
     function queueRemove(id) {
-        const owner = root, token = generation
-        Qt.callLater(() => { if (Qt.isQtObject(owner) && owner.opened && owner.model.editing && !owner.saving && token === owner.generation) owner.model.remove(id) })
+        const owner = root, token = generation, ids = moveIds(id)
+        Qt.callLater(() => { if (Qt.isQtObject(owner) && owner.opened && owner.model.editing && !owner.saving && token === owner.generation) owner.model.removeGroup(ids) })
+    }
+    function moveIds(id) {
+        return ((id === "mute" || id === "volume") && pairedVolume)
+            || (id === "volume" && !model.location("mute") && !model.location("volume")) ? ["mute", "volume"] : [id]
+    }
+    function united(a, b) {
+        const x = Math.min(a.x, b.x), y = Math.min(a.y, b.y)
+        return Qt.rect(x, y, Math.max(a.x + a.width, b.x + b.width) - x,
+            Math.max(a.y + a.height, b.y + b.height) - y)
+    }
+    function paletteOutlineSize(id) {
+        if (id === "spacer" || id === "divider") return Qt.size(24, 32)
+        if (id === "rightSidebar") return Qt.size(32, 32)
+        const tall = ["speed", "forward10", "backward10", "stop", "repeat", "shuffle", "record",
+            "snapshot", "pip", "hdr", "zoom", "bookmark", "playlists"]
+        return tall.includes(id) ? Qt.size(30, 32) : Qt.size(28, 28)
+    }
+    function outlineBounds(id, control) {
+        const actual = bounds(control), dp = theme.dp
+        const location = model.location(id), zone = location ? location.zone : ""
+        function centered(width, height) {
+            return Qt.rect(actual.x + (actual.width - dp(width)) / 2,
+                actual.y + (actual.height - dp(height)) / 2, dp(width), dp(height))
+        }
+        if (id.startsWith("divider:")) return centered(24, 28)
+        if (["menu", "library", "favorite", "mute"].includes(id)) return centered(28, 28)
+        if (id === "folder") return Qt.rect(actual.x + dp(6), actual.y + (actual.height - dp(28)) / 2,
+            Math.max(0, actual.width - dp(9)), dp(28))
+        if (id === "title") {
+            const width = Math.min(actual.width, control.implicitWidth)
+            return Qt.rect(actual.x + (actual.width - width) / 2, actual.y + dp(4), width, Math.max(0, actual.height - dp(8)))
+        }
+        if (["minimize", "maximize", "fullscreen", "close"].includes(id)) {
+            const rect = centered(actual.width / root.player.scaleFactor, 24)
+            if (zone.startsWith("footer")) rect.x -= dp(2)
+            return rect
+        }
+        if (id === "play") return centered(54, 34)
+        if (["audio", "subtitles", "settings", "queue"].includes(id)) return centered(30, 32)
+        if (id === "volume" && groupedVolume) {
+            const rect = united(actual, bounds(player.chromeItems.mute))
+            return Qt.rect(rect.x + dp(1), rect.y + (rect.height - dp(36)) / 2, rect.width + dp(2), dp(36))
+        }
+        if (id === "timeline") {
+            const inline = JSON.stringify(model.layout) === JSON.stringify(model.defaults())
+            return Qt.rect(actual.x + dp(inline ? 8 : 0), actual.y - dp(zone === "above" ? 5 : 4),
+                Math.max(0, actual.width - dp(inline ? 12 : 0)), dp(36))
+        }
+        return actual
     }
     function startPointer(id, area, mouse) {
         if (saving) return
@@ -186,27 +246,31 @@ Item {
             id: handle
             required property string modelData
             readonly property Item control: root.player.chromeItems[modelData]
+            readonly property rect outlineRect: control ? root.outlineBounds(modelData, control) : Qt.rect(0, 0, 0, 0)
             readonly property rect rect: {
-                const actual = root.bounds(control)
-                if (modelData.startsWith("divider:") && control) {
-                    const width = Math.max(actual.width, root.theme.dp(12)), height = Math.max(actual.height, root.theme.dp(28))
-                    return Qt.rect(actual.x + (actual.width - width) / 2, actual.y + (actual.height - height) / 2, width, height)
-                }
-                if (modelData !== "title" || !control) return actual
-                const width = Math.min(actual.width, control.implicitWidth + root.theme.dp(12))
-                return Qt.rect(actual.x + (actual.width - width) / 2, actual.y + root.theme.dp(4), width, Math.max(0, actual.height - root.theme.dp(8)))
+                // Keep full button hit areas and the visible border available.
+                if (modelData === "title") return outlineRect
+                let actual = root.bounds(control)
+                if (modelData === "volume" && root.groupedVolume) actual = root.united(actual, root.bounds(root.player.chromeItems.mute))
+                return root.united(actual, outlineRect)
             }
             activeFocusOnTab: true
             objectName: "customizeHandle_" + modelData
             x: rect.x; y: rect.y; width: rect.width; height: rect.height
             visible: root.player.layoutReady && !!control && control.visible && width > 0 && height > 0
+                && !(modelData === "mute" && root.groupedVolume)
             Accessible.role: Accessible.Button
             Accessible.name: qsTr("Move %1").arg(catalog.definition(modelData).label)
             Accessible.onPressAction: root.showPlacement(modelData, handle)
             Keys.onReturnPressed: root.showPlacement(modelData, handle)
             Keys.onEnterPressed: root.showPlacement(modelData, handle)
             Keys.onSpacePressed: root.showPlacement(modelData, handle)
-            Outline { anchors.fill: parent; stroke: handle.activeFocus ? root.theme.accent : root.theme.playerLabel }
+            Outline {
+                objectName: "customizeOutline_" + handle.modelData
+                x: handle.outlineRect.x - handle.x; y: handle.outlineRect.y - handle.y
+                width: handle.outlineRect.width; height: handle.outlineRect.height
+                stroke: handle.activeFocus ? root.theme.accent : root.theme.playerLabel
+            }
             PointerArea { anchors.fill: parent; controlId: handle.modelData; anchorItem: handle }
         }
     }
@@ -336,6 +400,9 @@ Item {
                     id: cell
                     required property var modelData
                     required property int index
+                    readonly property int referenceRow: Math.floor(controlPalette.width / controlPalette.cellWidth) === 9
+                        ? Math.min(3, Math.floor(index / 9)) : 0
+                    readonly property size outlineSize: root.paletteOutlineSize(modelData.id)
                     focus: GridView.isCurrentItem
                     activeFocusOnTab: true
                     onActiveFocusChanged: if (activeFocus) {
@@ -351,13 +418,15 @@ Item {
                     Keys.onEnterPressed: root.showPlacement(modelData.id, cell)
                     Keys.onSpacePressed: root.showPlacement(modelData.id, cell)
                     Outline {
-                        anchors.horizontalCenter: parent.horizontalCenter; y: root.theme.dp(14)
-                        width: root.theme.dp(28); height: root.theme.dp(32)
+                        objectName: "customizePaletteOutline_" + cell.modelData.id
+                        anchors.horizontalCenter: parent.horizontalCenter; y: root.theme.dp(14 - Math.max(0, cell.referenceRow - 2) * 4)
+                        width: root.theme.dp(cell.outlineSize.width); height: root.theme.dp(cell.outlineSize.height)
                         stroke: cell.activeFocus ? root.theme.accent : root.theme.playerLabel
                         RedesignIcon { anchors.centerIn: parent; width: root.theme.dp(24); height: width; name: cell.modelData.icon; color: cell.modelData.id === "thumbnail" ? root.theme.lightTheme ? "#a3a3a3" : "#303030" : root.theme.foreground }
                     }
                     Text {
-                        x: root.theme.dp(5); y: root.theme.dp(62); width: parent.width - root.theme.dp(10); height: root.theme.dp(40)
+                        x: root.theme.dp(5); y: root.theme.dp(62 - Math.max(0, cell.referenceRow - 1) * 4)
+                        width: parent.width - root.theme.dp(10); height: root.theme.dp(40)
                         text: root.paletteLabels[cell.modelData.id] || cell.modelData.label; textFormat: Text.PlainText
                         font.pixelSize: root.theme.dp(14); color: root.theme.foreground
                         wrapMode: Text.WordWrap; horizontalAlignment: Text.AlignHCenter

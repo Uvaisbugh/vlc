@@ -7,7 +7,11 @@ TestCase {
     id: testCase
     name: "JuxtopposedCustomizationEditor"
     width: 1920; height: 1080; visible: true; when: windowShown
-    RedesignPlayerView { id: player; anchors.fill: parent; started: true; hasVideo: true }
+    RedesignPlayerView {
+        id: player; anchors.fill: parent; started: true; hasVideo: true
+        mediaTitle: "The Wand S01E11"; mediaFolderTitle: "S01"
+        timeText: "00:02:10"; lengthText: "00:25:40"
+    }
     RedesignCustomizationEditor { id: editor; player: player }
     SignalSpy { id: toggled; target: player; signalName: "togglePlayback" }
     SignalSpy { id: saved; target: editor; signalName: "saveRequested" }
@@ -43,6 +47,109 @@ TestCase {
         const palette = item("customizationPalette")
         compare(Math.round(palette.width / palette.cellWidth), 9)
         tryVerify(() => item("customizeHandle_timeline") !== null)
+    }
+    function test_paletteUsesReferenceOutlineBounds() {
+        editor.begin()
+        for (const row of [["spacer", 24, 32, 318], ["divider", 24, 32, 318],
+                           ["speed", 30, 32, 318], ["forward15", 28, 28, 318],
+                           ["rightSidebar", 32, 32, 438], ["home", 28, 28, 558],
+                           ["favorite", 28, 28, 674], ["bookmark", 30, 32, 674]]) {
+            tryVerify(() => item("customizePalette_" + row[0]) !== null)
+            const outline = findChild(item("customizePalette_" + row[0]), "customizePaletteOutline_" + row[0])
+            verify(outline !== null)
+            compare(outline.width, row[1]); compare(outline.height, row[2])
+            fuzzyCompare(outline.mapToItem(editor, 0, 0).y, row[3], 0.6)
+        }
+    }
+    function outlineMatches(id, x, y, w, h, scale) {
+        tryVerify(() => {
+            const outline = item("customizeOutline_" + id)
+            if (!outline) return false
+            // Qt rounds each layout item; the right group accumulates those
+            // differences and the stretched timeline absorbs the remainder.
+            const p = outline.mapToItem(editor, 0, 0), tolerance = scale === 1 ? 0.6 : 6
+            const widthTolerance = id === "timeline" && scale !== 1 ? 8 : tolerance
+            return Math.abs(p.x - x * scale) <= tolerance && Math.abs(p.y - y * scale) <= tolerance
+                && Math.abs(outline.width - w * scale) <= widthTolerance && Math.abs(outline.height - h * scale) <= tolerance
+        }, 5000, "reference outline " + id)
+    }
+    function test_referenceOutlineBounds_data() {
+        return [{tag: "normal", scale: 1}, {tag: "fractional", scale: 1.125}]
+    }
+    function test_referenceOutlineBounds(data) {
+        // Keep the design's logical frame size at both display scales.
+        testCase.width = 1920 * data.scale; testCase.height = 1080 * data.scale
+        player.scaleFactor = data.scale
+        editor.begin(); tryCompare(player, "layoutReady", true)
+        for (const row of [["menu", 51, 6, 28, 28], ["library", 89, 6, 28, 28],
+                           ["divider:1", 117, 6, 24, 28],
+                           ["minimize", 1770, 8, 36, 24], ["close", 1878, 8, 36, 24],
+                           ["previous", 20, 1039, 30, 28], ["play", 58, 1036, 54, 34],
+                           ["next", 120, 1039, 30, 28], ["timeline", 170, 1035, 1406, 36],
+                           ["volume", 1591, 1035, 130, 36], ["audio", 1736, 1037, 30, 32],
+                           ["subtitles", 1778, 1037, 30, 32], ["settings", 1820, 1037, 30, 32],
+                           ["queue", 1870, 1037, 30, 32]])
+            outlineMatches(...row, data.scale)
+        // Caption width follows the application's font and translated text.
+        outlineMatches("folder", 141, 6, player.chromeItems.folder.width / data.scale - 9, 28, data.scale)
+        verify(!item("customizeHandle_mute").visible)
+        const menu = item("customizeHandle_menu"), outline = item("customizeOutline_menu")
+        verify(menu.width > outline.width); verify(menu.height > outline.height)
+        player.layoutModel.move("timeline", "above", 0)
+        outlineMatches("timeline", 20, 981, 1880, 36, data.scale)
+        for (const id of ["previous", "play", "next"])
+            player.layoutModel.move(id, "footerCenter", player.layoutModel.layout.zones.footerCenter.length)
+        outlineMatches("previous", 895, 1039, 30, 28, data.scale)
+        outlineMatches("play", 933, 1036, 54, 34, data.scale)
+        outlineMatches("next", 995, 1039, 30, 28, data.scale)
+        player.layoutModel.move("fullscreen", "footerRight", 6)
+        outlineMatches("volume", 1540, 1035, 130, 36, data.scale)
+        outlineMatches("audio", 1685, 1037, 30, 32, data.scale)
+        outlineMatches("fullscreen", 1864, 1041, 36, 24, data.scale)
+        for (const id of ["menu", "library", "divider:1", "folder", "title"])
+            player.layoutModel.move(id, "footerLeft", player.layoutModel.layout.zones.footerLeft.length)
+        outlineMatches("menu", 21, 1039, 28, 28, data.scale)
+        outlineMatches("library", 59, 1039, 28, 28, data.scale)
+        outlineMatches("divider:1", 87, 1039, 24, 28, data.scale)
+    }
+    function test_volumePairMovesRemovesAndReturnsWithRealPointer() {
+        editor.begin(); tryCompare(editor, "groupedVolume", true)
+        dragFromTo(item("customizeHandle_volume"), width / 2, height - 80)
+        tryCompare(player.layoutModel, "layout", player.layoutModel.draft)
+        tryVerify(() => JSON.stringify(player.layoutModel.layout.zones.above) === JSON.stringify(["mute", "volume"]))
+        verify(editor.groupedVolume)
+        const panel = item("customizationPanel")
+        dragFromTo(item("customizeHandle_volume"), panel.x + 80, panel.y + 150)
+        tryVerify(() => !player.layoutModel.location("mute") && !player.layoutModel.location("volume"))
+        verify(editor.available.some(row => row.id === "volume"))
+        verify(!editor.available.some(row => row.id === "mute"))
+        const palette = item("customizationPalette")
+        const row = editor.available.findIndex(row => row.id === "volume")
+        palette.positionViewAtIndex(row, GridView.Contain)
+        tryVerify(() => item("customizePalette_volume") !== null)
+        dragFromTo(item("customizePalette_volume"), width - 5, height - 25)
+        tryVerify(() => editor.groupedVolume)
+        compare(player.layoutModel.layout.zones.footerRight.slice(-2), ["mute", "volume"])
+    }
+    function test_legacySeparatedVolumeControlsStayIndependent() {
+        const layout = player.layoutModel.defaults()
+        layout.zones.footerRight.splice(0, 1); layout.zones.headerLeft.push("mute")
+        player.playerLayout = JSON.stringify(layout)
+        editor.begin(); tryVerify(() => item("customizeHandle_mute") !== null)
+        verify(!editor.groupedVolume); tryVerify(() => item("customizeHandle_mute").visible)
+        editor.queueRemove("volume")
+        tryVerify(() => !player.layoutModel.location("volume"))
+        compare(player.layoutModel.location("mute").zone, "headerLeft")
+        editor.queueMove("volume", "above", 0)
+        tryVerify(() => player.layoutModel.location("volume") !== null)
+        compare(player.layoutModel.layout.zones.above, ["volume"])
+    }
+    function test_narrowPlayerKeepsVolumePairTogether() {
+        testCase.width = 700; testCase.height = 600
+        editor.begin(); verify(editor.pairedVolume); verify(!editor.groupedVolume)
+        tryVerify(() => item("customizeHandle_mute").visible)
+        editor.queueMove("mute", "above", 0)
+        tryVerify(() => JSON.stringify(player.layoutModel.layout.zones.above) === JSON.stringify(["mute", "volume"]))
     }
     function test_cancelCloseAndEscapeRestore() {
         for (const method of ["cancel", "close", "escape"]) {

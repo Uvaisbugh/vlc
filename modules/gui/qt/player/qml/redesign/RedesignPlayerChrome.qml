@@ -20,18 +20,40 @@ Item {
     property bool applying: false
     readonly property string controlIds: JSON.stringify(Object.keys(allControls))
     readonly property bool compactDividerGap: renderedLayout.zones.footerLeft.some(id => id.startsWith("divider:"))
+    readonly property bool standardRight: {
+        const ids = renderedLayout.zones.footerRight
+        const standard = model.defaults().zones.footerRight
+        return JSON.stringify(ids) === JSON.stringify(standard)
+            || JSON.stringify(ids) === JSON.stringify(standard.concat(["fullscreen"]))
+    }
+    function gap(zone) {
+        if (zone === "footerLeft" && compactDividerGap) return 5
+        if (zone === "footerRight" && standardRight) return 6
+        return JSON.stringify(renderedLayout.zones[zone]) === JSON.stringify(["previous", "play", "next"]) ? 8 : 10
+    }
     Instantiator {
         model: JSON.parse(root.controlIds)
-        delegate: Binding {
+        delegate: QtObject {
             required property string modelData
             readonly property Item control: root.allControls[modelData]
-            target: control ? control.Layout : null
-            property: "rightMargin"
-            // The reference uses 10px between controls and 5px after a divider.
-            value: root.theme.dp(root.renderedLayout.zones.footerLeft.slice(-1)[0] === modelData ? 0 : 5)
-            when: root.custom && !root.applying && root.compactDividerGap && !!control && control.parent === footerLeft
-                && !modelData.startsWith("divider:")
-            restoreMode: Binding.RestoreBindingOrValue
+            readonly property Binding leftGap: Binding {
+                target: control ? control.Layout : null
+                property: "rightMargin"
+                // Match the gaps around navigation and padded metadata.
+                value: root.theme.dp(root.renderedLayout.zones.footerLeft.slice(-1)[0] === modelData || modelData === "title" ? 0
+                    : modelData === "menu" && root.renderedLayout.zones.footerLeft[0] === "menu" ? 3 : modelData === "folder" ? 4 : 5)
+                when: root.custom && !root.applying && root.compactDividerGap && !!control && control.parent === footerLeft
+                    && !modelData.startsWith("divider:")
+                restoreMode: Binding.RestoreBindingOrValue
+            }
+            readonly property Binding rightGap: Binding {
+                target: control ? control.Layout : null
+                property: "rightMargin"
+                value: root.theme.dp(modelData === "mute" ? 4 : modelData === "volume" ? 9
+                    : modelData === "settings" || (modelData === "queue" && root.renderedLayout.zones.footerRight.includes("fullscreen")) ? 8 : 0)
+                when: root.custom && !root.applying && root.standardRight && !!control && control.parent === footerRight
+                restoreMode: Binding.RestoreBindingOrValue
+            }
         }
     }
     visible: false
@@ -47,7 +69,7 @@ Item {
             width += (control.implicitWidth || control.width) + control.Layout.leftMargin + control.Layout.rightMargin
             ++count
         }
-        return width + Math.max(0, count - 1) * theme.dp(10)
+        return width + Math.max(0, count - 1) * theme.dp(gap(zone))
     }
     function schedule() { if (ready) Qt.callLater(apply) }
     function apply() {
@@ -129,11 +151,11 @@ Item {
             RowLayout {
                 id: footerLeft
                 objectName: "customFooterLeft"
-                x: root.theme.dp(18)
+                x: root.theme.dp(20)
                 width: root.hasSpacer("footerLeft") && !root.hasStretch("footerCenter")
                     ? Math.max(implicitWidth, (parent.width - root.preferredWidth("footerCenter")) / 2 - root.theme.dp(28)) : implicitWidth
                 anchors.verticalCenter: parent.verticalCenter
-                spacing: root.theme.dp(root.compactDividerGap ? 5 : 10)
+                spacing: root.theme.dp(root.gap("footerLeft"))
             }
             RowLayout {
                 id: footerCenter
@@ -141,16 +163,16 @@ Item {
                 x: root.hasStretch("footerCenter") ? footerLeft.x + footerLeft.width + root.theme.dp(10) : (parent.width - width) / 2
                 width: root.hasStretch("footerCenter") ? Math.max(0, parent.width - footerLeft.width - footerRight.width - root.theme.dp(56)) : root.preferredWidth("footerCenter")
                 anchors.verticalCenter: parent.verticalCenter
-                spacing: root.theme.dp(10)
+                spacing: root.theme.dp(root.gap("footerCenter"))
             }
             RowLayout {
                 id: footerRight
                 objectName: "customFooterRight"
-                anchors.right: parent.right; anchors.rightMargin: root.theme.dp(18)
+                anchors.right: parent.right; anchors.rightMargin: root.theme.dp(root.standardRight && !root.renderedLayout.zones.footerRight.includes("fullscreen") ? 17 : 18)
                 width: root.hasSpacer("footerRight") && !root.hasStretch("footerCenter")
                     ? Math.max(implicitWidth, (parent.width - root.preferredWidth("footerCenter")) / 2 - root.theme.dp(28)) : implicitWidth
                 anchors.verticalCenter: parent.verticalCenter
-                spacing: root.theme.dp(10)
+                spacing: root.theme.dp(root.gap("footerRight"))
             }
         }
     }

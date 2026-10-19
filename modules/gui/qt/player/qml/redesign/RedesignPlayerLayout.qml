@@ -96,32 +96,37 @@ QtObject {
     }
     // index is an insertion boundary before removal, like VLC's queue moves.
     function move(id, zone, index) {
+        if (id === "spacer" || id === "divider") id = instanceId(id, draft)
+        return moveGroup([id], zone, index)
+    }
+    function moveGroup(ids, zone, index) {
         if (!editing || !zones.includes(zone) || !Number.isInteger(index)
-            || index < 0 || index > draft.zones[zone].length) return false
+            || index < 0 || index > draft.zones[zone].length
+            || !Array.isArray(ids) || !ids.length || ids.some(id => !validId(id))
+            || new Set(ids).size !== ids.length) return false
         const next = clone(draft)
-        if (id === "spacer" || id === "divider") id = instanceId(id, next)
-        if (!validId(id)) return false
         for (const source of zones) {
-            const old = next.zones[source].indexOf(id)
-            if (old < 0) continue
-            next.zones[source].splice(old, 1)
-            if (source === zone && old < index) --index
+            // Count against the original boundary before removing any items.
+            if (source === zone)
+                index -= next.zones[source].slice(0, index).filter(id => ids.includes(id)).length
+            next.zones[source] = next.zones[source].filter(id => !ids.includes(id))
         }
-        next.zones[zone].splice(index, 0, id)
+        next.zones[zone].splice(index, 0, ...ids)
         if (!valid(next)) return false
         draft = next
         return true
     }
     function remove(id) {
-        if (!editing) return false
+        return removeGroup([id])
+    }
+    function removeGroup(ids) {
+        if (!editing || !Array.isArray(ids) || !ids.length
+            || new Set(ids).size !== ids.length || ids.some(id => !location(id))) return false
         const next = clone(draft)
-        let found = false
-        for (const zone of zones) {
-            const index = next.zones[zone].indexOf(id)
-            if (index >= 0) { next.zones[zone].splice(index, 1); found = true }
-        }
-        if (found) draft = next
-        return found
+        for (const zone of zones)
+            next.zones[zone] = next.zones[zone].filter(id => !ids.includes(id))
+        draft = next
+        return true
     }
     onSavedLayoutChanged: reload()
     Component.onCompleted: reload()
