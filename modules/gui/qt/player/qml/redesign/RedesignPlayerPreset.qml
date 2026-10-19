@@ -79,9 +79,9 @@ Item {
         enabled: !root.backend.pendingPlayerPreset
         background: Rectangle { color: root.theme.field; radius: root.theme.dp(6); border.width: field.visualFocus ? 1 : 0; border.color: root.theme.accent }
         contentItem: RowLayout {
-            anchors.fill: parent; anchors.leftMargin: root.theme.dp(14); anchors.rightMargin: root.theme.dp(14)
+            anchors.fill: parent; anchors.leftMargin: root.theme.dp(16); anchors.rightMargin: root.theme.dp(16)
             Text { Layout.fillWidth: true; text: root.selectedName; color: root.theme.foreground; font.pixelSize: root.theme.dp(14); elide: Text.ElideRight }
-            RedesignIcon { sourceSize: Qt.size(root.theme.dp(20) * Screen.devicePixelRatio, root.theme.dp(20) * Screen.devicePixelRatio); Layout.preferredWidth: root.theme.dp(20); Layout.preferredHeight: root.theme.dp(20); name: "chevron-down"; rotation: dropdown.visible ? 0 : 180; color: root.theme.foreground }
+            RedesignIcon { sourceSize: Qt.size(root.theme.dp(24) * Screen.devicePixelRatio, root.theme.dp(24) * Screen.devicePixelRatio); Layout.preferredWidth: root.theme.dp(24); Layout.preferredHeight: root.theme.dp(24); name: "chevron-down"; rotation: dropdown.visible ? 0 : 180; color: root.theme.foreground }
         }
         onClicked: dropdown.visible ? dropdown.close() : dropdown.open()
     }
@@ -93,7 +93,7 @@ Item {
         height: Math.min(list.count * root.theme.dp(root.theme.compactMenus ? 28 : 40) + padding * 2, root.theme.dp(340), root.mapToItem(C.Overlay.overlay, 0, 0).y - root.theme.dp(12))
         padding: root.theme.dp(1)
         focus: true
-        background: Rectangle { color: root.lightTheme ? root.theme.background : "#191919"; radius: root.theme.dp(6) }
+        background: MenuSurface { cornerRadius: root.theme.dp(6); shown: dropdown.visible }
         onOpened: {
             list.currentIndex = Math.max(0, list.model.findIndex(row => row.id === root.selectedId && row.action !== "create"))
             list.forceActiveFocus()
@@ -125,7 +125,8 @@ Item {
                 required property int index
                 objectName: modelData.action === "create" ? "playerPresetCreate" : modelData.id ? "playerPreset_" + index : "playerPresetDefault"
                 width: list.width; height: root.theme.dp(root.theme.compactMenus ? 28 : 40)
-                leftPadding: root.theme.dp(root.theme.compactMenus ? 8 : 16); rightPadding: root.theme.dp(root.theme.compactMenus ? 8 : 18)
+                leftPadding: root.theme.dp(root.theme.compactMenus ? 8 : 15); rightPadding: leftPadding
+                topPadding: 0; bottomPadding: 0
                 text: modelData.name
                 hoverEnabled: true
                 highlighted: list.currentIndex === index
@@ -146,15 +147,15 @@ Item {
                             anchors.centerIn: parent; width: root.theme.dp(root.theme.compactMenus ? 48 : 30); height: root.theme.dp(root.theme.compactMenus ? 24 : 30)
                             visible: !!row.modelData.id
                             scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
-                            iconName: root.theme.compactMenus ? "" : "more"; iconSize: root.theme.dp(20)
+                            iconName: root.theme.compactMenus ? "" : "more"; iconSize: root.theme.dp(24)
                             caption: root.theme.compactMenus ? qsTr("Actions") : ""
                             text: qsTr("Preset actions for %1").arg(row.modelData.name)
                             onClicked: list.openActions(row.modelData, row)
                         }
-                        RedesignIcon { anchors.centerIn: parent; width: root.theme.dp(20); height: width; visible: row.modelData.action === "create"; name: "add"; color: root.theme.playerLabel }
+                        RedesignIcon { objectName: "presetCreateIcon"; anchors.centerIn: parent; width: root.theme.dp(24); height: width; visible: row.modelData.action === "create"; name: "add"; color: root.theme.playerLabel }
                     }
                     Text { Layout.fillWidth: true; text: row.modelData.name; font.pixelSize: root.theme.dp(14); color: row.modelData.action === "create" ? root.theme.playerLabel : root.theme.foreground; elide: Text.ElideRight }
-                    RedesignIcon { objectName: "presetSelectionMark" + row.index; sourceSize: Qt.size(root.theme.dp(20) * Screen.devicePixelRatio, root.theme.dp(20) * Screen.devicePixelRatio); Layout.preferredWidth: root.theme.dp(20); Layout.preferredHeight: root.theme.dp(20); name: "check"; color: root.theme.accent; opacity: row.modelData.action !== "create" && row.modelData.id === root.selectedId ? 1 : 0 }
+                    RedesignIcon { objectName: "presetSelectionMark" + row.index; sourceSize: Qt.size(root.theme.dp(24) * Screen.devicePixelRatio, root.theme.dp(24) * Screen.devicePixelRatio); Layout.preferredWidth: root.theme.dp(24); Layout.preferredHeight: root.theme.dp(24); name: "check-active"; color: root.theme.accent; opacity: row.modelData.action !== "create" && row.modelData.id === root.selectedId ? 1 : 0 }
                 }
             }
             C.ScrollIndicator.vertical: C.ScrollIndicator { }
@@ -166,12 +167,14 @@ Item {
         parent: root.applicationProfile ? root.C.Overlay.overlay : dropdown.contentItem
         focus: true
         onAboutToShow: currentIndex = 0
-        width: root.theme.dp(root.theme.compactMenus ? 220 : 260); padding: root.theme.menuPadding
-        background: Rectangle { color: root.theme.background; radius: root.theme.dp(6); border.color: root.theme.border }
+        width: root.theme.dp(root.theme.compactMenus ? 220 : 265); padding: root.theme.menuPadding
+        margins: root.theme.dp(10)
+        background: MenuSurface { cornerRadius: root.theme.dp(10); shown: actions.visible }
         delegate: ProfileActionItem { }
         component ProfileActionItem: C.MenuItem {
             id: actionItem
             implicitHeight: root.theme.menuItemHeight
+            leftPadding: 0; rightPadding: 0
             topPadding: 0; bottomPadding: 0
             Keys.onPressed: event => {
                 if (event.key !== Qt.Key_Home && event.key !== Qt.Key_End) return
@@ -179,8 +182,8 @@ Item {
                 actions.itemAt(actions.currentIndex).forceActiveFocus()
                 event.accepted = true
             }
-            contentItem: Text { text: actionItem.text; color: root.theme.foreground; font.pixelSize: root.theme.dp(14); verticalAlignment: Text.AlignVCenter; leftPadding: root.theme.dp(root.theme.compactMenus ? 8 : 44) }
-            background: Rectangle { color: actionItem.highlighted ? root.theme.hover : "transparent"; radius: root.theme.dp(4) }
+            contentItem: Text { text: actionItem.text; color: root.theme.foreground; font.pixelSize: root.theme.dp(14); verticalAlignment: Text.AlignVCenter; leftPadding: root.theme.dp(root.theme.compactMenus ? 8 : 48) }
+            background: Rectangle { color: !actionItem.highlighted ? "transparent" : root.lightTheme ? root.theme.hover : "#1f1f1f"; radius: root.theme.dp(6) }
         }
         C.Action { text: qsTr("Rename"); onTriggered: root.namePreset("rename", root.contextId, root.contextName) }
         C.Action { text: qsTr("Duplicate"); onTriggered: root.namePreset("duplicate", root.contextId, root.contextName) }
@@ -196,6 +199,25 @@ Item {
             }
             onObjectAdded: (index, object) => actions.addItem(object)
             onObjectRemoved: (index, object) => actions.removeItem(object)
+        }
+    }
+    component MenuSurface: Rectangle {
+        id: menuSurface
+        property real cornerRadius
+        property bool shown
+        readonly property color fill: root.lightTheme ? root.theme.background : "#191919"
+        color: Qt.rgba(fill.r, fill.g, fill.b, root.theme.floatingOpacity)
+        radius: cornerRadius
+        Loader {
+            anchors.fill: parent
+            z: -1
+            active: menuSurface.shown
+            sourceComponent: root.videoBackdropContent
+            onLoaded: {
+                if (item.cornerRadius !== undefined)
+                    item.cornerRadius = Qt.binding(() => menuSurface.cornerRadius)
+                if (item.menuShadow !== undefined) item.menuShadow = true
+            }
         }
     }
     C.Popup {

@@ -29,7 +29,7 @@ TestCase {
     }
     function test_allPresetsUseAvailableWindowHeight() {
         open()
-        compare(combo.popup.height, 19 * 46)
+        compare(combo.popup.height, 19 * 46 + 2)
         const origin = combo.popup.contentItem.mapToItem(testCase, 0, 0)
         verify(origin.y >= 12)
         verify(origin.y + combo.popup.height <= height - 12)

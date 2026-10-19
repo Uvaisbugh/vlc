@@ -15,6 +15,7 @@ C.ComboBox {
     property bool restrictChoices: false
     property real choiceHeight: 34
     property real popupGap: 4
+    property real popupBottomPadding: 2
     property Component videoBackdropContent
     property var labelOverrides: ({})
     function presetPreviewAt(index) {
@@ -160,9 +161,10 @@ C.ComboBox {
         onAboutToShow: root.aboutToOpen()
         y: root.height + root.theme.dp(root.popupGap)
         width: root.width
-        implicitHeight: Math.min(contentItem.implicitHeight, Math.max(root.theme.dp(root.choiceHeight), root.Window.height - root.theme.dp(24)))
+        implicitHeight: Math.min(contentItem.implicitHeight + bottomPadding, Math.max(root.theme.dp(root.choiceHeight), root.Window.height - root.theme.dp(24)))
         margins: root.theme.dp(12)
         padding: 0
+        bottomPadding: root.theme.dp(root.popupBottomPadding)
         contentItem: ListView {
             clip: true
             implicitHeight: contentHeight

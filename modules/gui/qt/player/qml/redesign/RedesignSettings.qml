@@ -86,6 +86,7 @@ C.Pane {
                 spacing: 0
                 Item { Layout.fillWidth: true; height: theme.dp(11) }
                 RedesignPlaybackSettings {
+                    videoBackdropContent: root.videoBackdropContent
                     Layout.fillWidth: true; Layout.leftMargin: theme.dp(24); Layout.rightMargin: theme.dp(20)
                     scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
                     visible: root.page === "playback"

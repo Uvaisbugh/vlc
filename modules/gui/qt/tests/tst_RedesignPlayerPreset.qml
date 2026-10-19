@@ -9,6 +9,7 @@ TestCase {
     width: 800; height: 800
     visible: true; when: windowShown
     QtObject { id: shortcuts; property bool useGlobalShortcuts: true }
+    QtObject { id: redesignAppearance; property bool compactMenus: false; property bool backdropBlurEnabled: true }
     QtObject {
         id: store
         property QtObject ctx: shortcuts
@@ -40,6 +41,7 @@ TestCase {
     function item(name) { return findChild(selector, name) }
     function init() {
         failOnWarning(/Binding loop/)
+        redesignAppearance.compactMenus = false
         selector.scaleFactor = 1; selector.width = 360; selector.selectorVisible = true; selector.applicationProfile = false
         item("playerPresetMenu").close(); item("playerPresetActions").close()
         item("playerPresetNameDialog").close(); item("playerPresetDeleteDialog").close()
@@ -97,10 +99,12 @@ TestCase {
         tryCompare(item("playerPresetNameDialog"), "opened", false)
     }
     function test_createdPresetSelectionMarkHasStableLayout_data() {
-        return [{tag: "normal", scale: 1}, {tag: "fractional", scale: 1.125}, {tag: "large", scale: 2}]
+        return [{tag: "normal", scale: 1}, {tag: "fractional", scale: 1.125}, {tag: "large", scale: 2},
+                {tag: "compact", scale: 1, compact: true}, {tag: "compact-fractional", scale: 1.125, compact: true}]
     }
     function test_createdPresetSelectionMarkHasStableLayout(data) {
         selector.scaleFactor = data.scale
+        redesignAppearance.compactMenus = !!data.compact
         store.playerPresets = []; store.selectedPlayerPreset = ""; store.revision++
         mouseClick(item("playerPresetSelector")); tryCompare(item("playerPresetMenu"), "opened", true)
         keyClick(Qt.Key_Home); keyClick(Qt.Key_Return)
@@ -118,8 +122,11 @@ TestCase {
         const rasterSize = mark.sourceSize
         for (const width of [280, 340, 360]) {
             selector.width = width; wait(30)
-            fuzzyCompare(mark.width, 20 * data.scale, 0.01)
-            fuzzyCompare(mark.height, 20 * data.scale, 0.01)
+            fuzzyCompare(mark.width, 24 * data.scale, 0.01)
+            fuzzyCompare(mark.height, 24 * data.scale, 0.01)
+            const position = mark.mapToItem(list.currentItem, 0, 0)
+            verify(position.y >= 0 && position.y + mark.height <= list.currentItem.height)
+            fuzzyCompare(position.y + mark.height / 2, list.currentItem.height / 2, 1)
             compare(mark.sourceSize, rasterSize)
         }
     }

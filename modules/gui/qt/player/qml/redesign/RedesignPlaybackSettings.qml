@@ -8,6 +8,7 @@ ColumnLayout {
     property real scaleFactor: 1
     property color accentColor: "#d37918"
     property bool lightTheme: false
+    property Component videoBackdropContent
     property bool showStatistics: false
     property bool showSubtitleTimeline: false
     property string subtitleTimelineState: "off"
@@ -81,7 +82,8 @@ ColumnLayout {
             objectName: "sleepTimerChoice"
             Layout.preferredWidth: theme.dp(217)
             Layout.minimumWidth: 0
-            implicitHeight: theme.dp(46)
+            implicitHeight: theme.dp(48)
+            videoBackdropContent: root.videoBackdropContent
             scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
             model: root.sleepChoices; textRole: "label"; valueRole: "value"
             currentIndex: root.sleepChoices.findIndex(choice => choice.value === root.sleepTimerMinutes)
@@ -131,7 +133,8 @@ ColumnLayout {
         RedesignComboBox {
             objectName: "modelChoiceField"
             Layout.preferredWidth: theme.dp(217); Layout.minimumWidth: 0
-            implicitHeight: theme.dp(46)
+            implicitHeight: theme.dp(48); popupGap: 20
+            videoBackdropContent: root.videoBackdropContent
             scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
             model: root.visualizerOptions; textRole: "label"
             currentIndex: root.showWaveform ? root.visualizerOptions.findIndex(option => option.waveform)
@@ -139,7 +142,7 @@ ColumnLayout {
             displayText: currentIndex < 0 ? qsTr("Disabled") : currentText
             enabled: count > 0
             opacity: enabled ? 1 : .5
-            showSelectionMark: true; showIcons: true; choiceHeight: 46; choicePadding: 14
+            showSelectionMark: true; showIcons: true; choiceHeight: 46
             restrictChoices: true
             Accessible.name: qsTr("Audio Visualizer")
             onActivated: index => {

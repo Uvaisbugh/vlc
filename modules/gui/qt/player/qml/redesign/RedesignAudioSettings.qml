@@ -110,6 +110,7 @@ ColumnLayout {
         videoBackdropContent: root.videoBackdropContent
         Layout.fillWidth: true; Layout.topMargin: theme.dp(11)
         implicitHeight: theme.dp(48); choiceHeight: 46; popupGap: 20
+        popupBottomPadding: 0
         visible: root.equalizerInfo.kind !== undefined
         scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
         model: root.equalizerChoices; textRole: "label"; valueRole: "value"
