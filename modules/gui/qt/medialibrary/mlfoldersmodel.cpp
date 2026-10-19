@@ -46,6 +46,7 @@ MLFoldersBaseModel::EntryPoint::EntryPoint( const vlc_ml_folder_t& entryPoint)
     : mrl(entryPoint.psz_mrl)
     , banned(entryPoint.b_banned)
     , containsAudio(entryPoint.i_nb_audio > 0)
+    , containsVideo(entryPoint.i_nb_video > 0)
 {
 }
 
@@ -86,6 +87,8 @@ QVariant MLFoldersBaseModel::data( const QModelIndex &index ,
             return m_mrls[index.row()].mrl;
         case ContainsAudio:
             return m_mrls[index.row()].containsAudio;
+        case ContainsVideo:
+            return m_mrls[index.row()].containsVideo;
         case Qt::DisplayRole:
         case DisplayUrl:
         {
@@ -105,7 +108,8 @@ QHash<int, QByteArray> MLFoldersBaseModel::roleNames() const
         {DisplayUrl, QByteArrayLiteral("display_url")},
         {Banned, QByteArrayLiteral("banned")},
         {MRL, QByteArrayLiteral("url")},
-        {ContainsAudio, QByteArrayLiteral("contains_audio")}
+        {ContainsAudio, QByteArrayLiteral("contains_audio")},
+        {ContainsVideo, QByteArrayLiteral("contains_video")}
     };
 }
 
@@ -164,20 +168,23 @@ void MLFoldersBaseModel::updateImpl(vlc_ml_folder_list_t* (*folderListFunc)( vlc
         }
         if (folderListFunc == vlc_ml_list_entry_points) {
             // Use indexed descendants, without reading files or probing drives.
-            ml_unique_ptr<vlc_ml_folder_list_t> audioFolders(
-                vlc_ml_list_folders_by_type(ml, nullptr, VLC_ML_MEDIA_TYPE_AUDIO));
-            if (audioFolders) {
+            ml_unique_ptr<vlc_ml_folder_list_t> folders(vlc_ml_list_folders(ml, nullptr));
+            if (folders) {
                 for (auto& root : ctx.r) {
                     const auto rootUrl = QUrl::fromEncoded(root.mrl.toUtf8()).adjusted(QUrl::StripTrailingSlash);
-                    for (const auto& folder : ml_range_iterate<vlc_ml_folder_t>(audioFolders)) {
+                    for (const auto& folder : ml_range_iterate<vlc_ml_folder_t>(folders)) {
                         if (!folder.psz_mrl) continue;
                         const auto url = QUrl::fromEncoded(folder.psz_mrl).adjusted(QUrl::StripTrailingSlash);
                         if (url == rootUrl || rootUrl.isParentOf(url)) {
-                            root.containsAudio = true;
-                            break;
+                            root.containsAudio |= folder.i_nb_audio > 0;
+                            root.containsVideo |= folder.i_nb_video > 0;
+                            if (root.containsAudio && root.containsVideo) break;
                         }
                     }
                 }
+            } else {
+                // A failed metadata query must not hide a registered source.
+                for (auto& root : ctx.r) root.containsVideo = true;
             }
         }
     },
@@ -188,7 +195,8 @@ void MLFoldersBaseModel::updateImpl(vlc_ml_folder_list_t* (*folderListFunc)( vlc
         const bool unchanged = m_mrls.size() == ctx.r.size()
             && std::equal(m_mrls.cbegin(), m_mrls.cend(), ctx.r.cbegin(),
                 [](const EntryPoint& a, const EntryPoint& b) {
-                    return a.mrl == b.mrl && a.banned == b.banned && a.containsAudio == b.containsAudio;
+                    return a.mrl == b.mrl && a.banned == b.banned
+                        && a.containsAudio == b.containsAudio && a.containsVideo == b.containsVideo;
                 });
         if (!unchanged) {
             beginResetModel();

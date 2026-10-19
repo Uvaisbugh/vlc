@@ -23,6 +23,7 @@
 #include "../medialibrary/mlbasemodel.hpp"
 #include "../medialibrary/mlmedia.hpp"
 #include "../medialibrary/mlmediastore.hpp"
+#include "../medialibrary/mlfoldersmodel.hpp"
 #include "vlc_stub_modules.hpp"
 
 #include <memory>
@@ -149,11 +150,101 @@ protected:
     std::vector<MLItemId> m_items;
 };
 
+// These folder tests inject MediaLib directly and never construct a MainCtx.
+const QMetaObject MainCtx::staticMetaObject = QObject::staticMetaObject;
+
+class TestFoldersModel : public MLFoldersModel
+{
+public:
+    explicit TestFoldersModel(MediaLib* library) { m_mediaLib = library; }
+    void refresh() { m_refreshTimer.start(0); }
+    bool pending() const { return m_updatePending || m_refreshTimer.isActive(); }
+};
+
 class TestVLCMLModel : public QObject
 {
     Q_OBJECT
 
 private slots:
+    void testSourceFolderCategories_data()
+    {
+        QTest::addColumn<bool>("folderQueryFails");
+        QTest::newRow("indexed descendants") << false;
+        QTest::newRow("folder query unavailable") << true;
+    }
+
+    void testSourceFolderCategories()
+    {
+        QFETCH(bool, folderQueryFails);
+        struct Folder { const char* url; unsigned audio = 0; unsigned video = 0; };
+        const std::vector<Folder> roots {
+            {"file:///library/Music/"}, {"file:///library/Shows/"},
+            {"file:///library/Mixed/"}, {"file:///library/Empty/"},
+            {"file:///library/Direct/", 1, 1},
+            {"smb://offline/share/"}, {"file:///library/Music%20Extras/"},
+            {"file:///library/DirectAudio/", 1}
+        };
+        bool mixedHasVideo = true;
+        std::atomic_bool workerOnly {true};
+        auto list = [](const std::vector<Folder>& folders) {
+            auto* result = static_cast<vlc_ml_folder_list_t*>(calloc(1,
+                sizeof(vlc_ml_folder_list_t) + folders.size() * sizeof(vlc_ml_folder_t)));
+            result->i_nb_items = folders.size();
+            for (size_t i = 0; i < folders.size(); ++i) {
+                result->p_items[i].psz_mrl = strdup(folders[i].url);
+                result->p_items[i].i_nb_audio = folders[i].audio;
+                result->p_items[i].i_nb_video = folders[i].video;
+            }
+            return result;
+        };
+        m_env->mediaList = [&](int query, const vlc_ml_query_params_t*, va_list args) {
+            workerOnly = workerOnly && QThread::currentThread() != QCoreApplication::instance()->thread();
+            if (query == VLC_ML_LIST_ENTRY_POINTS) {
+                va_arg(args, int); // Banned entry points are requested separately.
+                *va_arg(args, vlc_ml_folder_list_t**) = list(roots);
+                return VLC_SUCCESS;
+            }
+            if (query != VLC_ML_LIST_FOLDERS) return VLC_EGENERIC;
+            if (folderQueryFails) return VLC_EGENERIC;
+            std::vector<Folder> indexed {
+                {"file:///library/Music/Album/", 1}, {"file:///library/Mixed/Album/", 1},
+                {"file:///library/Music%20Extras/Album/", 1}, {"smb://other/share/Album/", 1},
+                {"file:///library/Shows/Season/", 0, 1}, {"file:///library/Music%20Extras2/Film/", 0, 1}
+            };
+            if (mixedHasVideo) indexed.push_back({"file:///library/Mixed/Film/", 0, 1});
+            *va_arg(args, vlc_ml_folder_list_t**) = list(indexed);
+            return VLC_SUCCESS;
+        };
+        TestFoldersModel model(m_medialib.get());
+        QSignalSpy reset(&model, &QAbstractItemModel::modelReset);
+        model.refresh();
+        QTRY_COMPARE(reset.count(), 1);
+        const auto roles = model.roleNames();
+        QVERIFY(roles.values().contains("contains_video"));
+        const auto videoRole = roles.key("contains_video");
+        QCOMPARE(model.rowCount(), int(roots.size()));
+        for (int i = 0; i < model.rowCount(); ++i) {
+            const bool audio = i == 4 || i == 7 || (!folderQueryFails && (i == 0 || i == 2 || i == 6));
+            const bool video = folderQueryFails || i == 1 || i == 2 || i == 4;
+            QCOMPARE(model.data(model.index(i, 0), MLFoldersBaseModel::ContainsAudio).toBool(), audio);
+            QCOMPARE(model.data(model.index(i, 0), videoRole).toBool(), video);
+        }
+        QVERIFY(workerOnly.load());
+        QCOMPARE(m_medialib->folderRoots().size(), int(roots.size()));
+        model.refresh();
+        QTRY_VERIFY(!model.pending());
+        QCOMPARE(reset.count(), 1); // Unchanged source data must keep focused delegates.
+        mixedHasVideo = false;
+        model.refresh();
+        if (!folderQueryFails) {
+            QTRY_COMPARE(reset.count(), 2);
+            QVERIFY(!model.data(model.index(2, 0), videoRole).toBool());
+        } else {
+            QTRY_VERIFY(!model.pending());
+            QCOMPARE(reset.count(), 1);
+        }
+    }
+
     void testAudioMetadataReadsStayOnTheWorker_data()
     {
         QTest::addColumn<bool>("enabled");

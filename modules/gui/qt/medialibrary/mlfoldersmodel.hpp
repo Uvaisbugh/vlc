@@ -50,7 +50,8 @@ public:
         Banned = Qt::UserRole + 1,
         DisplayUrl,
         MRL,
-        ContainsAudio
+        ContainsAudio,
+        ContainsVideo
     };
     Q_ENUM(Roles)
 
@@ -92,6 +93,7 @@ protected:
         QString mrl;
         bool banned;
         bool containsAudio;
+        bool containsVideo;
     };
 
     virtual bool failed( const vlc_ml_event_t* event ) const = 0; // will be called outside the main thread

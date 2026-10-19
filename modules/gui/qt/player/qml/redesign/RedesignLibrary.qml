@@ -34,6 +34,7 @@ RedesignLibraryView {
     property string musicSection: ""
     readonly property bool showingSongFolders: category === 2 && musicSection === "Songs" && !currentFolder && !selectedCollection && !homeSection
     onShowingSongFoldersChanged: refreshFolders()
+    onCategoryChanged: refreshFolders()
     property string selectedName: ""
     property var backStack: []
     property var forwardStack: []
@@ -441,7 +442,9 @@ RedesignLibraryView {
         for (let i = 0; i < libraryFolders.rowCount(); ++i) {
             const url = libraryFolders.data(libraryFolders.index(i, 0), MLFolderModel.MRL).toString()
             roots.push(url)
-            if (showingSongFolders && !libraryFolders.data(libraryFolders.index(i, 0), MLFolderModel.ContainsAudio)) continue
+            const audio = libraryFolders.data(libraryFolders.index(i, 0), MLFolderModel.ContainsAudio)
+            const video = libraryFolders.data(libraryFolders.index(i, 0), MLFolderModel.ContainsVideo)
+            if (showingSongFolders ? !audio : category === 1 && audio && !video) continue
             const name = nameFromUrl(url)
             if (name.toLocaleLowerCase().includes(searchText.toLocaleLowerCase())) rows.push({key: url, name: name})
         }

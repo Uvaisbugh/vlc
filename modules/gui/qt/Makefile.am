@@ -2066,6 +2066,8 @@ test_ml_model_SOURCES = \
 	medialibrary/medialib.hpp medialibrary/medialib.cpp \
 	medialibrary/mlthreadpool.hpp medialibrary/mlthreadpool.cpp \
 	medialibrary/mlmediastore.hpp medialibrary/mlmediastore.cpp \
+	medialibrary/mlfoldersmodel.hpp medialibrary/mlfoldersmodel.cpp \
+	medialibrary/mlhelper.hpp medialibrary/mlhelper.cpp \
 	playlist/playlist_controller.hpp playlist/playlist_controller.cpp \
 	playlist/playlist_item.hpp playlist/playlist_item.cpp
 
@@ -2080,6 +2082,7 @@ nodist_test_ml_model_SOURCES = \
 	medialibrary/medialib.moc.cpp \
 	medialibrary/mlthreadpool.moc.cpp \
 	medialibrary/mlmediastore.moc.cpp \
+	medialibrary/mlfoldersmodel.moc.cpp \
 	playlist/playlist_controller.moc.cpp \
 	playlist/playlist_item.moc.cpp
 
