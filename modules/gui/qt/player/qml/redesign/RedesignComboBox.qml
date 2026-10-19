@@ -15,7 +15,16 @@ C.ComboBox {
     property bool restrictChoices: false
     property real choiceHeight: 34
     property real popupGap: 4
+    property Component videoBackdropContent
     property var labelOverrides: ({})
+    function presetPreviewAt(index) {
+        const value = model && model[index] ? model[index].value : ""
+        const names = {flat: "flat", classical: "classical", club: "club", dance: "dance",
+            fullbass: "full-bass", fullbasstreble: "full-bass-and-treble", fulltreble: "full-treble",
+            headphones: "headphones", largehall: "large-hall", live: "live", party: "party",
+            pop: "pop", reggae: "reggae", rock: "rock", ska: "ska", soft: "soft", softrock: "soft-rock", techno: "techno"}
+        return names[value] ? "eq-" + names[value] : ""
+    }
     function labelAt(index) { const text = textAt(index); return labelOverrides[text] || text }
     function choiceEnabled(index) {
         return index >= 0 && index < count && (!restrictChoices || model[index].enabled !== false)
@@ -63,20 +72,21 @@ C.ComboBox {
     readonly property RedesignTheme theme: RedesignTheme { scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor }
     implicitHeight: theme.dp(34)
     font.pixelSize: theme.dp(14)
-    leftPadding: theme.dp(14); rightPadding: theme.dp(40)
+    leftPadding: theme.dp(16); rightPadding: theme.dp(40)
     contentItem: Text {
         text: root.displayText; font: root.font
         color: root.theme.foreground
         verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight
     }
     background: Rectangle {
-        radius: root.theme.dp(4); color: root.theme.background
+        radius: root.theme.dp(6); color: root.lightTheme ? root.theme.background : "#191919"
+        border.width: root.theme.dp(2)
         border.color: root.visualFocus ? root.theme.accent : root.theme.field
     }
     indicator: RedesignIcon {
         name: "chevron-down"; color: root.theme.foreground
-        width: root.theme.dp(20); height: width
-        x: root.width - width - root.theme.dp(14); y: (root.height - height) / 2
+        width: root.theme.dp(24); height: width
+        x: root.width - width - root.theme.dp(16); y: (root.height - height) / 2
     }
     delegate: C.ItemDelegate {
         id: choiceDelegate
@@ -85,12 +95,19 @@ C.ComboBox {
         enabled: root.choiceEnabled(index)
         width: ListView.view.width
         implicitHeight: root.theme.dp(root.theme.compactMenus ? Math.min(28, root.choiceHeight) : root.choiceHeight)
-        leftPadding: root.choicePadding >= 0 ? root.theme.dp(root.theme.compactMenus ? 8 : root.choicePadding) : root.theme.compactMenus ? root.theme.dp(8) : padding; rightPadding: leftPadding
+        leftPadding: root.theme.dp(root.theme.compactMenus ? 8 : root.choicePadding >= 0 ? root.choicePadding : 16); rightPadding: leftPadding
         topPadding: root.theme.compactMenus ? 0 : padding; bottomPadding: topPadding
         text: root.labelAt(index)
         highlighted: root.highlightedIndex === index
         contentItem: RowLayout {
             spacing: root.theme.dp(10)
+            RedesignIcon {
+                objectName: "choicePresetPreview"
+                name: root.presetPreviewAt(index)
+                visible: !root.theme.compactMenus && root.showCurvePreviews && name.length > 0
+                Layout.preferredWidth: root.theme.dp(24); Layout.preferredHeight: root.theme.dp(24)
+                color: root.theme.foreground; detailColor: root.theme.accent
+            }
             RedesignIcon {
                 objectName: "choiceIcon"
                 readonly property string icon: root.model && root.model[index] ? root.model[index].iconName || "" : ""
@@ -104,7 +121,7 @@ C.ComboBox {
                 readonly property color fillColor: root.theme.accent
                 readonly property color lineColor: root.theme.foreground
                 Layout.preferredWidth: root.theme.dp(24); Layout.preferredHeight: root.theme.dp(18)
-                visible: !root.theme.compactMenus && root.showCurvePreviews && curve.length > 0
+                visible: !root.theme.compactMenus && root.showCurvePreviews && curve.length > 0 && root.presetPreviewAt(index).length === 0
                 sourceSize: Qt.size(width * Screen.devicePixelRatio, height * Screen.devicePixelRatio)
                 svg: {
                     if (curve.length < 2 || width <= 0 || height <= 0) return ""
@@ -127,19 +144,25 @@ C.ComboBox {
             }
             Item {
                 objectName: "choiceSelectionMark"
-                Layout.preferredWidth: root.theme.dp(20); Layout.preferredHeight: root.theme.dp(20)
+                Layout.preferredWidth: root.theme.dp(24); Layout.preferredHeight: root.theme.dp(24)
                 visible: root.showSelectionMark && index === root.currentIndex
-                RedesignIcon { anchors.fill: parent; name: "check"; color: root.theme.accent }
+                RedesignIcon { anchors.fill: parent; name: "check-active"; color: root.theme.accent }
             }
         }
-        background: Rectangle { radius: root.theme.dp(3); color: parent.highlighted ? root.theme.hover : "transparent" }
+        background: Rectangle {
+            x: root.theme.dp(2); y: root.theme.dp(2)
+            width: parent.width - root.theme.dp(4); height: parent.height - root.theme.dp(2)
+            radius: root.theme.dp(4)
+            color: !parent.highlighted ? "transparent" : root.lightTheme ? root.theme.hover : "#1f1f1f"
+        }
     }
     popup: C.Popup {
         onAboutToShow: root.aboutToOpen()
         y: root.height + root.theme.dp(root.popupGap)
         width: root.width
-        implicitHeight: Math.min(contentItem.implicitHeight + topPadding + bottomPadding, root.theme.dp(300))
-        padding: root.theme.menuPadding
+        implicitHeight: Math.min(contentItem.implicitHeight, Math.max(root.theme.dp(root.choiceHeight), root.Window.height - root.theme.dp(24)))
+        margins: root.theme.dp(12)
+        padding: 0
         contentItem: ListView {
             clip: true
             implicitHeight: contentHeight
@@ -147,6 +170,22 @@ C.ComboBox {
             currentIndex: root.highlightedIndex
             C.ScrollIndicator.vertical: C.ScrollIndicator { }
         }
-        background: Rectangle { color: root.theme.panel; radius: root.theme.dp(6); border.color: root.theme.border }
+        background: Rectangle {
+            id: surface
+            readonly property color fill: root.lightTheme ? root.theme.background : "#191919"
+            color: Qt.rgba(fill.r, fill.g, fill.b, root.theme.floatingOpacity)
+            radius: root.theme.dp(6)
+            Loader {
+                anchors.fill: parent
+                z: -1
+                active: root.popup.visible
+                sourceComponent: root.videoBackdropContent
+                onLoaded: {
+                    if (item.cornerRadius !== undefined)
+                        item.cornerRadius = Qt.binding(() => surface.radius)
+                    if (item.menuShadow !== undefined) item.menuShadow = true
+                }
+            }
+        }
     }
 }

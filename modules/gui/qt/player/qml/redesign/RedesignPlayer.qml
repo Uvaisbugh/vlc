@@ -464,6 +464,7 @@ FocusScope {
         }
         settingsContent: Component {
             RedesignSettings {
+                videoBackdropContent: rootPlayer.menuBackdropContent
                 preferenceStore: playerPreferences
                 Component.onCompleted: playerPreferences.refresh()
                 scaleFactor: view.scaleFactor; lightTheme: view.lightTheme; accentColor: view.accentColor

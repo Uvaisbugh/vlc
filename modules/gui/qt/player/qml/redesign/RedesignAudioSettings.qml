@@ -10,6 +10,7 @@ ColumnLayout {
     property real scaleFactor: 1
     property color accentColor: "#d37918"
     property bool lightTheme: false
+    property Component videoBackdropContent
     readonly property RedesignTheme theme: RedesignTheme { scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor }
     readonly property var equalizerInfo: { backend.revision; return backend.describe("redesign-equalizer-preset") }
     readonly property var equalizerChoices: equalizerInfo.choices || []
@@ -69,7 +70,7 @@ ColumnLayout {
     }
     Rectangle {
         Layout.fillWidth: true; Layout.topMargin: theme.dp(22)
-        Layout.leftMargin: -theme.dp(24); Layout.rightMargin: -theme.dp(24)
+        Layout.leftMargin: -theme.dp(20); Layout.rightMargin: -theme.dp(20)
         height: theme.dp(1); color: theme.border
     }
     Text {
@@ -90,7 +91,7 @@ ColumnLayout {
     }
     Rectangle {
         Layout.fillWidth: true; Layout.topMargin: theme.dp(24)
-        Layout.leftMargin: -theme.dp(24); Layout.rightMargin: -theme.dp(24)
+        Layout.leftMargin: -theme.dp(20); Layout.rightMargin: -theme.dp(20)
         height: theme.dp(1); color: theme.border
     }
     Text {
@@ -106,8 +107,9 @@ ColumnLayout {
     }
     RedesignComboBox {
         objectName: "inlineEqualizerPreset"
+        videoBackdropContent: root.videoBackdropContent
         Layout.fillWidth: true; Layout.topMargin: theme.dp(11)
-        implicitHeight: theme.dp(46); choiceHeight: 46
+        implicitHeight: theme.dp(48); choiceHeight: 46; popupGap: 20
         visible: root.equalizerInfo.kind !== undefined
         scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
         model: root.equalizerChoices; textRole: "label"; valueRole: "value"

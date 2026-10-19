@@ -12,6 +12,7 @@ ColumnLayout {
     property var deinterlaceModel
     property real scaleFactor: 1
     property bool lightTheme: false
+    property Component videoBackdropContent
     property color accentColor: "#d37918"
     property int liveRevision: 0
     readonly property RedesignTheme theme: RedesignTheme { scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor }
@@ -115,8 +116,9 @@ ColumnLayout {
         Text { Layout.fillWidth: true; Layout.preferredWidth: theme.dp(129); Layout.minimumWidth: 0; text: parent.label; color: theme.playerLabel; font.pixelSize: theme.dp(14); wrapMode: Text.WordWrap }
         RedesignComboBox {
             objectName: parent.optionName + "Choice"
+            videoBackdropContent: root.videoBackdropContent
             Layout.fillWidth: true; Layout.preferredWidth: theme.dp(217); Layout.maximumWidth: theme.dp(217); Layout.minimumWidth: 0
-            implicitHeight: theme.dp(46)
+            implicitHeight: theme.dp(48)
             scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
             model: parent.choices; textRole: "label"; valueRole: "value"
             restrictChoices: parent.restrictChoices
@@ -256,7 +258,7 @@ ColumnLayout {
         enabled: root.hdrSupported
         opacity: enabled ? 1 : .5
         restrictChoices: true
-        choiceHeight: 46; popupGap: 22
+        choiceHeight: 46; popupGap: 20
         choices: [
             {label: qsTr("Auto"), value: "auto", enabled: root.supportsHdrPolicy("auto")},
             {label: qsTr("Off"), value: "never", enabled: root.supportsHdrPolicy("never")},
@@ -307,7 +309,7 @@ ColumnLayout {
             }
         }
     }
-    Rectangle { Layout.fillWidth: true; Layout.leftMargin: -theme.dp(24); Layout.rightMargin: -theme.dp(20); Layout.topMargin: theme.dp(12); height: theme.dp(1); color: theme.border }
+    Rectangle { Layout.fillWidth: true; Layout.leftMargin: -theme.dp(20); Layout.rightMargin: -theme.dp(20); Layout.topMargin: theme.dp(12); height: theme.dp(1); color: theme.border }
     Text { Layout.topMargin: theme.dp(20); text: qsTr("Filters"); color: theme.playerHeading; font.pixelSize: theme.dp(16) }
     RedesignFilterSection {
         objectName: "videoEssentialSection"

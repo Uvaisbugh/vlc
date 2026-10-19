@@ -20,6 +20,7 @@ C.Pane {
     property real scaleFactor: 1
     property color accentColor: "#d37918"
     property bool lightTheme: false
+    property Component videoBackdropContent
     property string page: "playback"
     property bool showStatistics: false
     property bool showSubtitleTimeline: false
@@ -107,7 +108,8 @@ C.Pane {
                     onWaveformRequested: root.chooseVisualization(-1, true)
                 }
                 RedesignAudioSettings {
-                    Layout.fillWidth: true; Layout.leftMargin: theme.dp(24); Layout.rightMargin: theme.dp(24)
+                    videoBackdropContent: root.videoBackdropContent
+                    Layout.fillWidth: true; Layout.leftMargin: theme.dp(20); Layout.rightMargin: theme.dp(20)
                     visible: root.page === "audio"
                     Layout.topMargin: theme.dp(11)
                     scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
@@ -153,7 +155,8 @@ C.Pane {
                     onFpsRequested: value => root.preferenceStore.stage("sub-fps", value)
                 }
                 RedesignVideoSettings {
-                    Layout.fillWidth: true; Layout.leftMargin: theme.dp(24); Layout.rightMargin: theme.dp(20)
+                    videoBackdropContent: root.videoBackdropContent
+                    Layout.fillWidth: true; Layout.leftMargin: theme.dp(20); Layout.rightMargin: theme.dp(20)
                     visible: root.page === "video"
                     backend: root.preferenceStore
                     rendererModel: Player.rendererManager

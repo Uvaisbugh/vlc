@@ -188,7 +188,7 @@ TestCase {
         enableHdr()
         compare(choice.model.map(row => row.label).join("|"), "Auto|Off|HDR10|HDR10+|Dolby Vision|HLG")
         verify(choice.enabled); verify(choice.showSelectionMark)
-        compare(choice.choiceHeight, 46); compare(choice.popupGap, 22)
+        compare(choice.choiceHeight, 46); compare(choice.popupGap, 20)
         compare(choice.displayText, "Auto")
         for (let i = 0; i < 6; ++i) compare(choice.choiceEnabled(i), i < 3)
         choice.currentIndex = 2; choice.activated(2)

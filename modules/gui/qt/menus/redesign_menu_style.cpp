@@ -51,10 +51,10 @@ public:
         m_scale = ctx->getIntfScaleFactor();
         m_compact = ctx->compactMenus();
         m_background = QColor(light ? "#acacac" : "#191919");
-        m_background.setAlpha(242);
+        m_background.setAlpha(ctx->backdropBlurRequested() ? 230 : 255);
         m_foreground = QColor(light ? "#404040" : "#8f8f8f");
         m_disabled = QColor(light ? "#737373" : "#595959");
-        m_hover = QColor(light ? "#d5d5d5" : "#292929");
+        m_hover = QColor(light ? "#d5d5d5" : "#1f1f1f");
         m_border = QColor(light ? "#969696" : "#222222");
         m_accent = ctx->redesignAccent();
     }
@@ -250,6 +250,7 @@ public:
         qApp->installEventFilter(this);
         connect(ctx, &MainCtx::compactMenusChanged, this, [this] { refresh(); });
         connect(ctx, &MainCtx::intfScaleFactorChanged, this, [this] { refresh(); });
+        connect(ctx, &MainCtx::backdropBlurEnabledChanged, this, [this] { refresh(); });
     }
 protected:
     bool eventFilter(QObject* object, QEvent* event) override
