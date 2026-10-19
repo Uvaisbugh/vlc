@@ -191,6 +191,16 @@ TestCase {
         compare(profileActions.signalArguments[0][0], "music")
         compare(profiles.count, 0)
     }
+    function test_profileSubmenuUsesReferenceGap_data() {
+        return [{tag: "normal", scale: 1}, {tag: "fractional", scale: 1.125}]
+    }
+    function test_profileSubmenuUsesReferenceGap(data) {
+        menu.scaleFactor = data.scale
+        const submenu = openSubmenu(8)
+        const left = submenu.background.mapToItem(testCase, 0, 0).x
+        const right = menu.background.mapToItem(testCase, menu.width, 0).x
+        verify(Math.abs(left - right - 11 * data.scale) <= 1)
+    }
     function test_profileRowsStayStableWhenSettingsRefresh() {
         const submenu = openSubmenu(8)
         const first = submenu.itemAt(0)

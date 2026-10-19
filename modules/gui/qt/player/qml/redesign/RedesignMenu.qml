@@ -124,6 +124,7 @@ C.Menu {
     MenuRow { text: qsTr("Convert"); glyph: "menu-convert"; hint: "Ctrl+R"; onTriggered: root.activate("convert") }
     C.Menu {
         id: recentMenu
+        overlap: -root.theme.dp(11)
         objectName: "redesignRecentMenu"
         title: qsTr("Open Recent")
         width: root.theme.dp(root.theme.compactMenus ? 280 : 375); padding: root.padding
@@ -159,6 +160,7 @@ C.Menu {
     MenuDivider { }
     C.Menu {
         id: profileMenu
+        overlap: -root.theme.dp(11)
         objectName: "redesignProfileMenu"
         title: qsTr("Profile (%1)").arg(root.profileName)
         width: root.theme.dp(root.theme.compactMenus ? 240 : 265); padding: root.padding
