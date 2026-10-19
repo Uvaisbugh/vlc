@@ -2000,6 +2000,8 @@ vlc_module_begin ()
         change_safe ()
 
     add_bool( "save-recentplay", true, SAVE_RECENTPLAY, NULL )
+    add_string( "recentplay-filter", "", N_("Never remember items matching"),
+                N_("Enter a regular expression. VLC does not add matching file paths or links to the playback history. An empty field allows all paths and links.") )
 
     add_integer( "restore-playback-pos", VLC_PLAYER_RESTORE_PLAYBACK_POS_ASK,
                  RESTORE_PLAYBACK_POS_TEXT, RESTORE_PLAYBACK_POS_LONGTEXT )

@@ -47647,3 +47647,27 @@ msgstr "播放列表标志"
 #, qt-format
 msgid "Item flags"
 msgstr "项目标志"
+
+#: modules/gui/qt/player/qml/redesign/RedesignPreferencesCatalog.qml:52
+msgid "Clear history now"
+msgstr "立即清除历史记录"
+
+#: modules/gui/qt/dialogs/preferences/redesign_preferences.cpp:2286
+msgid "Enter a valid regular expression."
+msgstr "请输入有效的正则表达式。"
+
+#: modules/gui/qt/player/qml/redesign/RedesignPreferencesWindow.qml:49
+msgid "VLC cleared the playback history."
+msgstr "VLC 已清除播放历史记录。"
+
+#: modules/gui/qt/player/qml/redesign/RedesignPreferencesWindow.qml:49 modules/gui/qt/player/qml/redesign/RedesignPreferencesWindow.qml:89
+msgid "VLC cannot clear the playback history. Try again."
+msgstr "VLC 无法清除播放历史记录。请重试。"
+
+#: modules/gui/qt/dialogs/preferences/redesign_preferences.cpp:1415
+msgid "Remove the playback history for local files and network streams. Keep media files and playlists."
+msgstr "删除本地文件和网络串流的播放历史记录。保留媒体文件和播放列表。"
+
+#: src/libvlc-module.c:2004
+msgid "Enter a regular expression. VLC does not add matching file paths or links to the playback history. An empty field allows all paths and links."
+msgstr "请输入正则表达式。VLC 不会将匹配的文件路径或链接添加到播放历史记录中。字段为空时允许所有路径和链接。"

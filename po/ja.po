@@ -46803,3 +46803,27 @@ msgstr "プレイリストのフラグ"
 #, qt-format
 msgid "Item flags"
 msgstr "項目のフラグ"
+
+#: modules/gui/qt/player/qml/redesign/RedesignPreferencesCatalog.qml:52
+msgid "Clear history now"
+msgstr "履歴を今すぐ消去"
+
+#: modules/gui/qt/dialogs/preferences/redesign_preferences.cpp:2286
+msgid "Enter a valid regular expression."
+msgstr "有効な正規表現を入力してください。"
+
+#: modules/gui/qt/player/qml/redesign/RedesignPreferencesWindow.qml:49
+msgid "VLC cleared the playback history."
+msgstr "VLC は再生履歴を消去しました。"
+
+#: modules/gui/qt/player/qml/redesign/RedesignPreferencesWindow.qml:49 modules/gui/qt/player/qml/redesign/RedesignPreferencesWindow.qml:89
+msgid "VLC cannot clear the playback history. Try again."
+msgstr "VLC は再生履歴を消去できません。もう一度お試しください。"
+
+#: modules/gui/qt/dialogs/preferences/redesign_preferences.cpp:1415
+msgid "Remove the playback history for local files and network streams. Keep media files and playlists."
+msgstr "ローカルファイルとネットワークストリームの再生履歴を削除します。メディアファイルとプレイリストは保持されます。"
+
+#: src/libvlc-module.c:2004
+msgid "Enter a regular expression. VLC does not add matching file paths or links to the playback history. An empty field allows all paths and links."
+msgstr "正規表現を入力してください。VLC は一致するファイルパスやリンクを再生履歴に追加しません。空欄の場合はすべてのパスとリンクを許可します。"

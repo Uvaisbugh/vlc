@@ -39551,3 +39551,27 @@ msgstr "Playlist flags"
 #, qt-format
 msgid "Item flags"
 msgstr "Item flags"
+
+#: modules/gui/qt/player/qml/redesign/RedesignPreferencesCatalog.qml:52
+msgid "Clear history now"
+msgstr "Clear history now"
+
+#: modules/gui/qt/dialogs/preferences/redesign_preferences.cpp:2286
+msgid "Enter a valid regular expression."
+msgstr "Enter a valid regular expression."
+
+#: modules/gui/qt/player/qml/redesign/RedesignPreferencesWindow.qml:49
+msgid "VLC cleared the playback history."
+msgstr "VLC cleared the playback history."
+
+#: modules/gui/qt/player/qml/redesign/RedesignPreferencesWindow.qml:49 modules/gui/qt/player/qml/redesign/RedesignPreferencesWindow.qml:89
+msgid "VLC cannot clear the playback history. Try again."
+msgstr "VLC cannot clear the playback history. Try again."
+
+#: modules/gui/qt/dialogs/preferences/redesign_preferences.cpp:1415
+msgid "Remove the playback history for local files and network streams. Keep media files and playlists."
+msgstr "Remove the playback history for local files and network streams. Keep media files and playlists."
+
+#: src/libvlc-module.c:2004
+msgid "Enter a regular expression. VLC does not add matching file paths or links to the playback history. An empty field allows all paths and links."
+msgstr "Enter a regular expression. VLC does not add matching file paths or links to the playback history. An empty field allows all paths and links."

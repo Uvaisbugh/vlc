@@ -49755,3 +49755,27 @@ msgstr "Liste bayrakları"
 #, qt-format
 msgid "Item flags"
 msgstr "Öge bayrakları"
+
+#: modules/gui/qt/player/qml/redesign/RedesignPreferencesCatalog.qml:52
+msgid "Clear history now"
+msgstr "Geçmişi şimdi temizle"
+
+#: modules/gui/qt/dialogs/preferences/redesign_preferences.cpp:2286
+msgid "Enter a valid regular expression."
+msgstr "Geçerli bir düzenli ifade girin."
+
+#: modules/gui/qt/player/qml/redesign/RedesignPreferencesWindow.qml:49
+msgid "VLC cleared the playback history."
+msgstr "VLC oynatma geçmişini temizledi."
+
+#: modules/gui/qt/player/qml/redesign/RedesignPreferencesWindow.qml:49 modules/gui/qt/player/qml/redesign/RedesignPreferencesWindow.qml:89
+msgid "VLC cannot clear the playback history. Try again."
+msgstr "VLC oynatma geçmişini temizleyemiyor. Yeniden deneyin."
+
+#: modules/gui/qt/dialogs/preferences/redesign_preferences.cpp:1415
+msgid "Remove the playback history for local files and network streams. Keep media files and playlists."
+msgstr "Yerel dosyaların ve ağ akışlarının oynatma geçmişini kaldırın. Medya dosyaları ve oynatma listeleri korunur."
+
+#: src/libvlc-module.c:2004
+msgid "Enter a regular expression. VLC does not add matching file paths or links to the playback history. An empty field allows all paths and links."
+msgstr "Bir düzenli ifade girin. VLC, eşleşen dosya yollarını veya bağlantıları oynatma geçmişine eklemez. Boş bir alan tüm yollara ve bağlantılara izin verir."

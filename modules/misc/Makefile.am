@@ -134,6 +134,7 @@ libmedialibrary_plugin_la_SOURCES = \
 	misc/medialibrary/Thumbnailer.cpp \
 	misc/medialibrary/medialibrary.h \
 	misc/medialibrary/track_rules.hpp \
+	misc/medialibrary/history_filter.hpp \
 	misc/medialibrary/track_rule_store.hpp \
 	misc/medialibrary/library_storage.hpp \
 	misc/medialibrary/track_rule_store.cpp \

@@ -30,6 +30,7 @@
 #include <vlc_dialog.h>
 #include "medialibrary.h"
 #include "track_rules.hpp"
+#include "history_filter.hpp"
 #include "fs/fs.h"
 #include "fs/devicelister.h"
 
@@ -43,6 +44,7 @@
 #include <medialibrary/IPlaylist.h>
 #include <medialibrary/IBookmark.h>
 #include <medialibrary/IFolder.h>
+#include <medialibrary/IFile.h>
 
 #include <algorithm>
 #include <sstream>
@@ -1979,10 +1981,28 @@ int MediaLibrary::controlMedia( int query, va_list args )
     switch( query )
     {
         case VLC_ML_MEDIA_UPDATE_PROGRESS:
+        {
+            auto pattern = vlc::wrap_cptr(var_InheritString(m_vlc_ml, "recentplay-filter"));
+            if (pattern && *pattern) {
+                const vlc::medialibrary::HistoryFilter filter(pattern.get());
+                if (!filter.valid()) return VLC_SUCCESS;
+                try {
+                    const auto file = m->mainFile();
+                    if (!file) return VLC_SUCCESS;
+                    const auto uri = file->mrl();
+                    auto path = vlc::wrap_cptr(vlc_uri2path(uri.c_str()));
+                    if (!path) path.reset(vlc_uri_decode_duplicate(uri.c_str()));
+                    if (filter.excludes(uri, path ? path.get() : uri)) return VLC_SUCCESS;
+                } catch (const std::exception&) {
+                    // The file can disappear while playback is stopping.
+                    return VLC_SUCCESS;
+                }
+            }
             if ( m->setLastPosition( va_arg( args, double ) ) ==
                     medialibrary::IMedia::ProgressResult::Error )
                 return VLC_EGENERIC;
             return VLC_SUCCESS;
+        }
         case VLC_ML_MEDIA_GET_MEDIA_PLAYBACK_STATE:
         {
             auto meta = va_arg( args, int );

@@ -44,6 +44,10 @@ RedesignSettingsDialog {
     Connections {
         target: preferenceStore
         function onChanged() { if (!preferenceStore.errorMessage.length) root.resetFailed = false }
+        function onHistoryCleared(success) {
+            root.actionMessageIsError = !success
+            root.actionMessage = success ? qsTr("VLC cleared the playback history.") : qsTr("VLC cannot clear the playback history. Try again.")
+        }
         function onPluginScanChanged() {
             root.actionMessage = preferenceStore.pluginScanMessage
             root.actionMessageIsError = preferenceStore.pluginScanFailed
@@ -79,6 +83,13 @@ RedesignSettingsDialog {
         if (!preferenceStore.dirty || preferenceStore.save()) close()
     }
     function runAction(action) {
+        if (action === "redesign-clear-history") {
+            if (!preferenceStore.clearHistory()) {
+                actionMessageIsError = true
+                actionMessage = qsTr("VLC cannot clear the playback history. Try again.")
+            }
+            return
+        }
         if (action === "redesign-rescan-plugins") { preferenceStore.scanPlugins(); return }
         if (action === "redesign-reset-all") { resetDialog.open(); return }
         if (action === "redesign-reset-picture") {

@@ -43924,3 +43924,27 @@ msgstr "Indicateurs de la liste"
 #, qt-format
 msgid "Item flags"
 msgstr "Indicateurs de l’élément"
+
+#: modules/gui/qt/player/qml/redesign/RedesignPreferencesCatalog.qml:52
+msgid "Clear history now"
+msgstr "Effacer l’historique maintenant"
+
+#: modules/gui/qt/dialogs/preferences/redesign_preferences.cpp:2286
+msgid "Enter a valid regular expression."
+msgstr "Saisissez une expression régulière valide."
+
+#: modules/gui/qt/player/qml/redesign/RedesignPreferencesWindow.qml:49
+msgid "VLC cleared the playback history."
+msgstr "VLC a effacé l’historique de lecture."
+
+#: modules/gui/qt/player/qml/redesign/RedesignPreferencesWindow.qml:49 modules/gui/qt/player/qml/redesign/RedesignPreferencesWindow.qml:89
+msgid "VLC cannot clear the playback history. Try again."
+msgstr "VLC ne peut pas effacer l’historique de lecture. Réessayez."
+
+#: modules/gui/qt/dialogs/preferences/redesign_preferences.cpp:1415
+msgid "Remove the playback history for local files and network streams. Keep media files and playlists."
+msgstr "Supprimez l’historique de lecture des fichiers locaux et des flux réseau. Les fichiers multimédias et les listes de lecture sont conservés."
+
+#: src/libvlc-module.c:2004
+msgid "Enter a regular expression. VLC does not add matching file paths or links to the playback history. An empty field allows all paths and links."
+msgstr "Saisissez une expression régulière. VLC n’ajoute pas les chemins de fichiers ou les liens correspondants à l’historique de lecture. Un champ vide autorise tous les chemins et liens."

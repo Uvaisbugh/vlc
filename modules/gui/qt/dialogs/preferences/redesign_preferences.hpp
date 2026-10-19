@@ -49,6 +49,7 @@ public:
     Q_INVOKABLE bool startStereoTest();
     Q_INVOKABLE void stopStereoTest();
     Q_INVOKABLE bool scanPlugins();
+    Q_INVOKABLE bool clearHistory();
     QString pluginScanMessage() const { return m_pluginScanMessage; }
     bool pluginScanFailed() const { return m_pluginScanFailed; }
     Q_INVOKABLE QStringList subtitleSearchLanguages() const;
@@ -89,6 +90,7 @@ signals:
     void translationRevisionChanged();
     void stereoTestChanged();
     void pluginScanChanged();
+    void historyCleared(bool success);
 private:
     bool m_libraryStartupEdited = false;
     bool m_autoPreparseEdited = false;

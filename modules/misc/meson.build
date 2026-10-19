@@ -60,6 +60,7 @@ if medialibrary_dep.found()
             'medialibrary/Thumbnailer.cpp',
             'medialibrary/medialibrary.h',
             'medialibrary/track_rules.hpp',
+            'medialibrary/history_filter.hpp',
             'medialibrary/track_rule_store.hpp',
             'medialibrary/library_storage.hpp',
             'medialibrary/track_rule_store.cpp',

@@ -47,8 +47,9 @@ QtObject {
         privacy: [
             { title: qsTr("History"), rows: [
                 ["save-recentplay", qsTr("Save recently played items")],
-                ["restore-playback-pos", qsTr("Remember the playback position")],
-                ["qt-recentplay-filter", qsTr("Never remember items matching")] ] },
+                ["restore-playback-pos", qsTr("Remember the playback position"), {choiceLabels: {0: qsTr("Never"), 1: qsTr("Ask"), 2: qsTr("Always")}}],
+                ["recentplay-filter", qsTr("Never remember items matching")],
+                ["redesign-clear-history", qsTr("Clear history now")] ] },
             { title: qsTr("Network"), rows: [
                 ["metadata-network-access", qsTr("Fetch titles and cover art from the internet")],
                 ["filter:audio-filter:audioscrobbler", qsTr("Submit played tracks to last.fm")],
@@ -70,7 +71,7 @@ QtObject {
                 ["http-password", qsTr("Password"), {enabledWhen: "redesign-web-remote"}] ] } ],
         playback: [
             { title: qsTr("Startup"), rows: [
-                ["restore-playback-pos", qsTr("Continue where you left off")],
+                ["restore-playback-pos", qsTr("Continue where you left off"), {choiceLabels: {0: qsTr("Never"), 1: qsTr("Ask"), 2: qsTr("Always")}}],
                 ["playlist-autostart", qsTr("Start playing as soon as a file opens")],
                 ["rate", qsTr("Default playback speed"), {editor: "slider", from: 0.25, to: 2, step: 0.05, decimals: 2, suffix: "×", tickSuffix: "", ticks: [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2], compactTicks: [0.25, 1, 2], trackTicks: [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2]}],
                 ["playlist-cork", qsTr("Pause when another app uses audio")] ] },

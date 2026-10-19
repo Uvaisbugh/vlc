@@ -40,6 +40,8 @@
 #include "util/vlchotkeyconverter.hpp"
 #include "util/postprocessing_preferences.hpp"
 #include "util/interface_translator.hpp"
+#include "medialibrary/medialib.hpp"
+#include "../../../../misc/medialibrary/history_filter.hpp"
 #ifdef _WIN32
 #ifndef NOMINMAX
 #define NOMINMAX
@@ -568,6 +570,7 @@ QString categoryFor(const QString& name, int subcat)
         || subcat == SUBCAT_INPUT_VCODEC || subcat == SUBCAT_INPUT_ACODEC) return QStringLiteral("performance");
     if (subcat == SUBCAT_ADVANCED_NETWORK || subcat == SUBCAT_INPUT_ACCESS
         || name.startsWith(QLatin1String("http-"))) return QStringLiteral("network");
+    if (name == QLatin1String("recentplay-filter") || name == QLatin1String("save-recentplay")) return QStringLiteral("privacy");
     if (name.startsWith(QLatin1String("metadata-")) || name.contains(QLatin1String("scrobbler"))) return QStringLiteral("privacy");
     if (name.startsWith(QLatin1String("qt-"))) return QStringLiteral("interface");
     switch (subcat / 100) {
@@ -1361,6 +1364,17 @@ bool RedesignPreferences::isStaged(const QString& name) const
     return m_edits.contains(name);
 }
 
+bool RedesignPreferences::clearHistory()
+{
+    if (!m_ctx || !m_ctx->getMediaLibrary()) return false;
+    m_ctx->getMediaLibrary()->runOnMLThread<bool>(this,
+        [](vlc_medialibrary_t* ml, bool& success) {
+            success = vlc_ml_clear_history(ml, VLC_ML_HISTORY_TYPE_GLOBAL) == VLC_SUCCESS;
+        },
+        [this](quint64, bool& success) { emit historyCleared(success); });
+    return true;
+}
+
 QVariantMap RedesignPreferences::describe(const QString& name) const
 {
     if (name == QLatin1String("redesign-fullscreen-sensitivity")) {
@@ -1395,6 +1409,11 @@ QVariantMap RedesignPreferences::describe(const QString& name) const
     }
     if (!VLC_SKINS_ENABLED && name == QLatin1String("skins2-last"))
         return {};
+    if (name == QLatin1String("redesign-clear-history"))
+        return {{QStringLiteral("kind"), QStringLiteral("action")}, {QStringLiteral("editor"), QStringLiteral("action")},
+            {QStringLiteral("buttonLabel"), qtr("Clear")},
+            {QStringLiteral("supported"), m_ctx && m_ctx->getMediaLibrary()},
+            {QStringLiteral("help"), qtr("Remove the playback history for local files and network streams. Keep media files and playlists.")}};
     if (name == QLatin1String("redesign-rescan-plugins")) {
         if (!config_FindConfig("plugins-cache")) return {};
         return {{QStringLiteral("kind"), QStringLiteral("action")}, {QStringLiteral("editor"), QStringLiteral("action")},
@@ -2260,6 +2279,12 @@ bool RedesignPreferences::stage(const QString& name, const QVariant& proposed)
             || config_ValidateStartupOptions(VLC_OBJECT(m_ctx->getIntf()), normalized.toString().toUtf8().constData()) != VLC_SUCCESS)) {
         m_invalid.insert(name);
         m_error = qtr("Enter VLC options only. Check the option names and quotation marks.");
+        ++m_revision; emit changed(); return false;
+    }
+    if (valid && name == QLatin1String("recentplay-filter")
+        && !vlc::medialibrary::HistoryFilter(normalized.toString().toStdString()).valid()) {
+        m_invalid.insert(name);
+        m_error = qtr("Enter a valid regular expression.");
         ++m_revision; emit changed(); return false;
     }
     if (valid && name == QLatin1String("language")) {

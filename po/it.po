@@ -53685,3 +53685,27 @@ msgstr "Flag della scaletta"
 #, qt-format
 msgid "Item flags"
 msgstr "Flag dell’elemento"
+
+#: modules/gui/qt/player/qml/redesign/RedesignPreferencesCatalog.qml:52
+msgid "Clear history now"
+msgstr "Cancella la cronologia ora"
+
+#: modules/gui/qt/dialogs/preferences/redesign_preferences.cpp:2286
+msgid "Enter a valid regular expression."
+msgstr "Inserisci un’espressione regolare valida."
+
+#: modules/gui/qt/player/qml/redesign/RedesignPreferencesWindow.qml:49
+msgid "VLC cleared the playback history."
+msgstr "VLC ha cancellato la cronologia di riproduzione."
+
+#: modules/gui/qt/player/qml/redesign/RedesignPreferencesWindow.qml:49 modules/gui/qt/player/qml/redesign/RedesignPreferencesWindow.qml:89
+msgid "VLC cannot clear the playback history. Try again."
+msgstr "VLC non può cancellare la cronologia di riproduzione. Riprova."
+
+#: modules/gui/qt/dialogs/preferences/redesign_preferences.cpp:1415
+msgid "Remove the playback history for local files and network streams. Keep media files and playlists."
+msgstr "Rimuovi la cronologia di riproduzione dei file locali e dei flussi di rete. I file multimediali e le scalette vengono conservati."
+
+#: src/libvlc-module.c:2004
+msgid "Enter a regular expression. VLC does not add matching file paths or links to the playback history. An empty field allows all paths and links."
+msgstr "Inserisci un’espressione regolare. VLC non aggiunge alla cronologia di riproduzione i percorsi dei file o i collegamenti corrispondenti. Un campo vuoto consente tutti i percorsi e i collegamenti."

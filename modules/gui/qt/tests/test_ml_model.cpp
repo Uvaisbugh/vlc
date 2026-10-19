@@ -33,6 +33,7 @@
 #include <QTest>
 #include <QTemporaryDir>
 #include "../../../misc/medialibrary/track_rules.hpp"
+#include "../../../misc/medialibrary/history_filter.hpp"
 #include <QFile>
 #include <QQmlEngine>
 #include <QQmlContext>
@@ -166,6 +167,35 @@ class TestVLCMLModel : public QObject
     Q_OBJECT
 
 private slots:
+    void testHistoryExclusions_data()
+    {
+        QTest::addColumn<QString>("pattern");
+        QTest::addColumn<QString>("uri");
+        QTest::addColumn<QString>("path");
+        QTest::addColumn<bool>("valid");
+        QTest::addColumn<bool>("excluded");
+        QTest::newRow("empty") << "" << "file:///Private/a.mp4" << "/Private/a.mp4" << true << false;
+        QTest::newRow("filename") << "private" << "file:///Private/a.mp4" << "/Private/a.mp4" << true << true;
+        QTest::newRow("nonmatching") << "private" << "file:///Films/a.mp4" << "/Films/a.mp4" << true << false;
+        QTest::newRow("decoded spaces") << "Secret Show" << "file:///Secret%20Show/a.mp4" << "/Secret Show/a.mp4" << true << true;
+        QTest::newRow("encoded URL") << "%20" << "https://example.test/Secret%20Show" << "https://example.test/Secret Show" << true << true;
+        QTest::newRow("network") << "example[.]test" << "https://example.test/film" << "https://example.test/film" << true << true;
+        QTest::newRow("alternation") << "private|secret" << "file:///Secret/a.mp4" << "/Secret/a.mp4" << true << true;
+        QTest::newRow("extension") << "[.]mkv$" << "file:///Films/a.MKV" << "/Films/a.MKV" << true << true;
+        QTest::newRow("windows path") << R"(^C:\\Private)" << "file:///C:/Private/a.mp4" << R"(C:\Private\a.mp4)" << true << true;
+        QTest::newRow("unicode") << "猫" << "file:///%E7%8C%AB/a.mp4" << "/猫/a.mp4" << true << true;
+        QTest::newRow("invalid regex") << "[" << "file:///Films/a.mp4" << "/Films/a.mp4" << false << true;
+    }
+
+    void testHistoryExclusions()
+    {
+        QFETCH(QString, pattern); QFETCH(QString, uri); QFETCH(QString, path);
+        QFETCH(bool, valid); QFETCH(bool, excluded);
+        const vlc::medialibrary::HistoryFilter filter(pattern.toStdString());
+        QCOMPARE(filter.valid(), valid);
+        QCOMPARE(filter.excludes(uri.toStdString(), path.toStdString()), excluded);
+    }
+
     void testSourceFolderCategories_data()
     {
         QTest::addColumn<bool>("folderQueryFails");
