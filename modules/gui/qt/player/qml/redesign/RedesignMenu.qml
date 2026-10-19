@@ -14,6 +14,7 @@ C.Menu {
     property bool recentFilesAvailable: true
     property bool recentFilesEnabled: true
     property var profiles: []
+    readonly property string profileRows: JSON.stringify(profiles)
     property string selectedProfile: ""
     readonly property string profileName: profiles.find(profile => profile.id === selectedProfile)?.name || qsTr("Default Profile")
     readonly property RedesignTheme theme: RedesignTheme { scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor }
@@ -41,7 +42,7 @@ C.Menu {
     popupType: C.Popup.Item
     background: MenuSurface { shown: root.visible }
     delegate: MenuRow { }
-    onOpened: { currentIndex = 0; itemAt(0).forceActiveFocus() }
+    onAboutToShow: currentIndex = 0
 
     function activate(action) { dismiss(); actionRequested(action) }
 
@@ -165,7 +166,10 @@ C.Menu {
         delegate: MenuRow { }
         background: MenuSurface { shown: profileMenu.visible }
         Instantiator {
-            model: [{id: "", name: qsTr("Default Profile")}].concat(root.profiles)
+            model: {
+                const rows = JSON.parse(root.profileRows)
+                return rows.length ? rows : [{id: "", name: qsTr("Default Profile")}]
+            }
             delegate: MenuRow {
                 required property var modelData
                 id: profileRow

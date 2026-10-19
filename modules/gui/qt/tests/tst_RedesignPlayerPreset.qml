@@ -61,12 +61,19 @@ TestCase {
         mouseClick(item("playerPresetNameSave"))
         compare(store.lastAction, "rename"); compare(store.lastName, "Movies")
     }
+    function test_applicationDefaultIsAvailableFromActions() {
+        selector.applicationProfile = true; selector.selectorVisible = false
+        selector.openProfileActions("show", "My Show", 400, 400)
+        tryCompare(item("playerPresetActions"), "opened", true)
+        keyClick(Qt.Key_End); keyClick(Qt.Key_Return)
+        compare(store.lastAction, "select"); compare(store.lastId, "")
+    }
     function test_failedProfileDeleteCanRetry() {
         selector.applicationProfile = true; selector.selectorVisible = false
         selector.openProfileActions("show", "My Show", 400, 400)
         const actions = item("playerPresetActions")
         tryCompare(actions, "opened", true)
-        keyClick(Qt.Key_End); keyClick(Qt.Key_Return)
+        keyClick(Qt.Key_Home); keyClick(Qt.Key_Down); keyClick(Qt.Key_Down); keyClick(Qt.Key_Return)
         tryCompare(item("playerPresetDeleteDialog"), "opened", true)
         store.failSave = true
         mouseClick(findChild(item("playerPresetDeleteDialog"), "confirmationAccept"))

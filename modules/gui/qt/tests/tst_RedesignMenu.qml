@@ -175,7 +175,7 @@ TestCase {
     }
     function test_profileActionsFromKeyboard() {
         const submenu = openSubmenu(8)
-        submenu.itemAt(1).forceActiveFocus()
+        submenu.itemAt(0).forceActiveFocus()
         keyClick(Qt.Key_F10, Qt.ShiftModifier)
         compare(profileActions.count, 1)
         compare(profileActions.signalArguments[0][0], "movies")
@@ -185,28 +185,39 @@ TestCase {
     }
     function test_profileActionsFromRightClick() {
         const submenu = openSubmenu(8)
-        const row = submenu.itemAt(2)
+        const row = submenu.itemAt(1)
         mouseClick(row, row.width / 2, row.height / 2, Qt.RightButton)
         compare(profileActions.count, 1)
         compare(profileActions.signalArguments[0][0], "music")
         compare(profiles.count, 0)
     }
-    function test_profileSelectionAndDefault() {
-        let submenu = openSubmenu(8)
-        tryCompare(submenu, "count", 5)
-        verify(submenu.itemAt(1).checked)
-        submenu.itemAt(2).forceActiveFocus()
+    function test_profileRowsStayStableWhenSettingsRefresh() {
+        const submenu = openSubmenu(8)
+        const first = submenu.itemAt(0)
+        submenu.currentIndex = 1
+        menu.profiles = [{id: "movies", name: "Movies"}, {id: "music", name: "Music"}]
+        wait(10)
+        compare(submenu.itemAt(0), first)
+        compare(submenu.currentIndex, 1)
+    }
+    function test_profileSelectionMatchesReference() {
+        const submenu = openSubmenu(8)
+        tryCompare(submenu, "count", 4)
+        compare(submenu.itemAt(0).text, "Movies")
+        verify(submenu.itemAt(0).checked)
+        submenu.itemAt(1).forceActiveFocus()
         keyClick(Qt.Key_Return)
         compare(profiles.count, 1)
         compare(menu.selectedProfile, "music")
         compare(menu.itemAt(8).text, "Profile (Music)")
-        menu.open()
-        tryCompare(menu, "opened", true)
-        submenu = openSubmenu(8)
-        submenu.itemAt(0).forceActiveFocus()
-        keyClick(Qt.Key_Return)
-        compare(menu.selectedProfile, "")
-        compare(menu.itemAt(8).text, "Profile (Default Profile)")
+    }
+    function test_emptyProfileListShowsDefault() {
+        menu.profiles = []; menu.selectedProfile = ""
+        const submenu = openSubmenu(8)
+        tryCompare(submenu, "count", 3)
+        compare(submenu.itemAt(0).text, "Default Profile")
+        verify(submenu.itemAt(0).checked)
+        menu.profiles = [{id: "movies", name: "Movies"}, {id: "music", name: "Music"}]
     }
     function test_historyWithoutMediaLibrary() {
         menu.recentFilesAvailable = false

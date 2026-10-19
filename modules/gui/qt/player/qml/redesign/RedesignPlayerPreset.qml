@@ -165,10 +165,11 @@ Item {
         objectName: "playerPresetActions"
         parent: root.applicationProfile ? root.C.Overlay.overlay : dropdown.contentItem
         focus: true
-        onOpened: { currentIndex = 0; itemAt(0).forceActiveFocus() }
+        onAboutToShow: currentIndex = 0
         width: root.theme.dp(root.theme.compactMenus ? 220 : 260); padding: root.theme.menuPadding
         background: Rectangle { color: root.theme.background; radius: root.theme.dp(6); border.color: root.theme.border }
-        delegate: C.MenuItem {
+        delegate: ProfileActionItem { }
+        component ProfileActionItem: C.MenuItem {
             id: actionItem
             implicitHeight: root.theme.menuItemHeight
             topPadding: 0; bottomPadding: 0
@@ -184,6 +185,18 @@ Item {
         C.Action { text: qsTr("Rename"); onTriggered: root.namePreset("rename", root.contextId, root.contextName) }
         C.Action { text: qsTr("Duplicate"); onTriggered: root.namePreset("duplicate", root.contextId, root.contextName) }
         C.Action { text: qsTr("Delete"); onTriggered: { dropdown.close(); deleteDialog.open() } }
+        Instantiator {
+            model: 1
+            active: root.applicationProfile
+            delegate: ProfileActionItem {
+                objectName: "applicationProfileDefaultAction"
+                text: qsTr("Default Profile")
+                Rectangle { anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top; height: 1; color: root.theme.border }
+                onTriggered: if (!root.backend.selectPlayerPreset("")) root.retrySelection("")
+            }
+            onObjectAdded: (index, object) => actions.addItem(object)
+            onObjectRemoved: (index, object) => actions.removeItem(object)
+        }
     }
     C.Popup {
         id: nameDialog
@@ -240,7 +253,7 @@ Item {
         onAccepted: {
             if (root.backend.deletePlayerPreset(root.contextId)) return
             root.nameAction = "delete"; root.retryNameSave = root.backend.pendingPlayerPreset
-            nameDialog.open()
+            Qt.callLater(() => nameDialog.open())
         }
     }
 }

@@ -67,9 +67,9 @@ TestCase {
             keyClick(Qt.Key_Right)
             const submenu = menu.itemAt(8).subMenu
             tryCompare(submenu, "opened", true)
-            compare(submenu.itemAt(1).implicitHeight, compact ? 28 : 48)
-            verify(submenu.itemAt(1).contentItem.children[0].visible)
-            verify(submenu.itemAt(1).checked)
+            compare(submenu.itemAt(0).implicitHeight, compact ? 28 : 48)
+            verify(submenu.itemAt(0).contentItem.children[0].visible)
+            verify(submenu.itemAt(0).checked)
             keyClick(Qt.Key_Escape)
             tryCompare(submenu, "visible", false)
         }
