@@ -27,6 +27,7 @@ TestCase {
         testCase.width = 800; testCase.height = 600
         button.x = 300; button.y = 20
         menu.entries = [{action: "first", label: "First"}, {action: "second", label: "Second"}]
+        menu.checkedAction = ""
         actions.clear()
         mouseMove(testCase, 10, 580)
     }
@@ -72,6 +73,35 @@ TestCase {
         checkInsideWindow()
         mouseClick(button)
         tryCompare(menu, "visible", false)
+    }
+    function test_checkedChoiceReceivesKeyboardFocus() {
+        menu.checkedAction = "second"
+        button.forceActiveFocus(); keyClick(Qt.Key_Space)
+        tryCompare(menu, "opened", true)
+        tryCompare(menu, "currentIndex", 1)
+        verify(menu.itemAt(1).highlighted)
+        keyClick(Qt.Key_Return)
+        compare(actions.signalArguments[0][0], "second")
+        tryCompare(menu, "visible", false)
+    }
+    function test_disabledCheckedChoiceDoesNotReceiveKeyboardFocus() {
+        menu.entries = [{action: "first", label: "First"}, {action: "second", label: "Second", enabled: false}]
+        menu.checkedAction = "second"
+        button.forceActiveFocus(); keyClick(Qt.Key_Space)
+        tryCompare(menu, "opened", true)
+        verify(menu.currentIndex !== 1)
+        keyClick(Qt.Key_Down); keyClick(Qt.Key_Return)
+        compare(actions.signalArguments[0][0], "first")
+    }
+    function test_checkedChoiceDoesNotOverrideImmediateArrowNavigation() {
+        menu.checkedAction = "second"
+        button.forceActiveFocus(); keyClick(Qt.Key_Space)
+        tryCompare(menu, "opened", true)
+        keyClick(Qt.Key_Up)
+        wait(30)
+        compare(menu.currentIndex, 0)
+        keyClick(Qt.Key_Return)
+        compare(actions.signalArguments[0][0], "first")
     }
     function test_nearRightEdgeStaysInWindow() {
         button.x = 750

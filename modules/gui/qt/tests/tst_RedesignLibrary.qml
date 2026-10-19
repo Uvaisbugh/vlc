@@ -741,6 +741,20 @@ TestCase {
         mouseClick(list)
         compare(library.grid, false)
     }
+    function test_viewMenuKeyboardStartsAtCurrentChoice_data() {
+        return [{tag: "list", grid: false, index: 1}, {tag: "grid", grid: true, index: 0}]
+    }
+    function test_viewMenuKeyboardStartsAtCurrentChoice(data) {
+        library.grid = data.grid
+        mouseMove(testCase, width - 10, height - 10)
+        const button = findChild(library, "libraryViewButton"), menu = findChild(library, "libraryViewMenu")
+        button.forceActiveFocus(); keyClick(Qt.Key_Space)
+        tryCompare(menu, "opened", true)
+        tryCompare(menu, "currentIndex", data.index)
+        keyClick(Qt.Key_Return)
+        tryCompare(menu, "visible", false)
+        compare(library.grid, data.grid)
+    }
     function test_headerSettingsAction() {
         mouseClick(findChild(library, "libraryMoreButton"))
         tryCompare(findChild(library, "libraryMoreMenu"), "opened", true)

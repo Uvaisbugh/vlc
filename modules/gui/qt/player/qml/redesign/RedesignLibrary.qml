@@ -225,7 +225,7 @@ RedesignLibraryView {
             {action: "convert", label: qsTr("Convert"), icon: "convert", accent: true},
             {action: "queue", label: qsTr("Add to Queue"), icon: "queue", accent: true},
             {action: "add-playlist", label: qsTr("Add to Playlist"), icon: "playlist", accent: true}
-        ].concat(target.kind === "file" ? [{action: "explorer", label: qsTr("Show in File Explorer"), icon: "folder", accent: true}] : [])
+        ].concat(target.kind === "file" ? [{action: "explorer", label: qsTr("Show in File Explorer"), icon: "folder-two-tone", accent: true}] : [])
             .concat([{action: "source", label: qsTr("Go to Source"), icon: "source", accent: true},
                 {action: "subtitle-tracks", label: qsTr("Add Subtitle Tracks"), icon: "subtitles-two-tone", accent: true},
                 {action: "audio-tracks", label: qsTr("Add Audio Tracks"), icon: "audio-two-tone", accent: true},

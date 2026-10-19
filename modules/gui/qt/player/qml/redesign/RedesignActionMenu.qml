@@ -34,6 +34,16 @@ C.Menu {
         open()
     }
     onClosed: buttonAnchor = null
+    function focusCheckedChoice() {
+        if (!Qt.isQtObject(root) || !opened || !checkedAction.length || currentIndex >= 0) return
+        const selected = entries.findIndex(entry => entry.action === checkedAction && entry.enabled !== false)
+        if (selected >= 0) {
+            contentItem.forceLayout()
+            itemAt(selected).forceActiveFocus(Qt.PopupFocusReason)
+        }
+    }
+    // Let the menu's ListView finish its current-index update first.
+    onOpened: Qt.callLater(focusCheckedChoice)
     onButtonAnchorChanged: if (!buttonAnchor && visible) close()
     popupType: C.Popup.Item
     background: Rectangle {
@@ -68,12 +78,13 @@ C.Menu {
             checked: root.checkedAction.length > 0 ? modelData.action === root.checkedAction : modelData.checked === true
             indicator: null
             arrow: null
-            background: Rectangle { radius: root.theme.dp(6); color: row.highlighted ? root.theme.hover : "transparent" }
+            background: Rectangle { radius: root.theme.dp(6); color: !row.highlighted ? "transparent" : root.lightTheme ? root.theme.hover : "#1f1f1f" }
             contentItem: RowLayout {
                 spacing: root.theme.dp(10)
                 opacity: row.enabled ? 1 : 0.35
                 RedesignIcon {
                     id: actionIcon
+                    objectName: "libraryActionIcon_" + row.modelData.action
                     visible: !root.theme.compactMenus && !!row.modelData.icon
                     Layout.preferredWidth: root.theme.dp(24)
                     Layout.preferredHeight: root.theme.dp(24)
@@ -90,12 +101,13 @@ C.Menu {
                     elide: Text.ElideRight
                 }
                 RedesignIcon {
+                    objectName: "libraryActionCheck_" + row.modelData.action
                     visible: row.checkable
                     opacity: row.checked ? 1 : 0
-                    Layout.preferredWidth: root.theme.dp(20)
-                    Layout.preferredHeight: root.theme.dp(20)
-                    sourceSize: Qt.size(root.theme.dp(20) * Screen.devicePixelRatio, root.theme.dp(20) * Screen.devicePixelRatio)
-                    name: "check"
+                    Layout.preferredWidth: root.theme.dp(24)
+                    Layout.preferredHeight: root.theme.dp(24)
+                    sourceSize: Qt.size(root.theme.dp(24) * Screen.devicePixelRatio, root.theme.dp(24) * Screen.devicePixelRatio)
+                    name: "check-active"
                     color: root.theme.accent
                 }
             }
