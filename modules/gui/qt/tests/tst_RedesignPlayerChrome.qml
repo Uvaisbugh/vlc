@@ -51,6 +51,30 @@ TestCase {
         tryVerify(() => item("mainMenuButton").parent.objectName === "customFooterLeft")
         tryVerify(() => Math.abs(point("seekBar").x - 104) < 1 && Math.abs(point("seekBar").y - 986) < 1)
     }
+    function test_alternateNavigationUsesReferenceDividerSpacing_data() {
+        return [{tag: "normal", scale: 1}, {tag: "fractional", scale: 1.125}]
+    }
+    function test_alternateNavigationUsesReferenceDividerSpacing(data) {
+        alternate()
+        player.scaleFactor = data.scale
+        // Qt layouts round each control independently at fractional scales.
+        const tolerance = data.scale === 1 ? 1 : 3
+        const divider = player.chromeItems["divider:1"]
+        tryVerify(() => Math.abs(divider.mapToItem(player, 0, 0).x - 99 * data.scale) < tolerance)
+        const folderIcon = findChild(item("mediaFolderButton"), "redesignButtonIcon")
+        verify(folderIcon)
+        tryVerify(() => Math.abs(folderIcon.mapToItem(player, 0, 0).x - 113 * data.scale) < tolerance)
+        const saved = player.layoutModel.serialize()
+        player.layoutModel.finish(true)
+        player.playerLayout = ""
+        player.layoutModel.reload()
+        player.scaleFactor = 1
+        settledDefault()
+        player.scaleFactor = data.scale
+        player.playerLayout = saved
+        tryVerify(() => Math.abs(divider.mapToItem(player, 0, 0).x - 99 * data.scale) < tolerance)
+        tryVerify(() => Math.abs(folderIcon.mapToItem(player, 0, 0).x - 113 * data.scale) < tolerance)
+    }
     function test_fullscreenOpacityBlendsBackgroundWithoutFadingControls_data() {
         return [{tag: "dark quarter", light: false, alpha: 0.25},
                 {tag: "light quarter", light: true, alpha: 0.25},
@@ -79,6 +103,17 @@ TestCase {
         }
         player.fullscreen = false
         compare(header.color.a, 1); compare(toolbar.color.a, 1)
+    }
+    function test_windowButtonsRecoverAfterScaledCustomLayout() {
+        alternate(); player.scaleFactor = 1.125
+        wait(20)
+        player.playerLayout = ""; player.layoutModel.reload(); player.scaleFactor = 1
+        settledDefault()
+        player.maximized = true
+        const close = item("windowCloseButton")
+        tryCompare(close, "width", 42); tryCompare(close, "height", 40)
+        tryVerify(() => close.mapToItem(player, close.width, 0).x === player.width
+                  && close.mapToItem(player, close.width, 0).y === 0)
     }
     function test_closeReachesScreenCornerWithoutMovingIcon_data() {
         return [{tag: "maximized", max: true, scale: 1},

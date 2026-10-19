@@ -18,6 +18,22 @@ Item {
     property var originalParents: ({})
     property bool ready: false
     property bool applying: false
+    readonly property string controlIds: JSON.stringify(Object.keys(allControls))
+    readonly property bool compactDividerGap: renderedLayout.zones.footerLeft.some(id => id.startsWith("divider:"))
+    Instantiator {
+        model: JSON.parse(root.controlIds)
+        delegate: Binding {
+            required property string modelData
+            readonly property Item control: root.allControls[modelData]
+            target: control ? control.Layout : null
+            property: "rightMargin"
+            // The reference uses 10px between controls and 5px after a divider.
+            value: root.theme.dp(root.renderedLayout.zones.footerLeft.slice(-1)[0] === modelData ? 0 : 5)
+            when: root.custom && !root.applying && root.compactDividerGap && !!control && control.parent === footerLeft
+                && !modelData.startsWith("divider:")
+            restoreMode: Binding.RestoreBindingOrValue
+        }
+    }
     visible: false
 
     function hasTimeline(zone) { return renderedLayout.zones[zone].includes("timeline") }
@@ -117,7 +133,7 @@ Item {
                 width: root.hasSpacer("footerLeft") && !root.hasStretch("footerCenter")
                     ? Math.max(implicitWidth, (parent.width - root.preferredWidth("footerCenter")) / 2 - root.theme.dp(28)) : implicitWidth
                 anchors.verticalCenter: parent.verticalCenter
-                spacing: root.theme.dp(10)
+                spacing: root.theme.dp(root.compactDividerGap ? 5 : 10)
             }
             RowLayout {
                 id: footerCenter

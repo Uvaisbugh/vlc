@@ -573,7 +573,16 @@ FocusScope {
                 Accessible.checkable: true; Accessible.checked: root.libraryOpen
                 onClicked: root.libraryOpen = !root.libraryOpen
             }
-            Rectangle { id: headerDivider; visible: !root.presentationOnly && !root.libraryExpanded; Layout.leftMargin: theme.dp(2); Layout.rightMargin: theme.dp(6); width: theme.dp(1); height: theme.dp(18); color: theme.border }
+            Rectangle {
+                id: headerDivider
+                readonly property bool inFooter: !!parent && parent.objectName.startsWith("customFooter")
+                visible: !root.presentationOnly && !root.libraryExpanded
+                // The lower toolbar already adds spacing between controls.
+                // Retain the reference gap without the header's extra padding.
+                Layout.leftMargin: theme.dp(inFooter ? 1 : 2)
+                Layout.rightMargin: theme.dp(inFooter ? 0 : 6)
+                width: theme.dp(1); height: theme.dp(18); color: theme.border
+            }
             ChromeButton {
                 id: mediaFolderButton
                 objectName: "mediaFolderButton"
@@ -613,6 +622,25 @@ FocusScope {
                 text: root.mediaTitle
                 font.pixelSize: theme.dp(14)
                 elide: Text.ElideRight; color: theme.foreground
+            }
+        }
+        Instantiator {
+            model: [minimizeButton, maximizeButton, fullscreenButton, closeButton]
+            delegate: QtObject {
+                id: windowSize
+                required property var modelData
+                property Binding widthRule: Binding {
+                    target: windowSize.modelData; property: "width"
+                    value: windowSize.modelData.implicitWidth
+                    when: windowSize.modelData.parent === windowControls
+                    restoreMode: Binding.RestoreBindingOrValue
+                }
+                property Binding heightRule: Binding {
+                    target: windowSize.modelData; property: "height"
+                    value: windowSize.modelData.implicitHeight
+                    when: windowSize.modelData.parent === windowControls
+                    restoreMode: Binding.RestoreBindingOrValue
+                }
             }
         }
         Row {
