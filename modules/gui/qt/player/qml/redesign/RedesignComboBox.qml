@@ -8,6 +8,8 @@ C.ComboBox {
     property real scaleFactor: 1
     property bool lightTheme: false
     property bool showCurvePreviews: false
+    property bool showIcons: false
+    property real choicePadding: -1
     property bool showSelectionMark: showCurvePreviews
     // Opt in for array models whose unavailable rows have enabled: false.
     property bool restrictChoices: false
@@ -83,12 +85,18 @@ C.ComboBox {
         enabled: root.choiceEnabled(index)
         width: ListView.view.width
         implicitHeight: root.theme.dp(root.theme.compactMenus ? Math.min(28, root.choiceHeight) : root.choiceHeight)
-        leftPadding: root.theme.compactMenus ? root.theme.dp(8) : padding; rightPadding: leftPadding
+        leftPadding: root.choicePadding >= 0 ? root.theme.dp(root.theme.compactMenus ? 8 : root.choicePadding) : root.theme.compactMenus ? root.theme.dp(8) : padding; rightPadding: leftPadding
         topPadding: root.theme.compactMenus ? 0 : padding; bottomPadding: topPadding
         text: root.labelAt(index)
         highlighted: root.highlightedIndex === index
         contentItem: RowLayout {
             spacing: root.theme.dp(10)
+            RedesignIcon {
+                readonly property string icon: root.model && root.model[index] ? root.model[index].iconName || "" : ""
+                visible: root.showIcons && !root.theme.compactMenus && icon.length > 0
+                Layout.preferredWidth: root.theme.dp(24); Layout.preferredHeight: root.theme.dp(24)
+                name: icon; color: root.theme.foreground; detailColor: root.theme.menuAccent
+            }
             RedesignSvg {
                 readonly property var curve: root.model && root.model[index] ? root.model[index].curve || [] : []
                 readonly property color fillColor: root.theme.accent

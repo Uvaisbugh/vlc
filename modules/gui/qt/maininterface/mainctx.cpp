@@ -429,6 +429,7 @@ QVariantMap MainCtx::redesignPlayerPreferences() const
         {QStringLiteral("fullscreenSensitivity"), QVariant::fromValue<qlonglong>(var_InheritInteger(p_intf, "qt-fs-sensitivity"))},
         {QStringLiteral("seekPreview"), bool(config_GetInt("qt-seek-preview"))},
         {QStringLiteral("subtitleTimeline"), bool(config_GetInt("qt-subtitle-timeline"))},
+        {QStringLiteral("audioWaveform"), bool(config_GetInt("qt-audio-waveform"))},
         {QStringLiteral("layout"), qfu(layout ? layout : "")}};
     free(layout);
     return preferences;

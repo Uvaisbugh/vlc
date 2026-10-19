@@ -364,6 +364,8 @@ vlc_module_begin ()
               nullptr )
 
     add_bool("qt-remember-window-geometry", true, N_("Remember window size and position"), nullptr)
+    add_bool("qt-audio-waveform", false, N_("Show Audio Waveform on Seekbar"),
+        N_("Read audio levels from a local file. Show them on the seekbar."))
     add_bool("qt-subtitle-timeline", false, N_("Show Subtitle Timeline on Seekbar"), nullptr)
     add_bool("qt-seek-preview", true, N_("Show video previews on the seekbar"),
         N_("Show a video frame when you point to the seekbar."))

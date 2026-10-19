@@ -668,9 +668,8 @@ msgid "Spectrum"
 msgstr "Spektrum"
 
 #: src/audio_output/output.c:273
-#, fuzzy
 msgid "VU meter"
-msgstr "VU Metre"
+msgstr "VU ölçer"
 
 #: src/audio_output/output.c:312 src/libvlc-module.c:201
 msgid "Audio filters"
@@ -49779,3 +49778,19 @@ msgstr "Yerel dosyaların ve ağ akışlarının oynatma geçmişini kaldırın.
 #: src/libvlc-module.c:2004
 msgid "Enter a regular expression. VLC does not add matching file paths or links to the playback history. An empty field allows all paths and links."
 msgstr "Bir düzenli ifade girin. VLC, eşleşen dosya yollarını veya bağlantıları oynatma geçmişine eklemez. Boş bir alan tüm yollara ve bağlantılara izin verir."
+
+#: modules/gui/qt/player/qml/redesign/RedesignPlaybackSettings.qml:119
+msgid "Waveform"
+msgstr "Dalga biçimi"
+
+#: modules/gui/qt/qt.cpp:367
+msgid "Show Audio Waveform on Seekbar"
+msgstr "Arama çubuğunda ses dalga biçimini göster"
+
+#: modules/gui/qt/qt.cpp:368
+msgid "Read audio levels from a local file. Show them on the seekbar."
+msgstr "Yerel bir dosyadan ses düzeylerini okuyun. Bunları arama çubuğunda gösterin."
+
+#: modules/gui/qt/player/qml/redesign/RedesignPlaybackSettings.qml:155
+msgid "VLC cannot read audio levels for this file."
+msgstr "VLC bu dosyanın ses düzeylerini okuyamıyor."

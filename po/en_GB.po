@@ -638,9 +638,8 @@ msgid "Spectrum"
 msgstr "Spectrum"
 
 #: src/audio_output/output.c:273
-#, fuzzy
 msgid "VU meter"
-msgstr "Vu meter"
+msgstr "VU meter"
 
 #: src/audio_output/output.c:312 src/libvlc-module.c:201
 msgid "Audio filters"
@@ -39575,3 +39574,19 @@ msgstr "Remove the playback history for local files and network streams. Keep me
 #: src/libvlc-module.c:2004
 msgid "Enter a regular expression. VLC does not add matching file paths or links to the playback history. An empty field allows all paths and links."
 msgstr "Enter a regular expression. VLC does not add matching file paths or links to the playback history. An empty field allows all paths and links."
+
+#: modules/gui/qt/player/qml/redesign/RedesignPlaybackSettings.qml:119
+msgid "Waveform"
+msgstr "Waveform"
+
+#: modules/gui/qt/qt.cpp:367
+msgid "Show Audio Waveform on Seekbar"
+msgstr "Show Audio Waveform on Seekbar"
+
+#: modules/gui/qt/qt.cpp:368
+msgid "Read audio levels from a local file. Show them on the seekbar."
+msgstr "Read audio levels from a local file. Show them on the seekbar."
+
+#: modules/gui/qt/player/qml/redesign/RedesignPlaybackSettings.qml:155
+msgid "VLC cannot read audio levels for this file."
+msgstr "VLC cannot read audio levels for this file."

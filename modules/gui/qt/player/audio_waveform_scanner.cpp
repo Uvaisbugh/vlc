@@ -1,0 +1,240 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+#ifdef HAVE_CONFIG_H
+# include "config.h"
+#endif
+
+#include "audio_waveform_scanner.hpp"
+#include <vlc_aout.h>
+#include <vlc_block.h>
+#include <vlc_codec.h>
+#include <vlc_demux.h>
+#include <vlc_es_out.h>
+#include <vlc_stream.h>
+#include <algorithm>
+#include <atomic>
+#include <cmath>
+#include <cstring>
+#include <memory>
+#include <mutex>
+#include <vector>
+
+namespace {
+struct Output;
+struct AudioDecoder
+{
+    decoder_t decoder;
+    es_format_t input;
+    Output* output;
+    aout_filters_t* filters;
+    audio_sample_format_t format;
+};
+struct Track
+{
+    es_format_t format;
+    bool selected;
+    AudioDecoder* decoder = nullptr;
+    bool drained = false;
+    Track(const es_format_t& source, bool selected) : selected(selected) { es_format_Copy(&format, &source); }
+    ~Track() {
+        if (decoder) {
+            decoder_Clean(&decoder->decoder);
+            if (decoder->filters) aout_FiltersDelete(&decoder->decoder, decoder->filters);
+            es_format_Clean(&decoder->input);
+            vlc_object_delete(&decoder->decoder);
+        }
+        es_format_Clean(&format);
+    }
+};
+struct Output : es_out_t
+{
+    vlc_object_t* parent;
+    const AudioWaveformSource& source;
+    std::vector<std::unique_ptr<Track>> tracks;
+    QVector<float> peaks;
+    vlc_tick_t duration;
+    int audioCount = 0;
+    bool selectedFound = false;
+    std::atomic_bool failed{false};
+    bool receivedAudio = false;
+    std::mutex mutex;
+
+    Output(vlc_object_t* parent, const AudioWaveformSource& source);
+    void collect(AudioDecoder* decoder, block_t* block) {
+        std::lock_guard<std::mutex> lock(mutex);
+        if (vlc_killed() || failed) { block_Release(block); return; }
+        if (!decoder->filters) { failed = true;block_Release(block);return; }
+        block = aout_FiltersPlay(decoder->filters, block, 1.f);
+        if (!block) return;
+        const auto channels = decoder->format.i_channels;
+        const auto rate = decoder->format.i_rate;
+        const auto count = std::min<size_t>(block->i_nb_samples, channels ? block->i_buffer / (sizeof(float) * channels) : 0);
+        if (!channels || !rate || duration <= 0 || block->i_pts < VLC_TICK_0) {
+            block_Release(block); return;
+        }
+        const vlc_tick_t start = block->i_pts - VLC_TICK_0;
+        for (size_t frame = 0; frame < count; ++frame) {
+            const vlc_tick_t time = start + vlc_tick_from_samples(frame, rate);
+            if (time < 0 || time >= duration) continue;
+            const int bin = std::min<int>(peaks.size() - 1, (long double)time * peaks.size() / duration);
+            float peak = peaks[bin];
+            for (unsigned channel = 0; channel < channels; ++channel) {
+                float sample;
+                memcpy(&sample, block->p_buffer + (frame * channels + channel) * sizeof(float), sizeof(sample));
+                if (std::isfinite(sample)) peak = std::max(peak, std::min(1.f, std::abs(sample)));
+            }
+            peaks[bin] = peak;
+            receivedAudio = true;
+        }
+        block_Release(block);
+    }
+    bool createDecoder(Track& track) {
+        auto* owner = static_cast<AudioDecoder*>(vlc_object_create(parent, sizeof(AudioDecoder)));
+        if (!owner) return false;
+        owner->output = this;
+        owner->filters = nullptr;
+        decoder_Init(&owner->decoder, &owner->input, &track.format);
+        static const decoder_owner_callbacks callbacks = [] {
+            decoder_owner_callbacks callbacks{};
+            callbacks.audio.format_update = [](decoder_t* decoder) {
+                auto* owner = reinterpret_cast<AudioDecoder*>(decoder);
+                std::lock_guard<std::mutex> lock(owner->output->mutex);
+                if (owner->filters) { aout_FiltersDelete(decoder, owner->filters); owner->filters = nullptr; }
+                auto input = decoder->fmt_out.audio;
+                input.i_format = decoder->fmt_out.i_codec;
+                owner->format = input;
+                owner->format.i_format = VLC_CODEC_FL32;
+                owner->format.channel_type = AUDIO_CHANNEL_TYPE_BITMAP;
+                aout_FormatPrepare(&owner->format);
+                if (!input.i_channels || !input.i_rate || input.i_channels > AOUT_CHAN_MAX) return VLC_EGENERIC;
+                owner->filters = aout_FiltersNew(decoder, &input, &owner->format, nullptr);
+                return owner->filters ? VLC_SUCCESS : VLC_EGENERIC;
+            };
+            callbacks.audio.queue = [](decoder_t* decoder, block_t* block) {
+                auto* owner = reinterpret_cast<AudioDecoder*>(decoder);
+                owner->output->collect(owner, block);
+            };
+            return callbacks;
+        }();
+        owner->decoder.cbs = &callbacks;
+        if (decoder_LoadModule(&owner->decoder, false, true) != VLC_SUCCESS) {
+            decoder_Clean(&owner->decoder);
+            if (owner->filters) aout_FiltersDelete(&owner->decoder, owner->filters);
+            es_format_Clean(&owner->input);
+            vlc_object_delete(&owner->decoder);
+            return false;
+        }
+        track.decoder = owner;
+        return true;
+    }
+    void drain(Track& track) {
+        if (track.decoder && !track.drained) {
+            track.decoder->decoder.pf_decode(&track.decoder->decoder, nullptr);
+            track.drained = true;
+        }
+    }
+};
+
+Output::Output(vlc_object_t* parent, const AudioWaveformSource& source)
+    : parent(parent), source(source), peaks(source.bins, 0.f), duration(source.duration)
+{
+    static const es_out_callbacks callbacks = [] {
+        es_out_callbacks callbacks{};
+        callbacks.add = [](es_out_t* base, input_source_t*, const es_format_t* format) -> es_out_id_t* {
+            auto* output = static_cast<Output*>(base);
+            const bool selected = format->i_cat == AUDIO_ES && output->audioCount++ == output->source.audioIndex;
+            auto track = std::make_unique<Track>(*format, selected);
+            auto* id = reinterpret_cast<es_out_id_t*>(track.get());
+            output->selectedFound |= selected;
+            output->tracks.push_back(std::move(track));
+            return id;
+        };
+        callbacks.send = [](es_out_t* base, es_out_id_t* id, block_t* packet) {
+            auto* output = static_cast<Output*>(base);
+            auto* track = reinterpret_cast<Track*>(id);
+            if (!track->selected || output->failed || vlc_killed()) { block_Release(packet); return VLC_SUCCESS; }
+            if (!track->decoder && !output->createDecoder(*track)) {
+                output->failed = true; block_Release(packet); return VLC_EGENERIC;
+            }
+            const int status = track->decoder->decoder.pf_decode(&track->decoder->decoder, packet);
+            if (status == VLCDEC_RELOAD) { block_Release(packet); output->failed = true; }
+            else if (status != VLCDEC_SUCCESS) output->failed = true;
+            return output->failed ? VLC_EGENERIC : VLC_SUCCESS;
+        };
+        callbacks.del = [](es_out_t* base, es_out_id_t* id) {
+            auto* output = static_cast<Output*>(base);auto* track = reinterpret_cast<Track*>(id);
+            const auto found = std::find_if(output->tracks.begin(), output->tracks.end(), [track](const auto& item) { return item.get() == track; });
+            if (found != output->tracks.end()) { output->drain(**found); output->tracks.erase(found); }
+        };
+        callbacks.control = [](es_out_t*, input_source_t*, int query, va_list args) {
+            switch (query) {
+            case ES_OUT_GET_ES_STATE: {
+                auto* track = reinterpret_cast<Track*>(va_arg(args, es_out_id_t*));
+                *va_arg(args, bool*) = track && track->selected;return VLC_SUCCESS;
+            }
+            case ES_OUT_IS_EMPTY: *va_arg(args, bool*) = true;return VLC_SUCCESS;
+            case ES_OUT_SET_ES_FMT: {
+                auto* track = reinterpret_cast<Track*>(va_arg(args, es_out_id_t*));
+                const auto* format = va_arg(args, const es_format_t*);
+                if (!track || track->decoder) return VLC_EGENERIC;
+                es_format_Clean(&track->format);return es_format_Copy(&track->format, format);
+            }
+            case ES_OUT_SET_ES: case ES_OUT_UNSET_ES: case ES_OUT_SET_ES_DEFAULT:
+            case ES_OUT_SET_ES_STATE: case ES_OUT_SET_ES_CAT_POLICY: case ES_OUT_SET_GROUP:
+            case ES_OUT_SET_PCR: case ES_OUT_SET_GROUP_PCR: case ES_OUT_RESET_PCR:
+            case ES_OUT_SET_NEXT_DISPLAY_TIME: case ES_OUT_SET_GROUP_META: case ES_OUT_SET_META:
+                return VLC_SUCCESS;
+            default:return VLC_EGENERIC;
+            }
+        };
+        callbacks.destroy = [](es_out_t*) {};
+        return callbacks;
+    }();
+    cbs = &callbacks;
+}
+}
+
+AudioWaveformScan scanAudioWaveform(vlc_object_t* parent, const AudioWaveformSource& source,
+                                    vlc_interrupt_t* interrupt)
+{
+    AudioWaveformScan result;
+    auto* previous = vlc_interrupt_set(interrupt);
+    if (vlc_killed()) { vlc_interrupt_set(previous);result.status = AudioWaveformScan::Cancelled;return result; }
+    if (source.bins <= 0 || source.bins > 16384 || source.audioIndex < 0
+        || (source.deadline != VLC_TICK_INVALID && vlc_tick_now() >= source.deadline)) {
+        vlc_interrupt_set(previous);result.status = AudioWaveformScan::LimitReached;return result;
+    }
+    auto* context = static_cast<vlc_object_t*>(vlc_object_create(parent, sizeof(vlc_object_t)));
+    if (!context) { vlc_interrupt_set(previous);return result; }
+    context->no_interact = true;
+    var_Create(context, "audio-filter", VLC_VAR_STRING);var_SetString(context, "audio-filter", "");
+    var_Create(context, "audio-visual", VLC_VAR_STRING);var_SetString(context, "audio-visual", "none");
+    var_Create(context, "audio-time-stretch", VLC_VAR_BOOL);var_SetBool(context, "audio-time-stretch", false);
+    var_Create(context, "interact", VLC_VAR_BOOL);var_SetBool(context, "interact", false);
+    {
+        Output output(context, source);
+        stream_t* stream = vlc_stream_NewURL(context, source.uri.constData());
+        if (stream) {
+            auto* demux = demux_New(context, "any", source.uri.constData(), stream, &output);
+            if (demux) {
+                if (output.duration <= 0) demux_Control(demux, DEMUX_GET_LENGTH, &output.duration);
+                int status = VLC_DEMUXER_SUCCESS;
+                bool expired = false;
+                while (status > 0 && !vlc_killed() && !output.failed && output.duration > 0) {
+                    if (source.deadline != VLC_TICK_INVALID && vlc_tick_now() >= source.deadline) { expired = true;break; }
+                    status = demux_Demux(demux);
+                }
+                for (auto& track : output.tracks) output.drain(*track);
+                demux_Delete(demux);output.tracks.clear();
+                result.status = vlc_killed() ? AudioWaveformScan::Cancelled
+                    : expired ? AudioWaveformScan::LimitReached
+                    : output.failed || status < 0 || output.duration <= 0 ? AudioWaveformScan::Failed
+                    : !output.selectedFound ? AudioWaveformScan::TrackMissing
+                    : !output.receivedAudio ? AudioWaveformScan::Failed : AudioWaveformScan::Complete;
+                if (result.status == AudioWaveformScan::Complete) result.peaks = std::move(output.peaks);
+            } else vlc_stream_Delete(stream);
+        }
+        if (vlc_killed()) result.status = AudioWaveformScan::Cancelled;
+    }
+    vlc_object_delete(context);vlc_interrupt_set(previous);
+    return result;
+}

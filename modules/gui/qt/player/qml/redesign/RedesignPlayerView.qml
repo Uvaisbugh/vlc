@@ -39,6 +39,8 @@ FocusScope {
     property bool _headerRevealed: false
     property bool _toolbarRevealed: false
     property bool showStatistics: false
+    property bool audioWaveformEnabled: false
+    property var audioWaveformPeaks: []
     property bool showSubtitleTimeline: false
     property bool showSeekPreview: true
     property var subtitleTimelineCues: []
@@ -723,6 +725,8 @@ FocusScope {
                     videoBackdropContent: root.videoBackdropContent
                     previewImage: root.seekPreviewImage
                     previewImagePosition: root.seekPreviewImagePosition
+                    waveformEnabled: root.audioWaveformEnabled
+                    waveformPeaks: root.audioWaveformPeaks
                     timelineEnabled: root.showSubtitleTimeline
                     timelineCues: root.subtitleTimelineCues
                     timelineState: root.subtitleTimelineState

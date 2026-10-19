@@ -448,6 +448,8 @@ qt_plugin_sources = files(
     'player/player_controller.hpp',
     'player/player_controller_p.hpp',
     'player/subtitle_timeline_scanner.cpp',
+    'player/audio_waveform_scanner.cpp',
+    'player/audio_waveform_scanner.hpp',
     'player/subtitle_timeline_scanner.hpp',
     'util/seek_preview_cache.hpp',
     'util/seek_preview_image_provider.hpp',
@@ -1131,6 +1133,7 @@ qml_tests = {
     'tst_RedesignAddons': files('tests/tst_RedesignAddons.qml'),
     'tst_RedesignPlugins': files('tests/tst_RedesignPlugins.qml'),
     'tst_RedesignPlayback': files('tests/tst_RedesignPlayback.qml'),
+    'tst_RedesignWaveform': files('tests/tst_RedesignWaveform.qml'),
     'tst_RedesignSubtitleTimeline': files('tests/tst_RedesignSubtitleTimeline.qml'),
     'tst_RedesignAudio': files('tests/tst_RedesignAudio.qml'),
     'tst_RedesignGlobalEqualizer': files('tests/tst_RedesignGlobalEqualizer.qml'),
@@ -1671,6 +1674,18 @@ if qt6_dep.found()
             }
         endif
 
+        vlc_tests += {
+            'name': 'test_qt_audio_waveform_scanner',
+            'sources': files('tests/test_audio_waveform_scanner.cpp', 'player/audio_waveform_scanner.cpp'),
+            'moc_sources': files('tests/test_audio_waveform_scanner.cpp'),
+            'suite': ['qt'],
+            'include_directories': qt_include_dir,
+            'link_with': [libvlccore, libvlc],
+            'link_args': qt_link_args,
+            'dependencies': [qt6_dep, qt_extra_deps, qtest_qt6_dep],
+            'module_depends': ['filesystem', 'wav', 'araw', 'ugly_resampler', 'simple_channel_mixer', 'trivial_channel_mixer', 'audio_format'],
+            'env': ['VLC_PLUGIN_PATH=' + vlc_build_root / 'modules'],
+        }
         vlc_tests += {
             'name': 'test_qt_ml_model',
             'module_depends': ['export'],

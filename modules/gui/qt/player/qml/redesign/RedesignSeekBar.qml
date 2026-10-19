@@ -21,6 +21,25 @@ T.Slider {
         }
     }
     property real previewImagePosition: -1
+    property bool waveformEnabled: false
+    property var waveformPeaks: []
+    readonly property bool waveformActive: waveformEnabled && waveformPeaks.length > 0 && !timelineActive
+    readonly property var waveformBars: {
+        if (!waveformActive) return []
+        const count = Math.max(1, Math.min(waveformPeaks.length, Math.floor(availableWidth / theme.dp(5))))
+        const bars = []
+        for (let i = 0; i < count; ++i) {
+            const first = Math.floor(i * waveformPeaks.length / count)
+            const last = Math.floor((i + 1) * waveformPeaks.length / count)
+            let peak = 0
+            for (let sample = first; sample < last; ++sample) {
+                const value = Number(waveformPeaks[sample])
+                if (Number.isFinite(value)) peak = Math.max(peak, Math.min(1, Math.abs(value)))
+            }
+            bars.push(peak)
+        }
+        return bars
+    }
     property bool timelineEnabled: false
     property var timelineCues: []
     property string timelineState: "off"
@@ -127,7 +146,32 @@ T.Slider {
             height: root.availableHeight
             radius: theme.dp(4)
             color: theme.progress
-            visible: root.value > root.from
+            visible: root.value > root.from && !root.waveformActive
+        }
+    }
+    Item {
+        id: waveform
+        objectName: "audioWaveform"
+        x: root.leftPadding + root.handle.width / 2
+        y: root.topPadding
+        width: Math.max(0, root.availableWidth - root.handle.width)
+        height: root.availableHeight
+        visible: root.waveformActive
+        Repeater {
+            model: root.waveformBars
+            Rectangle {
+                required property int index
+                required property real modelData
+                readonly property real cell: waveform.width / Math.max(1, root.waveformBars.length)
+                readonly property bool played: root.mirrored ? x >= root.visualPosition * waveform.width : x < root.visualPosition * waveform.width
+                x: index * cell
+                width: Math.max(1, cell * .4)
+                height: Math.max(root.theme.dp(2), modelData * Math.max(0, waveform.height - root.theme.dp(6)))
+                y: (waveform.height - height) / 2
+                color: played ? root.theme.accent : root.theme.foreground
+                opacity: played ? .85 : .4
+                radius: root.theme.dp(.5)
+            }
         }
     }
     Item {

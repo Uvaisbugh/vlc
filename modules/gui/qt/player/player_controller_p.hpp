@@ -67,6 +67,8 @@ public:
     void UpdateSpuOrder(vlc_es_id_t *es_id, enum vlc_vout_order spu_order);
     int interpolateTime(vlc_tick_t system_now);
     bool isCurrentItemSynced();
+    void resetAudioWaveform();
+    void readAudioWaveform();
     void resetSubtitleTimeline();
     void readSubtitleTimeline();
     void resetSeekPreview();
@@ -125,11 +127,22 @@ public:
     QTimer m_subtitleTimelineTimeout;
     QThreadPool m_subtitleTimelineWorkers;
     quint64 m_subtitleTimelineGeneration = 0;
-    struct SubtitleTimelineRequest {
+    struct TimelineReadRequest {
         vlc_interrupt_t* interrupt = vlc_interrupt_create();
-        ~SubtitleTimelineRequest() { if (interrupt) vlc_interrupt_destroy(interrupt); }
+        ~TimelineReadRequest() { if (interrupt) vlc_interrupt_destroy(interrupt); }
     };
-    std::shared_ptr<SubtitleTimelineRequest> m_subtitleTimelineRequest;
+    std::shared_ptr<TimelineReadRequest> m_subtitleTimelineRequest;
+    bool m_audioWaveformEnabled = false;
+    QVariantList m_audioWaveformPeaks;
+    QString m_audioWaveformState = QStringLiteral("off");
+    QTimer m_audioWaveformRefresh;
+    QTimer m_audioWaveformTimeout;
+    QThreadPool m_audioWaveformWorkers;
+    quint64 m_audioWaveformGeneration = 0;
+    std::shared_ptr<TimelineReadRequest> m_audioWaveformRequest;
+    QString m_audioWaveformCacheKey;
+    QVariantList m_audioWaveformCachePeaks;
+
 
     //callbacks
     vlc_player_listener_id* m_player_listener = nullptr;

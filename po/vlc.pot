@@ -38802,3 +38802,19 @@ msgstr ""
 #: src/libvlc-module.c:2004
 msgid "Enter a regular expression. VLC does not add matching file paths or links to the playback history. An empty field allows all paths and links."
 msgstr ""
+
+#: modules/gui/qt/player/qml/redesign/RedesignPlaybackSettings.qml:119
+msgid "Waveform"
+msgstr ""
+
+#: modules/gui/qt/qt.cpp:367
+msgid "Show Audio Waveform on Seekbar"
+msgstr ""
+
+#: modules/gui/qt/qt.cpp:368
+msgid "Read audio levels from a local file. Show them on the seekbar."
+msgstr ""
+
+#: modules/gui/qt/player/qml/redesign/RedesignPlaybackSettings.qml:155
+msgid "VLC cannot read audio levels for this file."
+msgstr ""

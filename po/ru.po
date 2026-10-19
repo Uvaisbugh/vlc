@@ -662,9 +662,8 @@ msgid "Spectrum"
 msgstr "Спектр"
 
 #: src/audio_output/output.c:273
-#, fuzzy
 msgid "VU meter"
-msgstr "Волюметр"
+msgstr "Индикатор уровня"
 
 #: src/audio_output/output.c:312 src/libvlc-module.c:201
 msgid "Audio filters"
@@ -46950,3 +46949,19 @@ msgstr "Удалите историю воспроизведения локал�
 #: src/libvlc-module.c:2004
 msgid "Enter a regular expression. VLC does not add matching file paths or links to the playback history. An empty field allows all paths and links."
 msgstr "Введите регулярное выражение. VLC не добавляет в историю воспроизведения соответствующие пути к файлам и ссылки. Пустое поле разрешает все пути и ссылки."
+
+#: modules/gui/qt/player/qml/redesign/RedesignPlaybackSettings.qml:119
+msgid "Waveform"
+msgstr "Форма волны"
+
+#: modules/gui/qt/qt.cpp:367
+msgid "Show Audio Waveform on Seekbar"
+msgstr "Показывать форму звуковой волны на шкале времени"
+
+#: modules/gui/qt/qt.cpp:368
+msgid "Read audio levels from a local file. Show them on the seekbar."
+msgstr "Считывайте уровни звука из локального файла. Показывайте их на шкале времени."
+
+#: modules/gui/qt/player/qml/redesign/RedesignPlaybackSettings.qml:155
+msgid "VLC cannot read audio levels for this file."
+msgstr "VLC не может прочитать уровни звука этого файла."

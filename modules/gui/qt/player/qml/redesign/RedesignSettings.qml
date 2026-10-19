@@ -35,6 +35,16 @@ C.Pane {
     function select(model, index, selected) { model.setData(model.index(index, 0), selected, Qt.CheckStateRole) }
     function disable(model) { for (let i = 0; i < model.rowCount(); ++i) select(model, i, false) }
 
+    function chooseVisualization(index, waveform) {
+        const model = Player.audioVisualization
+        const value = waveform ? "" : String(model.choiceValue(index))
+        if (!preferenceStore.stage("qt-audio-waveform", waveform)) return
+        const effect = ["scope", "spectrum", "spectrometer", "vuMeter", "dummy"].includes(value)
+        if (effect && !preferenceStore.stage("effect-list", value)) return
+        if (!preferenceStore.stage("audio-visual", effect ? "visual" : value || "none")) return
+        preferenceStore.save()
+    }
+
     ColumnLayout {
         anchors.fill: parent
         spacing: 0
@@ -85,12 +95,16 @@ C.Pane {
                     playbackRate: Player.rate; rateAvailable: Player.ratechangable
                     reversed: Player.rate < 0; reverseAvailable: Player.rewindable && Player.ratechangable
                     visualizationModel: Player.audioVisualization
+                    showWaveform: Player.audioWaveformEnabled
+                    waveformState: Player.audioWaveformState
+                    waveformAvailable: String(Player.url).startsWith("file:///") && Player.lengthSeconds > 0
                     onStatisticsRequested: enabled => root.statisticsRequested(enabled)
                     onSubtitleTimelineRequested: enabled => root.preferenceStore.stage("qt-subtitle-timeline", enabled)
                     onReverseRequested: reversed => Player.rate = (reversed ? -1 : 1) * Math.abs(Player.rate)
                     onRateRequested: value => Player.rate = (Player.rate < 0 ? -1 : 1) * value
                     onSleepTimerRequested: minutes => root.sleepTimerRequested(minutes)
-                    onVisualizationRequested: index => root.select(Player.audioVisualization, index, true)
+                    onVisualizationRequested: index => root.chooseVisualization(index, false)
+                    onWaveformRequested: root.chooseVisualization(-1, true)
                 }
                 RedesignAudioSettings {
                     Layout.fillWidth: true; Layout.leftMargin: theme.dp(24); Layout.rightMargin: theme.dp(24)

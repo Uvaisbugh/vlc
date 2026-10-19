@@ -637,9 +637,8 @@ msgid "Spectrum"
 msgstr "频谱"
 
 #: src/audio_output/output.c:273
-#, fuzzy
 msgid "VU meter"
-msgstr "声量器"
+msgstr "音量表"
 
 #: src/audio_output/output.c:312 src/libvlc-module.c:201
 msgid "Audio filters"
@@ -47671,3 +47670,19 @@ msgstr "删除本地文件和网络串流的播放历史记录。保留媒体文
 #: src/libvlc-module.c:2004
 msgid "Enter a regular expression. VLC does not add matching file paths or links to the playback history. An empty field allows all paths and links."
 msgstr "请输入正则表达式。VLC 不会将匹配的文件路径或链接添加到播放历史记录中。字段为空时允许所有路径和链接。"
+
+#: modules/gui/qt/player/qml/redesign/RedesignPlaybackSettings.qml:119
+msgid "Waveform"
+msgstr "波形"
+
+#: modules/gui/qt/qt.cpp:367
+msgid "Show Audio Waveform on Seekbar"
+msgstr "在进度条上显示音频波形"
+
+#: modules/gui/qt/qt.cpp:368
+msgid "Read audio levels from a local file. Show them on the seekbar."
+msgstr "读取本地文件的音频电平。在进度条上显示。"
+
+#: modules/gui/qt/player/qml/redesign/RedesignPlaybackSettings.qml:155
+msgid "VLC cannot read audio levels for this file."
+msgstr "VLC 无法读取此文件的音频电平。"

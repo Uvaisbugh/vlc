@@ -12,6 +12,8 @@ TestCase {
     property bool canReverse: true
     property bool statisticsVisible: false
     property bool timelineVisible: false
+    property bool waveformVisible: false
+    property bool waveformAvailable: true
     RedesignSleepTimer { id: sleepTimer }
     SignalSpy { id: expirySpy; target: sleepTimer; signalName: "triggered" }
     ListModel { id: visualizations }
@@ -25,19 +27,23 @@ TestCase {
             visualizationModel: visualizations
             showStatistics: testCase.statisticsVisible
             showSubtitleTimeline: testCase.timelineVisible
+            showWaveform: testCase.waveformVisible
+            waveformAvailable: testCase.waveformAvailable
+            onWaveformRequested: testCase.waveformVisible = true
             onSubtitleTimelineRequested: enabled => testCase.timelineVisible = enabled
             onRateRequested: value => testCase.rateValue = (testCase.rateValue < 0 ? -1 : 1) * value
             onReverseRequested: reversed => testCase.rateValue = (reversed ? -1 : 1) * Math.abs(testCase.rateValue)
             onSleepTimerRequested: minutes => sleepTimer.start(minutes)
             onStatisticsRequested: enabled => testCase.statisticsVisible = enabled
             onVisualizationRequested: index => {
+                testCase.waveformVisible = false
                 for (let i = 0; i < visualizations.count; ++i) visualizations.setProperty(i, "checked", i === index)
             }
         }
     }
     function init() {
         sleepTimer.start(0); expirySpy.clear()
-        rateValue = 1; canReverse = true; statisticsVisible = false; timelineVisible = false
+        rateValue = 1; canReverse = true; statisticsVisible = false; timelineVisible = false; waveformVisible = false; waveformAvailable = true
         visualizations.clear()
         visualizations.append({display: "Disable", checked: true})
         visualizations.append({display: "Spectrum", checked: false})
@@ -82,6 +88,30 @@ TestCase {
         tryCompare(choice, "currentIndex", 0)
         verify(choice.enabled)
         compare(choice.displayText, "Disabled")
+    }
+    function test_waveformModeAndNativeChoicesKeepTheirIdentities() {
+        const choice = field("modelChoiceField")
+        mouseClick(choice); keyClick(Qt.Key_End); keyClick(Qt.Key_Return)
+        verify(waveformVisible); compare(choice.displayText, "Waveform")
+        mouseClick(choice); keyClick(Qt.Key_Home); keyClick(Qt.Key_Down); keyClick(Qt.Key_Down); keyClick(Qt.Key_Return)
+        verify(!waveformVisible); compare(choice.displayText, "Scope")
+        verify(visualizations.get(2).checked)
+    }
+    function test_unavailableWaveformIsSkippedByTheKeyboard() {
+        waveformAvailable = false
+        const choice = field("modelChoiceField")
+        mouseClick(choice); keyClick(Qt.Key_End); keyClick(Qt.Key_Return)
+        verify(!waveformVisible); compare(choice.displayText, "Scope")
+        verify(visualizations.get(2).checked)
+    }
+    function test_waveformSelectionSurvivesNativeOutputReplacement() {
+        waveformVisible = true
+        const choice = field("modelChoiceField")
+        compare(choice.displayText, "Waveform")
+        visualizations.clear(); verify(!choice.enabled); compare(choice.currentIndex, -1)
+        visualizations.append({display: "Disable", checked: true})
+        tryCompare(choice, "displayText", "Waveform")
+        verify(choice.enabled)
     }
     function test_reverseAndSpeedKeepTheSameMagnitude() {
         rateValue = 1.5

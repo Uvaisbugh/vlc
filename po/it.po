@@ -699,9 +699,8 @@ msgid "Spectrum"
 msgstr "Spettro"
 
 #: src/audio_output/output.c:273
-#, fuzzy
 msgid "VU meter"
-msgstr "Vu meter"
+msgstr "Misuratore VU"
 
 #: src/audio_output/output.c:312 src/libvlc-module.c:201
 msgid "Audio filters"
@@ -53709,3 +53708,19 @@ msgstr "Rimuovi la cronologia di riproduzione dei file locali e dei flussi di re
 #: src/libvlc-module.c:2004
 msgid "Enter a regular expression. VLC does not add matching file paths or links to the playback history. An empty field allows all paths and links."
 msgstr "Inserisci un’espressione regolare. VLC non aggiunge alla cronologia di riproduzione i percorsi dei file o i collegamenti corrispondenti. Un campo vuoto consente tutti i percorsi e i collegamenti."
+
+#: modules/gui/qt/player/qml/redesign/RedesignPlaybackSettings.qml:119
+msgid "Waveform"
+msgstr "Forma d’onda"
+
+#: modules/gui/qt/qt.cpp:367
+msgid "Show Audio Waveform on Seekbar"
+msgstr "Mostra la forma d’onda audio sulla barra di avanzamento"
+
+#: modules/gui/qt/qt.cpp:368
+msgid "Read audio levels from a local file. Show them on the seekbar."
+msgstr "Leggi i livelli audio da un file locale. Mostrali sulla barra di avanzamento."
+
+#: modules/gui/qt/player/qml/redesign/RedesignPlaybackSettings.qml:155
+msgid "VLC cannot read audio levels for this file."
+msgstr "VLC non può leggere i livelli audio di questo file."

@@ -335,7 +335,8 @@ const QStringList& presetOptions()
     // credentials, general file paths or other machine preferences.
     static const QStringList names = [] {
         QStringList names{
-            QStringLiteral("qt-subtitle-timeline"),
+            QStringLiteral("qt-subtitle-timeline"), QStringLiteral("qt-audio-waveform"),
+            QStringLiteral("audio-visual"), QStringLiteral("effect-list"),
             QStringLiteral("qt-player-layout"),
             QStringLiteral("audio-track"), QStringLiteral("audio-track-id"), QStringLiteral("audio-language"),
             QStringLiteral("sub-track"), QStringLiteral("sub-track-id"), QStringLiteral("sub-language"),
@@ -2362,6 +2363,12 @@ bool RedesignPreferences::stage(const QString& name, const QVariant& proposed)
     // A shortcut can change the current size without changing saved defaults.
     if (normalized == read(name.toUtf8()) && !applyToPlayer) m_edits.remove(name);
     else m_edits.insert(name, normalized);
+    if (name == QLatin1String("qt-audio-waveform") && normalized.toBool())
+        stage(QStringLiteral("audio-visual"), QStringLiteral("none"));
+    if ((name == QLatin1String("audio-visual") && !normalized.toString().isEmpty()
+            && normalized.toString() != QLatin1String("none"))
+        || (name == QLatin1String("effect-list") && value(QStringLiteral("audio-visual")) == QLatin1String("visual")))
+        if (value(QStringLiteral("qt-audio-waveform")).toBool()) stage(QStringLiteral("qt-audio-waveform"), false);
     if (m_invalid.isEmpty())
         m_error.clear();
     ++m_revision;

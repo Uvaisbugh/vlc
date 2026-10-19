@@ -193,6 +193,30 @@ FocusScope {
         restoreMode: Binding.RestoreBindingOrValue
     }
     Binding { target: Player; property: "seekPreviewEnabled"; value: MainCtx.redesignPlayerPreferences.seekPreview }
+    Connections {
+        target: Player.audioVisualization
+        function onDataChanged() { reconcileVisualization.restart() }
+    }
+    Timer {
+        id: reconcileVisualization
+        interval: 0
+        // Native variable callbacks can run inside a preference save. Wait for
+        // that transaction to finish before reconciling an external choice.
+        onTriggered: {
+            if (!Player.audioWaveformEnabled) return
+            const model = Player.audioVisualization
+            for (let i = 0; i < model.rowCount(); ++i) {
+                const value = String(model.choiceValue(i))
+                if (!value || !model.data(model.index(i, 0), Qt.CheckStateRole)) continue
+                const effect = ["scope", "spectrum", "spectrometer", "vuMeter", "dummy"].includes(value)
+                if (!playerPreferences.stage("qt-audio-waveform", false)) return
+                if (effect && !playerPreferences.stage("effect-list", value)) return
+                if (playerPreferences.stage("audio-visual", effect ? "visual" : value)) playerPreferences.save()
+                return
+            }
+        }
+    }
+    Binding { target: Player; property: "audioWaveformEnabled"; value: !!MainCtx.redesignPlayerPreferences.audioWaveform }
     Binding { target: Player; property: "subtitleTimelineEnabled"; value: MainCtx.redesignPlayerPreferences.subtitleTimeline }
 
     Component.onCompleted: {
@@ -251,6 +275,8 @@ FocusScope {
         fullscreenControlsSensitivity: MainCtx.redesignPlayerPreferences.fullscreenSensitivity
         showSubtitleTimeline: MainCtx.redesignPlayerPreferences.subtitleTimeline
         showSeekPreview: MainCtx.redesignPlayerPreferences.seekPreview
+        audioWaveformPeaks: Player.audioWaveformPeaks
+        audioWaveformEnabled: Player.audioWaveformEnabled
         subtitleTimelineCues: Player.subtitleTimelineCues
         subtitleTimelineState: Player.subtitleTimelineState
         subtitleDelayMS: Player.subtitleDelayMS

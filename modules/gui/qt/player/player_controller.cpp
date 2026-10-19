@@ -24,6 +24,7 @@
 #include "player_controller.hpp"
 #include "player_controller_p.hpp"
 #include "subtitle_timeline_scanner.hpp"
+#include "audio_waveform_scanner.hpp"
 #include "util/shared_input_item.hpp"
 #include "util/seek_preview_image_provider.hpp"
 
@@ -39,6 +40,8 @@
 #include <vlc_block.h>
 
 #include <QFile>
+#include <QFileInfo>
+#include <QDateTime>
 #include <QDir>
 #include <QSignalMapper>
 #include <QThreadPool>
@@ -73,6 +76,9 @@ PlayerControllerPrivate::~PlayerControllerPrivate()
     resetSubtitleTimeline();
     // Finish cancelled reads before the interface and queued callbacks die.
     m_subtitleTimelineWorkers.waitForDone();
+    m_audioWaveformEnabled = false;
+    resetAudioWaveform();
+    m_audioWaveformWorkers.waitForDone();
 
     {
         vlc_player_locker locker{m_player};
@@ -1317,6 +1323,22 @@ PlayerController::PlayerController( qt_intf_t *_p_intf )
     connect(this, &PlayerController::hasVideoOutputChanged, this, updateSamples);
     connect(this, &PlayerController::playingStateChanged, this, updateSamples);
     connect(this, &PlayerController::bufferingChanged, this, updateSamples);
+    d->m_audioWaveformWorkers.setMaxThreadCount(1);
+    d->m_audioWaveformRefresh.setSingleShot(true);
+    d->m_audioWaveformRefresh.setInterval(100);
+    d->m_audioWaveformTimeout.setSingleShot(true);
+    d->m_audioWaveformTimeout.setInterval(15000);
+    connect(&d->m_audioWaveformRefresh, &QTimer::timeout, this, [d] { d->readAudioWaveform(); });
+    connect(&d->m_audioWaveformTimeout, &QTimer::timeout, this, [d] {
+        if (d->m_audioWaveformRequest) vlc_interrupt_kill(d->m_audioWaveformRequest->interrupt);
+    });
+    const auto refreshWaveform = [d] { d->resetAudioWaveform(); };
+    connect(this, &PlayerController::inputChanged, this, refreshWaveform);
+    connect(this, &PlayerController::lengthChanged, this, refreshWaveform);
+    connect(&d->m_audioTracks, &QAbstractItemModel::dataChanged, this, refreshWaveform);
+    connect(&d->m_audioTracks, &QAbstractItemModel::rowsInserted, this, refreshWaveform);
+    connect(&d->m_audioTracks, &QAbstractItemModel::rowsRemoved, this, refreshWaveform);
+    connect(&d->m_audioTracks, &QAbstractItemModel::modelReset, this, refreshWaveform);
     d->m_subtitleTimelineWorkers.setMaxThreadCount(1);
     d->m_subtitleTimelineRefresh.setSingleShot(true);
     d->m_subtitleTimelineRefresh.setInterval(100);
@@ -1471,7 +1493,7 @@ void PlayerControllerPrivate::readSubtitleTimeline()
         emit q_ptr->subtitleTimelineChanged();
         return;
     }
-    auto request = std::make_shared<SubtitleTimelineRequest>();
+    auto request = std::make_shared<TimelineReadRequest>();
     if (!request->interrupt) {
         m_subtitleTimelineState = QStringLiteral("unavailable");
         emit q_ptr->subtitleTimelineChanged();
@@ -1513,6 +1535,93 @@ void PlayerControllerPrivate::readSubtitleTimeline()
                 : QStringLiteral("unavailable");
             msg_Dbg(p_intf, "Subtitle timeline: %lld cues, status %d", static_cast<long long>(m_subtitleTimelineCues.size()), int(status));
             emit q_ptr->subtitleTimelineChanged();
+        });
+    });
+}
+
+bool PlayerController::getAudioWaveformEnabled() const { return d_ptr->m_audioWaveformEnabled; }
+QVariantList PlayerController::getAudioWaveformPeaks() const { return d_ptr->m_audioWaveformPeaks; }
+QString PlayerController::getAudioWaveformState() const { return d_ptr->m_audioWaveformState; }
+void PlayerController::setAudioWaveformEnabled(bool enabled)
+{
+    Q_D(PlayerController);
+    if (d->m_audioWaveformEnabled == enabled) return;
+    d->m_audioWaveformEnabled = enabled;
+    d->resetAudioWaveform();
+    emit audioWaveformEnabledChanged();
+}
+void PlayerControllerPrivate::resetAudioWaveform()
+{
+    ++m_audioWaveformGeneration;
+    m_audioWaveformRefresh.stop();m_audioWaveformTimeout.stop();
+    if (m_audioWaveformRequest) vlc_interrupt_kill(m_audioWaveformRequest->interrupt);
+    m_audioWaveformRequest.reset();m_audioWaveformWorkers.clear();
+    m_audioWaveformPeaks.clear();
+    m_audioWaveformState = m_audioWaveformEnabled ? QStringLiteral("loading") : QStringLiteral("off");
+    emit q_ptr->audioWaveformChanged();
+    if (m_audioWaveformEnabled) m_audioWaveformRefresh.start();
+}
+void PlayerControllerPrivate::readAudioWaveform()
+{
+    AudioWaveformSource source;
+    SharedInputItem media;SharedEsId selectedId;
+    {
+        vlc_player_locker lock{m_player};
+        const auto* selected = vlc_player_GetSelectedTrack(m_player, AUDIO_ES);
+        if (!isCurrentItemSynced() || !m_currentItem || !selected) {
+            m_audioWaveformState = QStringLiteral("unavailable");emit q_ptr->audioWaveformChanged();return;
+        }
+        media = m_currentItem;selectedId.reset(selected->es_id, true);
+        const QByteArray id = vlc_es_id_GetStrId(selected->es_id);
+        const qsizetype split = id.indexOf("/audio/");
+        const QByteArray prefix = split < 0 ? QByteArray() : id.first(split + 1);
+        if ((!prefix.isEmpty() && prefix.size() != 33) || (prefix.isEmpty() && !id.startsWith("audio/"))) {
+            m_audioWaveformState = QStringLiteral("unavailable");emit q_ptr->audioWaveformChanged();return;
+        }
+        if (const char* uri = vlc_es_id_GetSourceUri(selected->es_id)) source.uri = uri;
+        else { vlc_mutex_locker itemLock{&m_currentItem->lock};source.uri = m_currentItem->psz_uri; }
+        for (size_t i = 0; i < vlc_player_GetTrackCount(m_player, AUDIO_ES); ++i) {
+            const auto* track = vlc_player_GetTrackAt(m_player, AUDIO_ES, i);
+            if (track == selected) break;
+            const QByteArray other = vlc_es_id_GetStrId(track->es_id);
+            if (prefix.isEmpty() ? other.startsWith("audio/") : other.startsWith(QByteArray(prefix + "audio/"))) ++source.audioIndex;
+        }
+        source.duration = vlc_player_GetLength(m_player);
+    }
+    const auto url = QUrl::fromEncoded(source.uri);
+    // A waveform needs a finite local file. Do not replay a stream or device.
+    if (!url.isLocalFile() || !url.host().isEmpty() || source.duration <= 0) {
+        m_audioWaveformState = QStringLiteral("unavailable");emit q_ptr->audioWaveformChanged();return;
+    }
+    const QFileInfo info(url.toLocalFile());
+    if (!info.isFile()) { m_audioWaveformState = QStringLiteral("unavailable");emit q_ptr->audioWaveformChanged();return; }
+    const QString key = QString::fromUtf8(source.uri) + QLatin1Char('|') + QString::number(source.audioIndex)
+        + QLatin1Char('|') + QString::number(source.duration) + QLatin1Char('|') + QString::number(info.size())
+        + QLatin1Char('|') + QString::number(info.lastModified().toMSecsSinceEpoch());
+    if (key == m_audioWaveformCacheKey && !m_audioWaveformCachePeaks.isEmpty()) {
+        m_audioWaveformPeaks = m_audioWaveformCachePeaks;m_audioWaveformState = QStringLiteral("ready");emit q_ptr->audioWaveformChanged();return;
+    }
+    auto request = std::make_shared<TimelineReadRequest>();
+    if (!request->interrupt) { m_audioWaveformState = QStringLiteral("unavailable");emit q_ptr->audioWaveformChanged();return; }
+    m_audioWaveformRequest = request;m_audioWaveformTimeout.start();
+    source.deadline = vlc_tick_now() + VLC_TICK_FROM_SEC(15);
+    const auto generation = m_audioWaveformGeneration;
+    m_audioWaveformWorkers.start([this, request, source, generation, media, selectedId, key] {
+        const auto result = scanAudioWaveform(VLC_OBJECT(p_intf), source, request->interrupt);
+        QVariantList peaks;
+        if (result.status == AudioWaveformScan::Complete) { peaks.reserve(result.peaks.size());for (float peak : result.peaks) peaks.append(peak); }
+        callAsync([this, generation, media, selectedId, key, peaks = std::move(peaks)] {
+            if (generation != m_audioWaveformGeneration) return;
+            {
+                vlc_player_locker lock{m_player};
+                const auto* selected = vlc_player_GetTrack(m_player, selectedId.get());
+                if (vlc_player_GetCurrentMedia(m_player) != media.get() || !selected || !selected->selected) { resetAudioWaveform();return; }
+            }
+            m_audioWaveformTimeout.stop();m_audioWaveformRequest.reset();
+            m_audioWaveformPeaks = peaks;
+            m_audioWaveformState = peaks.isEmpty() ? QStringLiteral("unavailable") : QStringLiteral("ready");
+            if (!peaks.isEmpty()) { m_audioWaveformCacheKey = key;m_audioWaveformCachePeaks = peaks; }
+            emit q_ptr->audioWaveformChanged();
         });
     });
 }

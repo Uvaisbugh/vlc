@@ -314,6 +314,7 @@ libqt_plugin_la_SOURCES = \
 	util/seek_preview_cache.hpp util/seek_preview_image_provider.hpp \
 	util/subtitle_source_service.hpp util/subtitle_source_service.cpp \
 	player/subtitle_timeline_scanner.cpp player/subtitle_timeline_scanner.hpp \
+	player/audio_waveform_scanner.cpp player/audio_waveform_scanner.hpp \
 	player/player_controlbar_model.cpp player/player_controlbar_model.hpp \
 	player/control_list_model.cpp player/control_list_model.hpp \
 	player/control_list_filter.cpp \
@@ -2051,6 +2052,19 @@ test_subtitle_timeline_scanner_LDFLAGS = $(QT_QTEST_COMMON_ldflags)
 check_PROGRAMS += test_subtitle_timeline_scanner
 TESTS += test_subtitle_timeline_scanner
 
+test_audio_waveform_scanner_SOURCES = \
+	tests/test_audio_waveform_scanner.cpp \
+	player/audio_waveform_scanner.cpp player/audio_waveform_scanner.hpp
+nodist_test_audio_waveform_scanner_SOURCES = tests/test_audio_waveform_scanner.moc
+BUILT_SOURCES += tests/test_audio_waveform_scanner.moc
+CLEANFILES += tests/test_audio_waveform_scanner.moc
+test_audio_waveform_scanner_CPPFLAGS = $(QT_QTEST_COMMON_cppflags)
+test_audio_waveform_scanner_CXXFLAGS = $(QT_QTEST_COMMON_cxxflags)
+test_audio_waveform_scanner_LDADD = $(QT_QTEST_COMMON_ldadd)
+test_audio_waveform_scanner_LDFLAGS = $(QT_QTEST_COMMON_ldflags)
+check_PROGRAMS += test_audio_waveform_scanner
+TESTS += test_audio_waveform_scanner
+
 
 # test_ml_model
 
@@ -2435,7 +2449,7 @@ qml_test_CXXFLAGS = $(AM_CXXFLAGS) $(QT_CFLAGS) -fPIC $(CXXFLAGS_qt) ${QT_QUICK_
 qml_test_LDADD = $(QT_INDIRECT_LIBS) ${QT_QUICK_TEST_LIBS} $(QT_LIBS) $(LIBS_qt) libqml_module_util.a
 qml_test_LDFLAGS = $(AM_LDFLAGS) $(QT_QUICK_TEST_LDFLAGS)
 check_PROGRAMS += qml_test
-EXTRA_DIST += tests/tst_FSM.qml tests/tst_Redesign.qml tests/tst_RedesignPreferences.qml tests/tst_RedesignPlayback.qml tests/tst_RedesignAudio.qml tests/tst_RedesignVideo.qml tests/tst_RedesignOnboarding.qml tests/tst_RedesignMenu.qml
+EXTRA_DIST += tests/tst_FSM.qml tests/tst_Redesign.qml tests/tst_RedesignPreferences.qml tests/tst_RedesignPlayback.qml tests/tst_RedesignWaveform.qml tests/tst_RedesignAudio.qml tests/tst_RedesignVideo.qml tests/tst_RedesignOnboarding.qml tests/tst_RedesignMenu.qml
 EXTRA_DIST += tests/tst_RedesignSubtitleTimeline.qml
 EXTRA_DIST += tests/tst_RedesignTheme.qml
 EXTRA_DIST += tests/tst_RedesignSliders.qml
@@ -2493,6 +2507,6 @@ TESTS += tests/tst_RedesignTrackAssignments.qml
 EXTRA_DIST += tests/tst_RedesignFolderInfo.qml
 TESTS += tests/tst_RedesignFolderInfo.qml
 TESTS += tests/tst_RedesignSubtitleTimeline.qml
-TESTS += tests/tst_FSM.qml tests/tst_Redesign.qml tests/tst_RedesignPreferences.qml tests/tst_RedesignPlayback.qml tests/tst_RedesignAudio.qml tests/tst_RedesignVideo.qml tests/tst_RedesignOnboarding.qml tests/tst_RedesignMenu.qml
+TESTS += tests/tst_FSM.qml tests/tst_Redesign.qml tests/tst_RedesignPreferences.qml tests/tst_RedesignPlayback.qml tests/tst_RedesignWaveform.qml tests/tst_RedesignAudio.qml tests/tst_RedesignVideo.qml tests/tst_RedesignOnboarding.qml tests/tst_RedesignMenu.qml
 endif
 endif

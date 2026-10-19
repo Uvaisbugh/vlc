@@ -658,9 +658,8 @@ msgid "Spectrum"
 msgstr "スペクトル"
 
 #: src/audio_output/output.c:273
-#, fuzzy
 msgid "VU meter"
-msgstr "VUメーター"
+msgstr "VU メーター"
 
 #: src/audio_output/output.c:312 src/libvlc-module.c:201
 msgid "Audio filters"
@@ -46827,3 +46826,19 @@ msgstr "ローカルファイルとネットワークストリームの再生履
 #: src/libvlc-module.c:2004
 msgid "Enter a regular expression. VLC does not add matching file paths or links to the playback history. An empty field allows all paths and links."
 msgstr "正規表現を入力してください。VLC は一致するファイルパスやリンクを再生履歴に追加しません。空欄の場合はすべてのパスとリンクを許可します。"
+
+#: modules/gui/qt/player/qml/redesign/RedesignPlaybackSettings.qml:119
+msgid "Waveform"
+msgstr "波形"
+
+#: modules/gui/qt/qt.cpp:367
+msgid "Show Audio Waveform on Seekbar"
+msgstr "シークバーに音声波形を表示"
+
+#: modules/gui/qt/qt.cpp:368
+msgid "Read audio levels from a local file. Show them on the seekbar."
+msgstr "ローカルファイルの音声レベルを読み取り、シークバーに表示します。"
+
+#: modules/gui/qt/player/qml/redesign/RedesignPlaybackSettings.qml:155
+msgid "VLC cannot read audio levels for this file."
+msgstr "VLC はこのファイルの音声レベルを読み取れません。"
