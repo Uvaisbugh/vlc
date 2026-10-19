@@ -586,6 +586,8 @@ int avformat_OpenDemux( vlc_object_t *p_this )
                     es_fmt.i_extra = cp->extradata_size;
                 }
             }
+            if( cp->codec_id == AV_CODEC_ID_SUBRIP )
+                es_fmt.subs.psz_encoding = strdup( "UTF-8" );
             psz_type = "subtitle";
             break;
 

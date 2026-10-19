@@ -541,7 +541,7 @@ static const struct vlc_avcodec_fourcc spu_codecs[] =
     /* ffmpeg only: AV_CODEC_ID_REALTEXT */
     /* ffmpeg only: AV_CODEC_ID_SUBVIEWER1 */
     /* ffmpeg only: AV_CODEC_ID_SUBVIEWER */
-    /* ffmpeg only: AV_CODEC_ID_SUBRIP */
+    { VLC_CODEC_SUBT, AV_CODEC_ID_SUBRIP },
     /* ffmpeg only: AV_CODEC_ID_WEBVTT */
     /* ffmpeg only: AV_CODEC_ID_MPL2 */
     /* ffmpeg only: AV_CODEC_ID_VPLAYER */

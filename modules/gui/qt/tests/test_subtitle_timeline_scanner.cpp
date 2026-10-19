@@ -66,6 +66,39 @@ private slots:
         check(result.cues[1], 2, 4);
         check(result.cues[2], 7, 8.25);
     }
+    void readsEmbeddedSubRipThroughAvformat() {
+        if (!module_exists("avformat")) QSKIP("avformat demux unavailable");
+        // Two Matroska S_TEXT/UTF8 tracks, without audio or video. Track zero
+        // has three overlapping cues; track one has one Unicode cue.
+        const auto bytes = QByteArray::fromBase64(
+            "GkXfo6NChoEBQveBAULygQRC84EIQoKIbWF0cm9za2FCh4EEQoWBAhhTgGcBAAAAAAACkxFNm3TAv4QDdI8mTbuLU6uEFUmpZlOs"
+            "gaFNu4tTq4QWVK5rU6yBzE27jFOrhBJUw2dTrIIBPE27jFOrhBxTu2tTrIICMOwBAAAAAAAAUwAAAAAAAAAAAAAAAAAAAAAAAAAA"
+            "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFUmpZqa/hOOUNzcq"
+            "17GDD0JATYCETGF2ZldBhExhdmZEiYhAwB0AAAAAABZUrmvrv4SMgm0orgEAAAAAAAAo14EBc8WIAAAAAAAAAAGcgQAitZyDdW5k"
+            "hotTX1RFWFQvVVRGOIOBEa4BAAAAAAAAK9eBAnPFiAAAAAAAAAACnIEAIrWcg3VuZIiBAIaLU19URVhUL1VURjiDgRESVMNnQIC/"
+            "hPT7Hd1zcwEAAAAAAAAzY8CLY8WIAAAAAAAAAAFnyKJFo4hEVVJBVElPTkSHlDAwOjAwOjA4LjI1MDAwMDAwMAAAc3MBAAAAAAAA"
+            "M2PAi2PFiAAAAAAAAAACZ8iiRaOIRFVSQVRJT05Eh5QwMDowMDowMS41MDAwMDAwMDAAAB9DtnXJv4Q2QcAA54IB9KCZoZOCAAAA"
+            "w4l0w6kg5pel5pys6Kqem4ID6KCPoYmBAfQARmlyc3SbggXcoJGhi4EF3ABPdmVybGFwm4IH0B9DtnWbv4TZTqfO54IbWKCPoYmB"
+            "AAAATGF0ZXKbggTiHFO7a96/hHQ4KiO7lLOCAfS3jveBAvGCAcLwgQqyggPou5SzggPot473gQHxggHC8IElsoIF3LuUs4IH0LeO"
+            "94EB8YIBwvCBNrKCB9C7lLOCG1i3jveBAfGCAhDwgQqyggTi");
+        QFile file(m_dir.filePath(QStringLiteral("embedded.mks")));
+        QVERIFY(file.open(QIODevice::WriteOnly));
+        QCOMPARE(file.write(bytes), bytes.size());
+        file.close();
+        auto request = source(QStringLiteral("embedded.mks"));
+        request.demux = "avformat";
+        auto result = scan(request);
+        QCOMPARE(result.status, SubtitleTimelineScan::Complete);
+        QCOMPARE(result.cues.size(), 3);
+        check(result.cues[0], 1, 2.5);
+        check(result.cues[1], 2, 4);
+        check(result.cues[2], 7, 8.25);
+        request.subtitleIndex = 1;
+        result = scan(request);
+        QCOMPARE(result.status, SubtitleTimelineScan::Complete);
+        QCOMPARE(result.cues.size(), 1);
+        check(result.cues[0], .5, 1.5);
+    }
     void appliesNativeSubtitleRate() {
         auto request = source(); request.subtitleRate = .5f;
         auto result = scan(request);
