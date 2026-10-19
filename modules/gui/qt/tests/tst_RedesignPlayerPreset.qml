@@ -40,7 +40,7 @@ TestCase {
     function item(name) { return findChild(selector, name) }
     function init() {
         failOnWarning(/Binding loop/)
-        selector.scaleFactor = 1; selector.width = 360
+        selector.scaleFactor = 1; selector.width = 360; selector.selectorVisible = true
         item("playerPresetMenu").close(); item("playerPresetActions").close()
         item("playerPresetNameDialog").close(); item("playerPresetDeleteDialog").close()
         store.playerPresets = [{id: "show", name: "My Show"}, {id: "quiet", name: "Quiet Movies"}]
@@ -98,6 +98,28 @@ TestCase {
         tryCompare(item("playerPresetMenu"), "opened", true)
         keyClick(Qt.Key_End); keyClick(Qt.Key_Return)
         compare(store.lastId, ""); compare(store.lastAction, "select")
+    }
+    function test_createWithoutSelectorKeepsDialogAndShortcutBehavior() {
+        selector.selectorVisible = false
+        verify(!item("playerPresetSelector").visible)
+        selector.namePreset("create", "", "")
+        const dialog = item("playerPresetNameDialog")
+        tryCompare(dialog, "opened", true)
+        verify(!shortcuts.useGlobalShortcuts)
+        verify(!dialog.dim)
+        compare(dialog.background.radius, 14)
+        const save = item("playerPresetNameSave")
+        verify(!save.enabled)
+        item("playerPresetName").text = "Movies"
+        mouseClick(save)
+        compare(store.lastAction, "create"); compare(store.lastName, "Movies")
+        tryCompare(dialog, "visible", false)
+        tryVerify(() => shortcuts.useGlobalShortcuts)
+        selector.namePreset("create", "", "")
+        tryCompare(dialog, "opened", true)
+        mouseClick(item("playerPresetNameCancel"))
+        tryCompare(dialog, "visible", false)
+        tryVerify(() => shortcuts.useGlobalShortcuts)
     }
     function test_createUsesNameDialog() {
         mouseClick(item("playerPresetSelector"))

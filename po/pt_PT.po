@@ -47157,3 +47157,7 @@ msgstr "Leia os níveis de áudio de um ficheiro local. Mostre-os na barra de pr
 #: modules/gui/qt/player/qml/redesign/RedesignPlaybackSettings.qml:155
 msgid "VLC cannot read audio levels for this file."
 msgstr "O VLC não consegue ler os níveis de áudio deste ficheiro."
+
+#: modules/gui/qt/player/qml/redesign/RedesignMenu.qml:179
+msgid "New"
+msgstr "Novo"

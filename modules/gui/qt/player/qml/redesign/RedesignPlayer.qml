@@ -532,6 +532,14 @@ FocusScope {
         scaleFactor: view.scaleFactor; lightTheme: view.lightTheme; accentColor: view.accentColor
         onSaved: playerPreferences.discard()
     }
+    RedesignPlayerPreset {
+        id: profileEditor
+        objectName: "menuPlayerProfileEditor"
+        backend: playerPreferences
+        selectorVisible: false
+        videoBackdropContent: rootPlayer.menuBackdropContent
+        scaleFactor: view.scaleFactor; lightTheme: view.lightTheme; accentColor: view.accentColor
+    }
     RedesignMenu {
         id: mediaMenu
         parent: view
@@ -554,6 +562,7 @@ FocusScope {
             case "capture": DialogsProvider.openCaptureDialog(); break
             case "convert": DialogsProvider.openAndTranscodingDialogs(); break
             case "customize": rootPlayer.beginCustomization(); break
+            case "new-profile": profileEditor.namePreset("create", "", ""); break
             case "shortcuts": shortcutEditor.open(); break
             case "settings": DialogsProvider.prefsDialog(); break
             case "about": DialogsProvider.aboutDialog(); break

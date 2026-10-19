@@ -10,6 +10,8 @@ Item {
     property real scaleFactor: 1
     property bool lightTheme: false
     property color accentColor: "#d37918"
+    property Component videoBackdropContent
+    property bool selectorVisible: true
     readonly property RedesignTheme theme: RedesignTheme { scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor }
     readonly property var presets: { backend.revision; return backend.playerPresets }
     readonly property string selectedId: { backend.revision; return backend.selectedPlayerPreset }
@@ -30,7 +32,7 @@ Item {
             && (dropdown.visible || actions.visible || nameDialog.visible || deleteDialog.visible)
         restoreMode: Binding.RestoreBindingOrValue
     }
-    implicitHeight: theme.dp(42)
+    implicitHeight: selectorVisible ? theme.dp(42) : 0
 
     function namePreset(action, id, name) {
         nameAction = action; contextId = id || ""; contextName = name || ""
@@ -56,6 +58,7 @@ Item {
     RedesignButton {
         id: field
         objectName: "playerPresetSelector"
+        visible: root.selectorVisible
         anchors.fill: parent
         scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
         text: root.selectedName
@@ -175,9 +178,9 @@ Item {
         anchors.centerIn: parent
         width: Math.min(root.theme.dp(420), parent.width - root.theme.dp(32))
         padding: root.theme.dp(24)
-        modal: true; dim: true; focus: true
+        modal: true; dim: false; focus: true
         closePolicy: C.Popup.CloseOnEscape
-        background: Rectangle { color: root.theme.panel; radius: root.theme.dp(12); border.color: root.theme.border }
+        background: RedesignDialogSurface { theme: root.theme; videoBackdropContent: root.videoBackdropContent }
         onOpened: { presetName.forceActiveFocus(); presetName.selectAll() }
         onClosed: {
             if (root.retryNameSave) root.backend.cancelPlayerPreset()
@@ -201,8 +204,8 @@ Item {
             RowLayout {
                 Layout.fillWidth: true
                 Item { Layout.fillWidth: true }
-                RedesignButton { scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor; caption: qsTr("Cancel"); text: caption; onClicked: nameDialog.close() }
-                RedesignButton { objectName: "playerPresetNameSave"; scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor; caption: root.retryNameSave ? qsTr("Retry") : qsTr("Save"); text: caption; enabled: presetName.text.trim().length > 0; foreground: root.theme.accent; onClicked: root.saveName() }
+                RedesignButton { objectName: "playerPresetNameCancel"; scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor; caption: qsTr("Cancel"); text: caption; onClicked: nameDialog.close() }
+                RedesignButton { objectName: "playerPresetNameSave"; scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor; caption: root.retryNameSave ? qsTr("Retry") : qsTr("Save"); text: caption; enabled: presetName.text.trim().length > 0; primaryAction: true; onClicked: root.saveName() }
             }
         }
     }

@@ -180,7 +180,7 @@ C.Pane {
             ColumnLayout {
                 anchors.fill: parent; anchors.leftMargin: theme.dp(20); anchors.rightMargin: theme.dp(20); anchors.topMargin: theme.dp(20); anchors.bottomMargin: theme.dp(12)
                 spacing: theme.dp(14)
-                RedesignPlayerPreset { Layout.fillWidth: true; backend: root.preferenceStore; scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor }
+                RedesignPlayerPreset { videoBackdropContent: root.videoBackdropContent; Layout.fillWidth: true; backend: root.preferenceStore; scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor }
                 RedesignButton { Layout.alignment: Qt.AlignHCenter; scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor; iconName: "settings"; iconSize: theme.dp(20); caption: qsTr("Open Advanced Settings"); text: caption; onClicked: DialogsProvider.prefsDialog() }
             }
         }

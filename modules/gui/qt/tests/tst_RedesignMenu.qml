@@ -160,9 +160,21 @@ TestCase {
         recentFiles.append({id: 44, url: "/private.mkv"})
         compare(submenu.count, 3)
     }
+    function test_profileNewUsesMenuActionAndClosesBothMenus() {
+        const submenu = openSubmenu(8)
+        compare(submenu.width, 265)
+        keyClick(Qt.Key_End)
+        compare(submenu.itemAt(submenu.currentIndex).objectName, "profileCreateAction")
+        keyClick(Qt.Key_Return)
+        compare(actions.count, 1)
+        compare(actions.signalArguments[0][0], "new-profile")
+        compare(profiles.count, 0)
+        tryCompare(submenu, "visible", false)
+        tryCompare(menu, "visible", false)
+    }
     function test_profileSelectionAndDefault() {
         let submenu = openSubmenu(8)
-        tryCompare(submenu, "count", 3)
+        tryCompare(submenu, "count", 5)
         verify(submenu.itemAt(1).checked)
         submenu.itemAt(2).forceActiveFocus()
         keyClick(Qt.Key_Return)

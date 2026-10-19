@@ -159,7 +159,7 @@ C.Menu {
         id: profileMenu
         objectName: "redesignProfileMenu"
         title: qsTr("Profile (%1)").arg(root.profileName)
-        width: root.theme.dp(root.theme.compactMenus ? 240 : 300); padding: root.padding
+        width: root.theme.dp(root.theme.compactMenus ? 240 : 265); padding: root.padding
         popupType: C.Popup.Item
         delegate: MenuRow { }
         background: MenuSurface { shown: profileMenu.visible }
@@ -175,6 +175,8 @@ C.Menu {
             onObjectAdded: (index, object) => profileMenu.insertItem(index, object)
             onObjectRemoved: (index, object) => profileMenu.removeItem(object)
         }
+        MenuDivider { }
+        MenuRow { objectName: "profileCreateAction"; text: qsTr("New"); glyph: "add"; onTriggered: root.activate("new-profile") }
     }
     MenuRow { text: qsTr("Keyboard Shortcuts"); glyph: "menu-keyboard"; onTriggered: root.activate("shortcuts") }
     MenuRow { text: qsTr("Customize Player"); glyph: "menu-customize"; onTriggered: root.activate("customize") }

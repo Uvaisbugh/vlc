@@ -39590,3 +39590,7 @@ msgstr "Read audio levels from a local file. Show them on the seekbar."
 #: modules/gui/qt/player/qml/redesign/RedesignPlaybackSettings.qml:155
 msgid "VLC cannot read audio levels for this file."
 msgstr "VLC cannot read audio levels for this file."
+
+#: modules/gui/qt/player/qml/redesign/RedesignMenu.qml:179
+msgid "New"
+msgstr "New"

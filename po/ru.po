@@ -46965,3 +46965,7 @@ msgstr "Считывайте уровни звука из локального �
 #: modules/gui/qt/player/qml/redesign/RedesignPlaybackSettings.qml:155
 msgid "VLC cannot read audio levels for this file."
 msgstr "VLC не может прочитать уровни звука этого файла."
+
+#: modules/gui/qt/player/qml/redesign/RedesignMenu.qml:179
+msgid "New"
+msgstr "Создать"

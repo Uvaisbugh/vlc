@@ -49794,3 +49794,7 @@ msgstr "Yerel bir dosyadan ses düzeylerini okuyun. Bunları arama çubuğunda g
 #: modules/gui/qt/player/qml/redesign/RedesignPlaybackSettings.qml:155
 msgid "VLC cannot read audio levels for this file."
 msgstr "VLC bu dosyanın ses düzeylerini okuyamıyor."
+
+#: modules/gui/qt/player/qml/redesign/RedesignMenu.qml:179
+msgid "New"
+msgstr "Yeni"
