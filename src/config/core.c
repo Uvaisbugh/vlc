@@ -410,6 +410,17 @@ static struct
     size_t count;
 } config = { NULL, 0 };
 
+void config_ForEachPersistent(void (*callback)(void *, const char *), void *opaque)
+{
+    assert(callback != NULL);
+    for (size_t i = 0; i < config.count; ++i)
+    {
+        const struct vlc_param *param = config.list[i];
+        if (!param->obsolete && !param->unsaved)
+            callback(opaque, param->item.psz_name);
+    }
+}
+
 /**
  * Index the configuration items by name for faster lookups.
  */

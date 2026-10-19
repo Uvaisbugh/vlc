@@ -129,6 +129,14 @@ VLC_API int config_GetType(const char *name) VLC_USED;
 VLC_API bool config_IsPersistent(const char *name) VLC_USED;
 
 /**
+ * Visits every persistent configuration item, including private items.
+ * The callback receives a borrowed name valid for the module bank lifetime.
+ * Volatile options, obsolete options and configuration hints are excluded.
+ */
+VLC_API void config_ForEachPersistent(void (*callback)(void *, const char *),
+                                    void *opaque);
+
+/**
  * Gets an integer configuration item's value.
  *
  * This function retrieves the current value of a configuration item of

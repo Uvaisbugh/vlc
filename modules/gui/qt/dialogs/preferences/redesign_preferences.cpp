@@ -60,23 +60,15 @@ constexpr qsizetype applicationProfileLimit = 16 * 1024 * 1024;
 
 QStringList applicationOptions()
 {
-    QSet<QString> names;
-    size_t count = 0;
-    module_t** modules = module_list_get(&count);
-    for (size_t i = 0; i < count; ++i) {
-        unsigned size = 0;
-        module_config_t* configs = module_config_get(modules[i], &size);
-        for (unsigned j = 0; j < size; ++j) {
-            const char* name = configs[j].psz_name;
-            if (name && config_IsPersistent(name) && qfu(name) != applicationProfileOption)
-                names.insert(qfu(name));
-        }
-        module_config_free(configs);
-    }
-    module_list_free(modules);
-    auto result = names.values();
-    std::sort(result.begin(), result.end());
-    return result;
+    QStringList names;
+    config_ForEachPersistent([](void* opaque, const char* name) {
+        const auto option = qfu(name);
+        if (option != applicationProfileOption)
+            static_cast<QStringList*>(opaque)->append(option);
+    }, &names);
+    names.removeDuplicates();
+    std::sort(names.begin(), names.end());
+    return names;
 }
 
 QVariantMap encodeInterface(const QVariantMap& values)
@@ -1063,7 +1055,26 @@ QVariantMap RedesignPreferences::presetState(bool application) const
     }
     const auto selected = state.value(QStringLiteral("selected")).toString();
     if (!selected.isEmpty() && !ids.contains(selected)) return {};
-    if (application) return state;
+    if (application) {
+        // Older snapshots enumerated public module controls, so private saved
+        // settings such as player layout were missing. New settings from a
+        // different build also need a stable baseline rather than inheriting
+        // the previously active profile's values.
+        auto defaults = state.value(QStringLiteral("default")).toMap();
+        for (const auto& name : applicationOptions()) {
+            if (defaults.contains(name)) continue;
+            const auto* cfg = config_FindConfig(name.toUtf8().constData());
+            if (!cfg) continue;
+            switch (CONFIG_CLASS(cfg->i_type)) {
+            case CONFIG_ITEM_BOOL: defaults.insert(name, bool(cfg->orig.i)); break;
+            case CONFIG_ITEM_INTEGER: defaults.insert(name, QVariant::fromValue<qlonglong>(cfg->orig.i)); break;
+            case CONFIG_ITEM_FLOAT: defaults.insert(name, cfg->orig.f); break;
+            case CONFIG_ITEM_STRING: defaults.insert(name, qfu(cfg->orig.psz ? cfg->orig.psz : "")); break;
+            }
+        }
+        state.insert(QStringLiteral("default"), defaults);
+        return state;
+    }
     // Older presets stored fit=None for pixel zoom but omitted autoscale.
     // Normalize each snapshot before merging a named preset with defaults.
     const auto normalize = [](QVariantMap options) {

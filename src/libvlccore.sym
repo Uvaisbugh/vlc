@@ -87,6 +87,7 @@ config_GetPsz
 config_GetPszChoices
 config_GetType
 config_IsPersistent
+config_ForEachPersistent
 config_PutFloat
 config_PutInt
 config_PutPsz

@@ -5,6 +5,25 @@
 #include <vlc_fs.h>
 #include <vlc_variables.h>
 
+struct persistent_options
+{
+    unsigned count;
+    bool rate, volume, device, instance;
+};
+
+static void persistent_option(void *opaque, const char *name)
+{
+    struct persistent_options *options = opaque;
+    assert(config_IsPersistent(name));
+    assert(strcmp(name, "config") && strcmp(name, "help")
+        && strcmp(name, "load-startup-options"));
+    ++options->count;
+    options->rate |= !strcmp(name, "rate");
+    options->volume |= !strcmp(name, "audio-last-volume");
+    options->device |= !strcmp(name, "audio-device-default-module");
+    options->instance |= !strcmp(name, "single-instance-preferences-version");
+}
+
 static void expansion(const char *text, const char *const expected[], size_t count)
 {
     char *setting;
@@ -95,6 +114,10 @@ static void test_runtime(void)
     assert(!config_IsPersistent("help"));
     assert(!config_IsPersistent("not-a-real-vlc-setting"));
     assert(!config_IsPersistent(NULL));
+    struct persistent_options persistent = {0};
+    config_ForEachPersistent(persistent_option, &persistent);
+    assert(persistent.count > 0 && persistent.rate && persistent.volume
+        && persistent.device && persistent.instance);
     vlc_object_t *object = VLC_OBJECT(base->p_libvlc_int);
     assert(config_ValidateStartupOptions(object, "--rate=3 --video --http-user-agent='Sample player'") == VLC_SUCCESS);
     assert(var_InheritFloat(base->p_libvlc_int, "rate") == 1.25f);
