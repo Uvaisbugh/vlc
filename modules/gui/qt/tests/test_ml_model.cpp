@@ -154,6 +154,57 @@ class TestVLCMLModel : public QObject
     Q_OBJECT
 
 private slots:
+    void testAudioMetadataReadsStayOnTheWorker_data()
+    {
+        QTest::addColumn<bool>("enabled");
+        QTest::newRow("audio metadata") << true;
+        QTest::newRow("ordinary lookup") << false;
+    }
+    void testAudioMetadataReadsStayOnTheWorker()
+    {
+        QFETCH(bool, enabled);
+        std::atomic<int> artistReads {0}, writes {0};
+        std::atomic_bool workerOnly {true};
+        m_env->mediaGet = [&](int query, va_list args) -> void* {
+            workerOnly = workerOnly && QThread::currentThread() != QCoreApplication::instance()->thread();
+            if (query == VLC_ML_GET_ARTIST) {
+                if (va_arg(args, int64_t) != 44) return nullptr;
+                ++artistReads;
+                auto* artist = static_cast<vlc_ml_artist_t*>(calloc(1, sizeof(vlc_ml_artist_t)));
+                artist->i_id = 44; artist->psz_name = strdup("Artist");
+                return artist;
+            }
+            if (query != VLC_ML_GET_MEDIA_BY_MRL) return nullptr;
+            const auto mrl = va_arg(args, const char*);
+            auto* media = static_cast<vlc_ml_media_t*>(calloc(1, sizeof(vlc_ml_media_t)));
+            media->i_id = 42; media->i_type = VLC_ML_MEDIA_TYPE_AUDIO;
+            media->i_subtype = VLC_ML_MEDIA_SUBTYPE_ALBUMTRACK;
+            media->album_track.i_artist_id = 44;
+            media->psz_title = strdup("Track title"); media->psz_filename = strdup("01.mp3");
+            media->p_files = static_cast<vlc_ml_file_list_t*>(calloc(1, sizeof(vlc_ml_file_list_t) + sizeof(vlc_ml_file_t)));
+            media->p_files->i_nb_items = 1;
+            media->p_files->p_items[0].i_type = VLC_ML_FILE_TYPE_MAIN;
+            media->p_files->p_items[0].psz_mrl = strdup(mrl);
+            return media;
+        };
+        m_env->mediaControl = [&](int, va_list) { ++writes; return VLC_EGENERIC; };
+        MLMediaStore store(m_medialib.get());
+        store.setReadAudioMetadata(enabled);
+        QSignalSpy metadata(&store, &MLMediaStore::audioMetadataUpdated);
+        QSignalSpy updated(&store, &MLMediaStore::updated);
+        const QString mrl = QStringLiteral("file://server/music/01.mp3");
+        bool finished = false;
+        store.insertMany({mrl}, [&] { finished = true; });
+        QTRY_VERIFY(finished);
+        QCOMPARE(updated.count(), 1);
+        QCOMPARE(metadata.count(), enabled ? 1 : 0);
+        if (enabled) QCOMPARE(metadata[0], (QVariantList{mrl, "Track title", "Artist"}));
+        store.insert(mrl);
+        QTRY_COMPARE(updated.count(), 2);
+        QCOMPARE(artistReads.load(), enabled ? 2 : 0);
+        QVERIFY(workerOnly.load());
+        QCOMPARE(writes.load(), 0);
+    }
     void initTestCase() {
         m_env = std::make_unique<VLCTestingEnv>();
         QVERIFY(m_env->init());

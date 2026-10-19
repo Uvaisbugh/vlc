@@ -52,11 +52,13 @@ public:
     void cancelBatch();
     void remove(const MLItemId &id);
     void clear();
+    void setReadAudioMetadata(bool enabled) { m_readAudioMetadata = enabled; }
 
     bool contains(const QString &mrl) const;
 
 signals:
     void updated(const QString &mrl, const MLMedia &media);
+    void audioMetadataUpdated(const QString& mrl, const QString& title, const QString& artist);
 
 private:
     static void onVlcMlEvent(void* data
@@ -66,6 +68,9 @@ private:
     void update(const MLItemId &id);
 
     void setMedia(const QString &mrl, MLMedia media);
+    struct Details { MLMedia media; QString artist; };
+    static Details details(vlc_medialibrary_t* ml, const vlc_ml_media_t* media, bool audioMetadata);
+    void notifyMetadata(const QString& mrl, const Details& details);
     struct Batch {
         struct Entry { QString mrl; quint64 revision; };
         QVector<Entry> entries;
@@ -77,6 +82,7 @@ private:
     void readNextBatch();
     std::shared_ptr<Batch> m_batch;
     bool m_batchRunning = false;
+    bool m_readAudioMetadata = false;
 
     MediaLib *m_ml;
 
