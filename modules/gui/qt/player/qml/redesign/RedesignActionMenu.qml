@@ -75,7 +75,8 @@ C.Menu {
             text: modelData.label
             enabled: modelData.enabled !== false
             checkable: root.checkedAction.length > 0 || modelData.checked !== undefined
-            checked: root.checkedAction.length > 0 ? modelData.action === root.checkedAction : modelData.checked === true
+            autoExclusive: root.checkedAction.length > 0
+            checked: root.visible && (root.checkedAction.length > 0 ? modelData.action === root.checkedAction : modelData.checked === true)
             indicator: null
             arrow: null
             background: Rectangle { radius: root.theme.dp(6); color: !row.highlighted ? "transparent" : root.lightTheme ? root.theme.hover : "#1f1f1f" }

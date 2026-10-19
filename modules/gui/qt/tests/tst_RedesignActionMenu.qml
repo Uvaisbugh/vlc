@@ -83,6 +83,9 @@ TestCase {
         keyClick(Qt.Key_Return)
         compare(actions.signalArguments[0][0], "second")
         tryCompare(menu, "visible", false)
+        button.forceActiveFocus(); keyClick(Qt.Key_Space)
+        tryCompare(menu, "opened", true)
+        verify(menu.itemAt(1).checked)
     }
     function test_disabledCheckedChoiceDoesNotReceiveKeyboardFocus() {
         menu.entries = [{action: "first", label: "First"}, {action: "second", label: "Second", enabled: false}]
@@ -92,6 +95,18 @@ TestCase {
         verify(menu.currentIndex !== 1)
         keyClick(Qt.Key_Down); keyClick(Qt.Key_Return)
         compare(actions.signalArguments[0][0], "first")
+    }
+    function test_reopenedChoiceReflectsTheAuthoritativeSelection() {
+        menu.checkedAction = "second"
+        button.forceActiveFocus(); keyClick(Qt.Key_Space)
+        tryCompare(menu, "currentIndex", 1)
+        keyClick(Qt.Key_Up); keyClick(Qt.Key_Return)
+        compare(actions.signalArguments[0][0], "first")
+        // The caller can reject or defer a requested selection.
+        compare(menu.checkedAction, "second")
+        button.forceActiveFocus(); keyClick(Qt.Key_Space)
+        tryCompare(menu, "opened", true)
+        verify(menu.itemAt(1).checked); verify(!menu.itemAt(0).checked)
     }
     function test_checkedChoiceDoesNotOverrideImmediateArrowNavigation() {
         menu.checkedAction = "second"

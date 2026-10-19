@@ -754,6 +754,9 @@ TestCase {
         keyClick(Qt.Key_Return)
         tryCompare(menu, "visible", false)
         compare(library.grid, data.grid)
+        button.forceActiveFocus(); keyClick(Qt.Key_Space)
+        tryCompare(menu, "opened", true)
+        verify(menu.itemAt(data.index).checked)
     }
     function test_headerSettingsAction() {
         mouseClick(findChild(library, "libraryMoreButton"))
