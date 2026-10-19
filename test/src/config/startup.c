@@ -4,6 +4,7 @@
 #include <vlc_configuration.h>
 #include <vlc_fs.h>
 #include <vlc_variables.h>
+#include <vlc_modules.h>
 
 struct persistent_options
 {
@@ -114,6 +115,23 @@ static void test_runtime(void)
     assert(!config_IsPersistent("help"));
     assert(!config_IsPersistent("not-a-real-vlc-setting"));
     assert(!config_IsPersistent(NULL));
+    /* A live plugin definition takes priority over an obsolete alias with
+     * the same name. SRT input removed payload-size; SRT output still uses it. */
+    size_t module_count;
+    module_t **modules = module_list_get(&module_count);
+    for (size_t i = 0; i < module_count; ++i)
+    {
+        unsigned count;
+        module_config_t *items = module_config_get(modules[i], &count);
+        for (unsigned j = 0; j < count; ++j)
+            if (items[j].psz_name && !strcmp(items[j].psz_name, "payload-size"))
+            {
+                assert(config_IsPersistent("payload-size"));
+                assert(config_FindConfig("payload-size")->orig.i == items[j].orig.i);
+            }
+        module_config_free(items);
+    }
+    module_list_free(modules);
     struct persistent_options persistent = {0};
     config_ForEachPersistent(persistent_option, &persistent);
     assert(persistent.count > 0 && persistent.rate && persistent.volume
