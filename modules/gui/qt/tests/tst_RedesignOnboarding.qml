@@ -16,7 +16,21 @@ TestCase {
         property bool saveFails: false
         property int skipCount: 0
         property var saved: ({})
-        property var shortcuts: [{title: "Play / Pause", keys: ["Space"]}, {title: "Seek Backward / Forward", keys: ["Alt+Left", "Alt+Right"]}]
+        readonly property var defaultShortcuts: [
+            {title: "Play / Pause", keys: ["Space"]},
+            {title: "Seek Backward / Forward", keys: ["Alt+Left", "Alt+Right"]},
+            {title: "Previous / Next Item", keys: ["P", "N"]},
+            {title: "Previous / Next Frame", keys: ["Shift+E", "E"]},
+            {title: "Cycle Subtitle Track", keys: ["V"]},
+            {title: "Cycle Audio Track", keys: ["B"]},
+            {title: "Toggle Fullscreen", keys: ["F"]},
+            {title: "Increase / Decrease Volume", keys: ["Ctrl+Up", "Ctrl+Down"]},
+            {title: "Show / Hide Queue", keys: ["Ctrl+L"]},
+            {title: "Show / Hide File Browser", keys: ["Ctrl+Shift+L"]},
+            {title: "Take a Snapshot", keys: ["Shift+S"]},
+            {title: "Record", keys: ["Shift+R"]}
+        ]
+        property var shortcuts: defaultShortcuts
         function validateFolder(folder) { errorMessage = folder === "missing" ? "Select an existing folder." : ""; return !errorMessage.length }
         function browseFolder(folder) { return "/media/Movies" }
         function finish(folder, scheme, accent, network) {
@@ -34,6 +48,7 @@ TestCase {
         onboarding.accentColor = "#d37918"; onboarding.onlineMetadata = true
         setup.hasMediaLibrary = true; setup.errorMessage = ""; setup.saveFails = false; setup.saved = ({})
         setup.skipCount = 0
+        setup.shortcuts = setup.defaultShortcuts
         finished.clear(); dismissed.clear(); onboarding.width = 1090; onboarding.height = 759
     }
     function test_navigationUsesThreePagesAndRetainsEdits() {
@@ -44,6 +59,50 @@ TestCase {
         compare(onboarding.scheme, 1); compare(onboarding.accentColor, "#185dd3")
         mouseClick(item("onboardingBack")); compare(onboarding.page, 0); compare(onboarding.folder, "/media/Music")
         compare(finished.count, 0)
+    }
+    function test_welcomeAndAppearanceMatchReferencePositions() {
+        const cone = item("onboardingWelcomeCone"), folder = item("onboardingFolder")
+        compare(cone.x, 475); compare(cone.y, 116); compare(cone.width, 140); compare(cone.height, 140)
+        compare(folder.x, 248); compare(folder.y, 534); compare(folder.width, 469); compare(folder.height, 34)
+        compare(item("onboardingNext").y, 671)
+        onboarding.page = 1
+        compare(item("onboardingAccent_0").mapToItem(onboarding, 0, 0).y, 655)
+        compare(item("onboardingBack").y, 671)
+    }
+    function test_shortcutKeycapsMatchReferenceAndKeepLiveCombinations() {
+        onboarding.page = 2
+        const space = item("onboardingKeycap_0_0_0"), fullscreen = item("onboardingKeycap_6_0_0")
+        compare(space.mapToItem(onboarding, 0, 0), Qt.point(302, 154))
+        compare(space.width, 93); compare(space.height, 42)
+        compare(fullscreen.mapToItem(onboarding, 0, 0), Qt.point(845, 154))
+        compare(fullscreen.width, 56)
+        const shadow = item("onboardingKeycap_0_0_0_shadow")
+        compare(shadow.y, 7); compare(shadow.height, 42)
+        const shift = item("onboardingKeycap_10_0_0")
+        compare(shift.width, 92)
+        // Configured multi-key alternatives still fit the two-column page.
+        const volumeEnd = item("onboardingKeycap_7_1_1")
+        verify(volumeEnd.mapToItem(onboarding, volumeEnd.width, 0).x <= 1080)
+        compare(volumeEnd.mapToItem(onboarding, 0, 0).y, item("onboardingShortcutRow_7").y)
+        const browserEnd = item("onboardingKeycap_9_0_2")
+        verify(browserEnd.mapToItem(onboarding, browserEnd.width, 0).x <= 1080)
+    }
+    function test_configuredPlusKeyDoesNotCreateEmptyKeycaps() {
+        setup.shortcuts = [{title: "Custom action", keys: ["Ctrl++", "+"]}]
+        onboarding.page = 2
+        tryVerify(() => item("onboardingKeycap_0_1_0") !== null)
+        compare(item("onboardingKeycap_0_0_1").modelData, "+")
+        compare(item("onboardingKeycap_0_1_0").modelData, "+")
+        compare(item("onboardingKeycap_0_0_2"), null)
+        compare(item("onboardingKeycap_0_1_1"), null)
+    }
+    function test_longConfiguredShortcutAlternativesStayOnOneRow() {
+        setup.shortcuts = [{title: "Custom action", keys: ["Ctrl+Alt+Shift+Left", "Ctrl+Alt+Shift+Right"]}]
+        onboarding.page = 2
+        tryVerify(() => item("onboardingKeycap_0_1_3") !== null)
+        const last = item("onboardingKeycap_0_1_3"), end = last.mapToItem(onboarding, last.width, last.height)
+        verify(end.x <= 538); verify(end.y <= 196)
+        compare(last.mapToItem(onboarding, 0, 0).y, 154)
     }
     function test_browseChangesOnlyTheFolder() {
         mouseClick(item("onboardingBrowse")); compare(onboarding.folder, "/media/Movies")

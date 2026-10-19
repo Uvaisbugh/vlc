@@ -33,6 +33,24 @@ FocusScope {
         backend.skip()
         dismissRequested()
     }
+    function keycapWidth(key, textWidth, compact) {
+        if (compact) return Math.max(40, textWidth + 24)
+        if (key === "Space") return Math.max(93, textWidth + 32)
+        if (key === "Shift") return Math.max(92, textWidth + 32)
+        if (["Left", "Right", "Up", "Down"].includes(key)) return 46
+        if ([",", "."].includes(key)) return 35
+        if (["<", ">"].includes(key)) return 41
+        return Math.max(56, textWidth + 24)
+    }
+    function keyParts(sequence) {
+        const parts = sequence.split("+")
+        // Native key names use a final plus sign for the Plus key.
+        if (parts.length > 1 && parts[parts.length - 1] === "") {
+            parts.pop()
+            if (parts[parts.length - 1] === "") parts[parts.length - 1] = "+"
+        }
+        return parts
+    }
     Keys.onEscapePressed: dismiss()
     Rectangle { anchors.fill: parent; radius: 14 * root.contentScale; color: "#0e0e0e" }
     Item {
@@ -44,9 +62,10 @@ FocusScope {
         }
         component Action: RedesignButton {
             width: 100; height: 32; captionFontSize: 16
+            captionFontWeight: Font.DemiBold
             accentColor: root.accentColor
             background: Rectangle {
-                radius: 6; color: parent.accent ? root.accentColor : parent.hovered ? "#292929" : "#191919"
+                radius: 6; color: parent.accent ? root.accentColor : parent.hovered ? "#292929" : "#1b1b1b"
                 border.color: parent.visualFocus ? "#e5e5e5" : "transparent"
             }
         }
@@ -61,16 +80,16 @@ FocusScope {
         Item {
             objectName: "onboardingWelcome"
             anchors.fill: parent; visible: root.page === 0
-            RedesignIcon { x: 473; y: 118; width: 144; height: 144; name: "cone"; color: root.accentColor }
-            Label { x: 248; y: 288; width: 594; height: 50; text: qsTr("Welcome to VLC!"); color: "#e5e5e5"; font.pixelSize: 32; horizontalAlignment: Text.AlignHCenter }
+            RedesignIcon { objectName: "onboardingWelcomeCone"; x: 475; y: 116; width: 140; height: 140; name: "cone"; color: root.accentColor }
+            Label { x: 248; y: 286; width: 594; height: 50; text: qsTr("Welcome to VLC!"); color: "#e5e5e5"; font.pixelSize: 32; horizontalAlignment: Text.AlignHCenter }
             Label {
-                x: 248; y: 368; width: 594; height: 84; lineHeight: 1.75
+                x: 248; y: 366; width: 594; height: 84; lineHeight: 1.4
                 text: qsTr("VLC is a free and open source media player.\nPlay videos and music from files, discs, and network streams.\nYou can change all settings later.")
             }
-            Label { x: 248; y: 504; width: 594; text: qsTr("Choose a media folder to start with"); font.pixelSize: 14 }
+            Label { x: 248; y: 500; width: 594; text: qsTr("Choose a media folder to start with"); font.pixelSize: 14 }
             C.TextField {
                 id: folderField; objectName: "onboardingFolder"
-                x: 248; y: 538; width: 469; height: 34
+                x: 248; y: 534; width: 469; height: 34
                 enabled: root.backend.hasMediaLibrary
                 text: root.folder; placeholderText: qsTr("No folder selected")
                 color: "#afafaf"; placeholderTextColor: "#8f8f8f"; font.pixelSize: 16
@@ -81,7 +100,8 @@ FocusScope {
             }
             Action {
                 objectName: "onboardingBrowse"
-                x: 729; y: 538; width: 114; height: 34
+                x: 729; y: 533.5; width: 114; height: 35
+                captionFontWeight: Font.Normal
                 caption: qsTr("Browse"); text: caption; enabled: root.backend.hasMediaLibrary
                 onClicked: { const chosen = root.backend.browseFolder(root.folder); if (chosen.length) root.folder = chosen }
             }
@@ -172,7 +192,7 @@ FocusScope {
                 }
             }
             Row {
-                x: 41; y: 659; spacing: 16
+                x: 41; y: 655; spacing: 16
                 Repeater {
                     model: root.accents
                     C.AbstractButton {
@@ -188,7 +208,7 @@ FocusScope {
                         background: Rectangle {
                             radius: 32; color: "transparent"
                             border.width: Qt.colorEqual(root.accentColor, colorButton.modelData) ? 4 : colorButton.visualFocus ? 2 : 0
-                            border.color: colorButton.visualFocus ? "#e5e5e5" : Qt.alpha(colorButton.modelData, .4)
+                            border.color: colorButton.visualFocus ? "#e5e5e5" : Qt.alpha(colorButton.modelData, .3)
                         }
                         contentItem: Item {
                             Rectangle { x: 12; y: 12; width: 40; height: 40; radius: 20; color: colorButton.modelData; opacity: Qt.colorEqual(root.accentColor, colorButton.modelData) || colorButton.hovered ? 1 : .5 }
@@ -200,20 +220,27 @@ FocusScope {
         Item {
             objectName: "onboardingShortcuts"
             anchors.fill: parent; visible: root.page === 2
-            Label { x: 100; y: 64; width: 890; text: qsTr("Learn the basic keyboard shortcuts."); horizontalAlignment: Text.AlignHCenter; font.pixelSize: 24 }
+            Label { x: 100; y: 68; width: 890; text: qsTr("Learn the basic keyboard shortcuts."); horizontalAlignment: Text.AlignHCenter; font.pixelSize: 24 }
             Repeater {
                 model: root.backend.shortcuts
                 Row {
+                    id: shortcutRow
                     required property var modelData
                     required property int index
-                    x: index < 6 ? 62 : 605; y: 164 + (index % 6) * 82
-                    width: 446; height: 42
-                    Label { width: 241; anchors.verticalCenter: parent.verticalCenter; text: parent.modelData.title; font.pixelSize: 16 }
-                    Flow {
+                    readonly property bool compactKeys: modelData.keys.length > 1
+                        && Array.from(modelData.keys).every(key => key.includes("+"))
+                    objectName: "onboardingShortcutRow_" + index
+                    x: index < 6 ? 62 : 605; y: 154 + (index % 6) * 82
+                    width: 475; height: 42
+                    Label { width: 240; anchors.verticalCenter: parent.verticalCenter; text: parent.modelData.title; font.pixelSize: 16 }
+                    Row {
                         width: 235; spacing: 6
+                        scale: Math.min(1, width / implicitWidth)
+                        transformOrigin: Item.TopLeft
                         Repeater {
                             model: parent.parent.modelData.keys
                             Row {
+                                id: keyGroup
                                 required property string modelData
                                 required property int index
                                 spacing: 6
@@ -221,12 +248,21 @@ FocusScope {
                                 Row {
                                     spacing: 4
                                     Repeater {
-                                        model: modelData.split("+")
-                                        Rectangle {
+                                        model: root.keyParts(modelData)
+                                        Item {
+                                            id: keycap
                                             required property string modelData
-                                            width: Math.max(40, keyLabel.implicitWidth + 24); height: 40; radius: 11
-                                            color: "#191919"; border.color: "#333333"; border.width: 3
-                                            Label { id: keyLabel; anchors.centerIn: parent; font.pixelSize: 16; text: ({Left: "←", Right: "→", Up: "↑", Down: "↓"})[parent.modelData] || parent.modelData; color: "#afafaf" }
+                                            required property int index
+                                            objectName: "onboardingKeycap_" + shortcutRow.index + "_" + keyGroup.index + "_" + index
+                                            width: root.keycapWidth(modelData, keyLabel.implicitWidth, shortcutRow.compactKeys); height: 42
+                                            Rectangle { objectName: keycap.objectName + "_shadow"; y: 7; width: parent.width; height: parent.height; radius: 12; color: "#222222" }
+                                            Rectangle { anchors.fill: parent; radius: 12; color: "#1b1b1b"; border.color: "#373737"; border.width: 3 }
+                                            Label {
+                                                id: keyLabel; anchors.centerIn: parent; font.pixelSize: 16
+                                                text: ({Left: "←", Right: "→", Up: "↑", Down: "↓"})[keycap.modelData]
+                                                    || (["Shift", "Ctrl", "Alt", "Meta"].includes(keycap.modelData) ? keycap.modelData.toUpperCase() : keycap.modelData)
+                                                color: "#afafaf"
+                                            }
                                         }
                                     }
                                 }
@@ -235,7 +271,7 @@ FocusScope {
                     }
                 }
             }
-            Label { x: 62; y: 680; text: qsTr("Find the full list in the menu."); font.pixelSize: 16; color: "#666666" }
+            Label { x: 62; y: 676; text: qsTr("Find the full list in the menu."); font.pixelSize: 16; color: "#666666" }
         }
         Label {
             id: error; objectName: "onboardingError"
@@ -246,13 +282,13 @@ FocusScope {
         }
         Action {
             objectName: "onboardingBack"
-            x: 820; y: 675; visible: root.page > 0
+            x: 820; y: 671; visible: root.page > 0
             caption: qsTr("Back"); text: caption
             onClicked: { root.page--; nextButton.forceActiveFocus() }
         }
         Action {
             id: nextButton; objectName: "onboardingNext"
-            x: 928; y: 675; accent: true
+            x: 928; y: 671; accent: true
             caption: root.page === 2 ? qsTr("Finish") : qsTr("Next"); text: caption
             onClicked: root.next()
         }
