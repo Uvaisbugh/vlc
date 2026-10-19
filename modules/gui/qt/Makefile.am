@@ -1307,6 +1307,7 @@ libqml_module_player_a_QML = \
 	player/qml/redesign/RedesignDialogSurface.qml \
 	player/qml/redesign/RedesignSettingsDialog.qml \
 	player/qml/redesign/RedesignLibraryArtwork.qml \
+	player/qml/redesign/RedesignAudioArtwork.qml \
 	player/qml/redesign/RedesignLibraryView.qml \
 	player/qml/redesign/RedesignBreadcrumbs.qml \
 	player/qml/redesign/RedesignLibraryPath.qml \

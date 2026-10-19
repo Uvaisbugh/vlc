@@ -35,7 +35,8 @@ public:
     {
         RectDropShadow = 1,
         RoundedRectDropShadow,
-        DoubleRoundedRectDropShadow
+        DoubleRoundedRectDropShadow,
+        Artwork
     };
     Q_ENUM(Effect)
 

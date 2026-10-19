@@ -6,6 +6,8 @@
 #include <QQmlComponent>
 #include <QQmlEngine>
 #include <QAtomicInt>
+#include <QTemporaryDir>
+#include <QPainter>
 #include "../util/effects_image_provider.hpp"
 
 class CountingEffectsProvider final : public EffectsImageProvider
@@ -112,6 +114,47 @@ private slots:
         QVERIFY(image);
         QTRY_COMPARE(image->property("status").toInt(), 1);
         QCOMPARE(provider->requests.loadRelaxed(), requests);
+    }
+    void artworkKeepsPixelsAndRoundsCorners()
+    {
+        QTemporaryDir folder;
+        QVERIFY(folder.isValid());
+        const QString path = folder.filePath("cover with spaces %.png");
+        QImage source(200, 100, QImage::Format_RGB32);
+        source.fill(Qt::red);
+        QPainter painter(&source);
+        painter.fillRect(100, 0, 100, 100, Qt::blue);
+        painter.end();
+        QVERIFY(source.save(path));
+        QQmlEngine engine;
+        auto* provider = new EffectsImageProvider(&engine);
+        auto render = [&](QVariantMap settings, QSize requested) {
+            settings.insert("source", QUrl::fromLocalFile(path));
+            const auto url = EffectsImageProvider::url(EffectsImageProvider::Artwork, settings);
+            QSize size;
+            return provider->requestImage(url.toString().mid(QStringLiteral("image://effects/").length()), &size, requested);
+        };
+        const auto rounded = render({{"radius", .1}}, QSize(400, 400));
+        QCOMPARE(rounded.size(), QSize(400, 200));
+        QCOMPARE(rounded.pixelColor(0, 0).alpha(), 0);
+        QCOMPARE(rounded.pixelColor(50, 100), QColor(Qt::red));
+        QCOMPARE(rounded.pixelColor(350, 100), QColor(Qt::blue));
+        const auto blurred = render({{"blur", .05}}, QSize(100000, 100000));
+        QCOMPARE(blurred.size(), QSize(512, 256));
+        QVERIFY(blurred.pixelColor(255, 128).red() > 30);
+        QVERIFY(blurred.pixelColor(255, 128).blue() > 30);
+        QCOMPARE(render({}, QSize(100000, 100000)).size(), QSize(2048, 1024));
+    }
+    void artworkRejectsMissingAndNonlocalSources()
+    {
+        QQmlEngine engine;
+        auto* provider = new EffectsImageProvider(&engine);
+        for (const auto& source : {"file:///missing-cover.png", "https://127.0.0.1:9/cover.png", "file://server/share/cover.png"}) {
+            const auto url = EffectsImageProvider::url(EffectsImageProvider::Artwork, {{"source", QUrl(source)}});
+            QSize size;
+            QVERIFY(provider->requestImage(url.toString().mid(QStringLiteral("image://effects/").length()), &size, QSize(512, 512)).isNull());
+            QVERIFY(size.isEmpty());
+        }
     }
 };
 QTEST_MAIN(EffectsImageProviderTest)

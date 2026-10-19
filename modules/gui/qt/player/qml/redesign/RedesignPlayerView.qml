@@ -264,7 +264,7 @@ FocusScope {
             leftMargin: root.minimalView || root.libraryExpanded || root.fullscreen ? 0 : theme.dp(10)
             rightMargin: root.minimalView || root.libraryExpanded || root.fullscreen ? 0 : theme.dp(10)
         }
-        Rectangle { anchors.fill: parent; color: "black"; radius: theme.dp(10) }
+        Rectangle { anchors.fill: parent; color: audioArtwork.ready && audioArtwork.visible ? "transparent" : "black"; radius: theme.dp(10) }
         Loader { id: videoLoader; anchors.fill: parent; sourceComponent: root.videoContent }
         Rectangle {
             // The outer border leaves a rounded opening over the native video layer.
@@ -274,7 +274,7 @@ FocusScope {
             radius: theme.dp(root.libraryExpanded ? 10 : 20)
             border.width: theme.dp(root.libraryExpanded ? 5 : 10)
             border.color: theme.background
-            visible: root.libraryExpanded || (!root.fullscreen && !root.minimalView)
+            visible: (root.libraryExpanded || (!root.fullscreen && !root.minimalView)) && !(audioArtwork.ready && audioArtwork.visible)
         }
 
 
@@ -304,23 +304,25 @@ FocusScope {
                 onClicked: root.openRequested()
             }
         }
+        RedesignAudioArtwork {
+            id: audioArtwork
+            objectName: "audioArtworkView"
+            anchors.fill: parent
+            scaleFactor: root.scaleFactor
+            source: visible ? root.artwork : ""
+            title: root.mediaTitle; artist: root.artist
+            showTitle: !root.libraryExpanded
+            visible: root.started && !root.hasVideo
+        }
         Column {
             anchors.centerIn: parent
             spacing: theme.dp(14)
-            visible: root.started && !root.hasVideo
-            Image {
-                anchors.horizontalCenter: parent.horizontalCenter
-                source: root.artwork
-                width: Math.min(viewport.width * 0.45, theme.dp(320))
-                height: width
-                fillMode: Image.PreserveAspectFit
-                visible: status === Image.Ready
-            }
+            objectName: "audioArtworkFallback"
+            visible: root.started && !root.hasVideo && !audioArtwork.ready
             RedesignIcon {
                 anchors.horizontalCenter: parent.horizontalCenter
                 width: theme.dp(96); height: width
                 name: "music"; color: theme.accent
-                visible: !root.artwork.toString()
             }
             Text {
                 anchors.horizontalCenter: parent.horizontalCenter

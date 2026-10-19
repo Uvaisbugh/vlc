@@ -22,8 +22,11 @@
 #include <QUrl>
 #include <QUrlQuery>
 #include <QPainterPath>
+#include <QImageReader>
 
 #include <memory>
+#include <algorithm>
+#include <cstring>
 
 #include "fast_gaussian_blur_template.h"
 
@@ -216,6 +219,73 @@ protected:
     RoundedRectDropShadowEffect shadow2;
 };
 
+// The player artwork is already cached locally. Keep image reads and blur work
+// on the image provider thread, including with Qt's software renderer.
+class ArtworkEffect : public IEffect
+{
+public:
+    explicit ArtworkEffect(const QVariantMap& settings)
+        : m_source(settings["source"].toUrl())
+        , m_blur(std::clamp(settings["blur"].toReal(), 0., .05))
+        , m_radius(std::clamp(settings["radius"].toReal(), 0., .5))
+    {}
+
+    QImage generate(const QSize& size) const override
+    {
+        QString path;
+        if (m_source.isLocalFile() && m_source.host().isEmpty())
+            path = m_source.toLocalFile();
+        else if (m_source.scheme() == QLatin1String("qrc"))
+            path = QLatin1Char(':') + m_source.path();
+        if (path.isEmpty()) return {};
+
+        const int limit = m_blur > 0 ? 512 : 2048;
+        const QSize target = size.width() > limit || size.height() > limit
+            ? size.scaled(limit, limit, Qt::KeepAspectRatio) : size;
+        QImageReader reader(path);
+        reader.setAutoTransform(true);
+        const QSize original = reader.size();
+        if (original.isEmpty() || qint64(original.width()) * original.height() > 16 * 1024 * 1024)
+            return {};
+        reader.setScaledSize(original.scaled(target, Qt::KeepAspectRatio));
+        QImage image = reader.read();
+        if (image.isNull()) return {};
+        image = image.scaled(target, Qt::KeepAspectRatio, Qt::SmoothTransformation)
+            .convertToFormat(QImage::Format_ARGB32_Premultiplied);
+
+        if (m_blur > 0) {
+            const auto bytes = size_t(image.sizeInBytes());
+            auto* input = static_cast<unsigned char*>(malloc(bytes));
+            auto* output = static_cast<unsigned char*>(malloc(bytes));
+            if (!input || !output) { free(input); free(output); return {}; }
+            memcpy(input, image.constBits(), bytes);
+            fast_gaussian_blur(input, output, image.width(), image.height(), 4,
+                               m_blur * std::min(image.width(), image.height()), 3, Border::kMirror);
+            free(input);
+            image = QImage(output, image.width(), image.height(), image.bytesPerLine(),
+                           QImage::Format_ARGB32_Premultiplied, free, output);
+        }
+        if (m_radius > 0) {
+            QImage rounded(image.size(), QImage::Format_ARGB32_Premultiplied);
+            rounded.fill(Qt::transparent);
+            QPainter painter(&rounded);
+            painter.setRenderHint(QPainter::Antialiasing);
+            painter.setPen(Qt::NoPen);
+            painter.setBrush(QBrush(image));
+            const qreal radius = m_radius * std::min(image.width(), image.height());
+            painter.drawRoundedRect(image.rect(), radius, radius);
+            painter.end();
+            return rounded;
+        }
+        return image;
+    }
+
+private:
+    QUrl m_source;
+    qreal m_blur;
+    qreal m_radius;
+};
+
 }
 
 QImage EffectsImageProvider::requestImage(const QString &id, QSize *size, const QSize &requestedSize)
@@ -258,6 +328,10 @@ QImage EffectsImageProvider::requestImage(const QString &id, QSize *size, const 
 
         case EffectsImageProvider::DoubleRoundedRectDropShadow:
             effect = std::make_unique<DoubleShadowEffect>(queryToVariantMap(query));
+            break;
+
+        case EffectsImageProvider::Artwork:
+            effect = std::make_unique<ArtworkEffect>(queryToVariantMap(query));
             break;
 
         default:
