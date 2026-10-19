@@ -92,12 +92,14 @@ C.ComboBox {
         contentItem: RowLayout {
             spacing: root.theme.dp(10)
             RedesignIcon {
+                objectName: "choiceIcon"
                 readonly property string icon: root.model && root.model[index] ? root.model[index].iconName || "" : ""
                 visible: root.showIcons && !root.theme.compactMenus && icon.length > 0
                 Layout.preferredWidth: root.theme.dp(24); Layout.preferredHeight: root.theme.dp(24)
                 name: icon; color: root.theme.foreground; detailColor: root.theme.menuAccent
             }
             RedesignSvg {
+                objectName: "choiceCurvePreview"
                 readonly property var curve: root.model && root.model[index] ? root.model[index].curve || [] : []
                 readonly property color fillColor: root.theme.accent
                 readonly property color lineColor: root.theme.foreground
@@ -124,6 +126,7 @@ C.ComboBox {
                 verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight
             }
             Item {
+                objectName: "choiceSelectionMark"
                 Layout.preferredWidth: root.theme.dp(20); Layout.preferredHeight: root.theme.dp(20)
                 visible: root.showSelectionMark && index === root.currentIndex
                 RedesignIcon { anchors.fill: parent; name: "check"; color: root.theme.accent }

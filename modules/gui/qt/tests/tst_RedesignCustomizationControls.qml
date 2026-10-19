@@ -57,10 +57,11 @@ TestCase {
         player.customControlStates = ({favorite: {checked: true, icon: "favorite-active", enabled: false}})
         verify(button.selected); verify(!button.enabled)
         player.layoutModel.move("favorite", "headerLeft", 0)
-        tryVerify(() => control.parent.objectName === "customHeaderLeft")
+        tryVerify(() => player.layoutReady && control.visible && control.parent.objectName === "customHeaderLeft")
         compare(item("customControl_favorite"), control)
         player.customControlStates = ({favorite: {checked: false, enabled: true}})
         verify(!button.selected); verify(button.enabled)
+        verify(waitForRendering(player))
         mouseClick(button); compare(actionSpy.count, 1)
     }
     function test_metadataIsElidedAndMissingValuesAreClear() {

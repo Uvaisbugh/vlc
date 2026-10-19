@@ -27,8 +27,8 @@ TestCase {
     }
     RedesignComboBox {
         id: combo; x: 500; y: 20; width: 280
-        model: [{label: "Flat", curve: [0,0,0]}, {label: "Bass", curve: [6,2,0]}]
-        textRole: "label"; showCurvePreviews: true
+        model: [{label: "Flat", curve: [0,0,0], iconName: "visual-waveform"}, {label: "Bass", curve: [6,2,0], iconName: "visual-scope"}]
+        textRole: "label"; showCurvePreviews: true; showIcons: true
     }
     QtObject {
         id: store
@@ -96,12 +96,14 @@ TestCase {
         compare(row.implicitHeight, 34)
         redesignAppearance.compactMenus = true
         compare(row.implicitHeight, 28)
-        verify(!row.contentItem.children[0].visible)
-        verify(row.contentItem.children[2].visible)
+        verify(!findChild(row, "choiceCurvePreview").visible)
+        verify(!findChild(row, "choiceIcon").visible)
+        verify(findChild(row, "choiceSelectionMark").visible)
         compare(combo.currentIndex, 0)
         redesignAppearance.compactMenus = false
         compare(row.implicitHeight, 34)
-        verify(row.contentItem.children[0].visible)
+        verify(findChild(row, "choiceCurvePreview").visible)
+        verify(findChild(row, "choiceIcon").visible)
     }
     function test_presetActionsRemainAccessible() {
         redesignAppearance.compactMenus = true
