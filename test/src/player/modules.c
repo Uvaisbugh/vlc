@@ -32,15 +32,29 @@ static void teardown_window_Disable(vlc_window_t *window)
     vlc_mutex_unlock(&window_teardown.lock);
 }
 
+static void teardown_window_Destroy(vlc_window_t *window)
+{
+    (void) window;
+    vlc_mutex_lock(&window_teardown.lock);
+    window_teardown.closed++;
+    vlc_cond_signal(&window_teardown.wait);
+    vlc_mutex_unlock(&window_teardown.lock);
+}
+
 static int teardown_window_Open(vlc_window_t *window)
 {
     static const struct vlc_window_operations ops = {
         .enable = teardown_window_Enable,
         .disable = teardown_window_Disable,
         .resize = vlc_window_ReportSize,
+        .destroy = teardown_window_Destroy,
     };
     window->type = VLC_WINDOW_TYPE_DUMMY;
     window->ops = &ops;
+    vlc_mutex_lock(&window_teardown.lock);
+    window_teardown.opened++;
+    vlc_cond_signal(&window_teardown.wait);
+    vlc_mutex_unlock(&window_teardown.lock);
     return VLC_SUCCESS;
 }
 #endif

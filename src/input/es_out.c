@@ -1213,11 +1213,26 @@ static void EsOutChangePosition(es_out_sys_t *p_sys,
     p_sys->i_prev_stream_level = -1;
 }
 
+static bool EsOutHasVideo(es_out_sys_t *p_sys)
+{
+    es_out_id_t *es;
+    foreach_es_then_es_slaves(es)
+        if (es->fmt.i_cat == VIDEO_ES && !es->b_terminated)
+            return true;
+    return false;
+}
+
 static void EsOutStopFreeVout(es_out_sys_t *p_sys)
 {
     /* Clean up vout after user action (in active mode only). */
     if( p_sys->b_active )
-        input_resource_StopFreeVout( input_priv(p_sys->p_input)->p_resource );
+    {
+        input_resource_t *resource = input_priv(p_sys->p_input)->p_resource;
+        if (EsOutHasVideo(p_sys))
+            input_resource_StopFreeVout(resource);
+        else
+            input_resource_CloseFreeVout(resource);
+    }
 }
 
 static void EsOutDecodersStopBuffering(es_out_sys_t *p_sys, bool b_forced)
@@ -4055,21 +4070,10 @@ static int EsOutVaPrivControlLocked(es_out_sys_t *p_sys, input_source_t *source,
 
         if (i_mode != ES_OUT_MODE_NONE && !p_sys->b_active && !vlc_list_is_empty(&p_sys->es))
         {
-            /* XXX Terminate vout if there are tracks but no video one.
-             * This one is not mandatory but is he earliest place where it
-             * can be done */
-            es_out_id_t *p_es;
-            bool found = false;
-
-            foreach_es_then_es_slaves(p_es)
-                if( p_es->fmt.i_cat == VIDEO_ES && !found /* nested loop */ )
-                {
-                    found = true;
-                    break;
-                }
-
-            if (!found)
-                EsOutStopFreeVout(p_sys);
+            /* Release a previous video's cached output before starting an
+             * audio-only input. A visualizer can then use the same surface. */
+            if (!EsOutHasVideo(p_sys))
+                input_resource_CloseFreeVout(input_priv(p_sys->p_input)->p_resource);
         }
         p_sys->b_active = i_mode != ES_OUT_MODE_NONE;
         p_sys->i_mode = i_mode;

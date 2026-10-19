@@ -11,6 +11,42 @@
 
 struct window_teardown_test window_teardown = { .lock = VLC_STATIC_MUTEX };
 
+static void test_audio_only_releases_unused_window(struct ctx *ctx)
+{
+    test_log("test_audio_only_releases_unused_window\n");
+    vlc_player_t *player = ctx->player;
+    vlc_cond_init(&window_teardown.wait);
+    window_teardown.opened = window_teardown.closed = 0;
+    assert(var_SetString(ctx->vlc->p_libvlc_int, "window", "test-window-teardown") == 0);
+    struct media_params params = DEFAULT_MEDIA_PARAMS(VLC_TICK_FROM_SEC(10));
+    vlc_player_SetStartPaused(player, true);
+    player_set_current_mock_media(ctx, "video", &params, false);
+    player_start(ctx);
+    wait_state(ctx, VLC_PLAYER_STATE_PAUSED);
+    vlc_mutex_lock(&window_teardown.lock);
+    assert(window_teardown.opened == 1 && window_teardown.closed == 0);
+    vlc_mutex_unlock(&window_teardown.lock);
+
+    assert(vlc_player_Stop(player) == VLC_SUCCESS);
+    wait_state(ctx, VLC_PLAYER_STATE_STOPPED);
+    /* Drop the test report's observer references while retaining the player
+     * and its cached output. The next media has different track counts. */
+    test_end(ctx);
+    params.track_count[VIDEO_ES] = params.track_count[SPU_ES] = 0;
+    vlc_player_SetStartPaused(player, true);
+    player_set_current_mock_media(ctx, "audio", &params, false);
+    player_start(ctx);
+    wait_state(ctx, VLC_PLAYER_STATE_PAUSED);
+    vlc_player_Unlock(player);
+    vlc_mutex_lock(&window_teardown.lock);
+    const vlc_tick_t deadline = vlc_tick_now() + VLC_TICK_FROM_SEC(5);
+    while (window_teardown.closed != window_teardown.opened)
+        assert(vlc_cond_timedwait(&window_teardown.wait, &window_teardown.lock, deadline) == 0);
+    vlc_mutex_unlock(&window_teardown.lock);
+    vlc_player_Lock(player);
+    test_end(ctx);
+}
+
 static void test_reopen_during_window_teardown(struct ctx *ctx)
 {
     test_log("test_reopen_during_window_teardown\n");
@@ -209,6 +245,10 @@ main(void)
     ctx_init(&ctx, 0);
     test_outputs(&ctx);
     test_audio_defaults(&ctx);
+    ctx_destroy(&ctx);
+
+    ctx_init(&ctx, 0);
+    test_audio_only_releases_unused_window(&ctx);
     ctx_destroy(&ctx);
 
     ctx_init(&ctx, 0);

@@ -20,6 +20,8 @@ struct window_teardown_test {
     vlc_cond_t wait;
     bool blocked;
     bool entered;
+    unsigned opened;
+    unsigned closed;
 };
 extern struct window_teardown_test window_teardown;
 #endif
