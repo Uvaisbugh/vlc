@@ -256,7 +256,7 @@ C.Dialog {
     function loadSearch(request, result) {
         if (!visible || request !== searchRequestId || !onlineMode) return
         searching = false
-        if (!result.success) { onlineSources = []; errorMessage = result.error || qsTr("VLC could not search for subtitles. Try again."); return }
+        if (!result.success) { onlineSources = []; errorMessage = result.error || qsTr("VLC cannot search for subtitles. Try again."); return }
         onlineSources = (result.sources || []).map(item => Object.assign({}, item, {url: sourceMappings[item.url] || item.url})); performMatching(true)
     }
     function resolveSources(mapping) {
@@ -279,7 +279,7 @@ C.Dialog {
             if (providerConfigured) { languagesRequested(); requestSearch() }
             else { searching = false; onlineSources = [] }
         }
-        else providerSetup.errorMessage = error || qsTr("VLC could not save the API key. Check it and try again.")
+        else providerSetup.errorMessage = error || qsTr("VLC cannot save the API key. Check it and try again.")
     }
     function setTracks(url, selection) {
         const draft = drafts[url]
@@ -322,7 +322,7 @@ C.Dialog {
     function dropSources(urls, target = "") {
 
         if (!visible || saving || loading || loadingDrop) return false
-        if (!urls.length) { errorMessage = qsTr("VLC could not read these files. Try again."); return false }
+        if (!urls.length) { errorMessage = qsTr("VLC cannot read these files. Try again."); return false }
         const values = Array.from(urls, value => String(value))
         if (subtitles && values.every(url => /^https?:/i.test(url))) selectSource(2)
         else selectSource(0)

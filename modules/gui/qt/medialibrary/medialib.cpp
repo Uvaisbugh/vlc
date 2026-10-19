@@ -495,7 +495,7 @@ void MediaLib::trackAssignmentRows(const QVariantMap& target, bool subtitles, QJ
                 const int status = vlc_ml_folder_get_track_rule(ml, folder.toEncoded().constData(), type, &value);
                 const auto definition = qfu(value); free(value);
                 result.insert("folderRule", definition); result.insert("automaticMatching", automatic);
-                if (status != VLC_SUCCESS) result.insert("ruleError", qtr("VLC could not read the saved folder matches. Save again to replace them."));
+                if (status != VLC_SUCCESS) result.insert("ruleError", qtr("VLC cannot read the saved folder matches. Save again to replace them."));
                 std::vector<vlc::medialibrary::trackrules::Pair> pairs;
                 if (!definition.isEmpty() && vlc::medialibrary::trackrules::decode(definition.toStdString(), pairs) && !pairs.empty()) {
                     hasFolderRule = true;
@@ -774,7 +774,7 @@ void MediaLib::saveTrackAssignmentsImpl(const QVariantList& rows, bool subtitles
                 if (status != VLC_SUCCESS) {
                     result["error"] = status == VLC_ENOTSUP
                         ? qtr("This VLC build cannot replace saved tracks.")
-                        : qtr("VLC could not save the tracks for %1. Try again.").arg(edit.url.fileName());
+                        : qtr("VLC cannot save the tracks for %1. Try again.").arg(edit.url.fileName());
                     return;
                 }
                 saved.append(QVariantMap{{"url", edit.url.toString(QUrl::FullyEncoded)},
@@ -785,7 +785,7 @@ void MediaLib::saveTrackAssignmentsImpl(const QVariantList& rows, bool subtitles
                 const auto folder = rule.value("folder").toUrl().toEncoded();
                 const auto definition = rule.value("definition").toString().toUtf8();
                 if (vlc_ml_folder_set_track_rule(ml, folder.constData(), type, definition.isEmpty() ? nullptr : definition.constData()) != VLC_SUCCESS) {
-                    result["error"] = qtr("VLC could not save the folder matches. Try Save again."); return;
+                    result["error"] = qtr("VLC cannot save the folder matches. Try Save again."); return;
                 }
                 result["folderRuleSaved"] = true; result["folderRule"] = QString::fromUtf8(definition);
             }
@@ -987,7 +987,7 @@ void MediaLib::addMediaTracks(const QUrl& url, const QList<QUrl>& tracks, bool s
                 if (found) continue;
                 const auto uri = track.toEncoded();
                 if (vlc_ml_media_add_external_mrl(ml, media->i_id, uri.constData(), type) != VLC_SUCCESS) {
-                    result.error = qtr("VLC could not save this track: %1").arg(track.fileName());
+                    result.error = qtr("VLC cannot save this track: %1").arg(track.fileName());
                     return;
                 }
                 result.added.push_back(track);
@@ -1063,7 +1063,7 @@ void MediaLib::addLibraryFiles(const QList<QUrl>& urls, QJSValue callback)
                 const auto uri = folder.toEncoded();
                 if (vlc_ml_add_folder(ml, uri.constData()) != VLC_SUCCESS) {
                     result["folders"] = completed;
-                    result["error"] = qtr("VLC could not add this folder: %1").arg(folder.toDisplayString(QUrl::PreferLocalFile)); return;
+                    result["error"] = qtr("VLC cannot add this folder: %1").arg(folder.toDisplayString(QUrl::PreferLocalFile)); return;
                 }
                 completed.append(folder.toString(QUrl::FullyEncoded));
             }

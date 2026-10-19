@@ -37817,7 +37817,6 @@ msgstr "更新"
 #~ msgid "Addon Manager"
 #~ msgstr "アドオン管理"
 
-
 #. Redesign translation by Codex (first pass; review welcome).
 msgid "System language"
 msgstr "システムの言語"
@@ -39517,7 +39516,7 @@ msgstr "許容範囲内の値を入力してください。"
 #. First-pass Japanese translation; fluent-speaker review is welcome.
 #: modules/gui/qt/dialogs/preferences/redesign_preferences.cpp:2431
 #, qt-format
-msgid "The preferences file could not be saved. Your edits are still open."
+msgid "VLC cannot save the preferences file. Your changes are still open."
 msgstr "設定ファイルを保存できませんでした。編集中の設定は開いたままです。"
 
 #. First-pass Japanese translation; fluent-speaker review is welcome.
@@ -39928,8 +39927,7 @@ msgstr "VLC はこれらのファイルを読み込めません。もう一度�
 #. First-pass Japanese translation; fluent-speaker review is welcome.
 #: modules/gui/qt/medialibrary/medialib.cpp:498
 #, qt-format
-msgid ""
-"VLC could not read the saved folder matches. Save again to replace them."
+msgid "VLC cannot read the saved folder matches. Save again to replace them."
 msgstr "保存済みのフォルダー対応を読み込めませんでした。もう一度保存すると置き換えます。"
 
 #. First-pass Japanese translation; fluent-speaker review is welcome.
@@ -40010,13 +40008,13 @@ msgstr "この VLC ビルドでは、保存済みトラックを置き換えら�
 #. First-pass Japanese translation; fluent-speaker review is welcome.
 #: modules/gui/qt/medialibrary/medialib.cpp:777
 #, qt-format
-msgid "VLC could not save the tracks for %1. Try again."
+msgid "VLC cannot save the tracks for %1. Try again."
 msgstr "%1 のトラックを保存できませんでした。もう一度お試しください。"
 
 #. First-pass Japanese translation; fluent-speaker review is welcome.
 #: modules/gui/qt/medialibrary/medialib.cpp:788
 #, qt-format
-msgid "VLC could not save the folder matches. Try Save again."
+msgid "VLC cannot save the folder matches. Try Save again."
 msgstr "フォルダー対応を保存できませんでした。もう一度「保存」を押してください。"
 
 #. First-pass Japanese translation; fluent-speaker review is welcome.
@@ -40082,7 +40080,7 @@ msgstr "VLC はこのメディアを読み込めません。もう一度ファ�
 #. First-pass Japanese translation; fluent-speaker review is welcome.
 #: modules/gui/qt/medialibrary/medialib.cpp:990
 #, qt-format
-msgid "VLC could not save this track: %1"
+msgid "VLC cannot save this track: %1"
 msgstr "このトラックを保存できませんでした: %1"
 
 #. First-pass Japanese translation; fluent-speaker review is welcome.
@@ -40095,7 +40093,7 @@ msgstr "VLC はこのファイルを読み込めません: %1"
 #: modules/gui/qt/medialibrary/medialib.cpp:1066
 #: modules/gui/qt/player/qml/redesign/RedesignLibrary.qml:546
 #, qt-format
-msgid "VLC could not add this folder: %1"
+msgid "VLC cannot add this folder: %1"
 msgstr "このフォルダーを追加できませんでした: %1"
 
 #. First-pass Japanese translation; fluent-speaker review is welcome.
@@ -44390,7 +44388,7 @@ msgstr "滑らかな再生"
 #. First-pass Japanese translation; fluent-speaker review is welcome.
 #: modules/gui/qt/player/qml/redesign/RedesignPreferencesCatalog.qml:156
 #, qt-format
-msgid "Drop frames when the system can't keep up"
+msgid "Skip late video frames"
 msgstr "処理が追いつかない場合はフレームを破棄"
 
 #. First-pass Japanese translation; fluent-speaker review is welcome.
@@ -45183,7 +45181,7 @@ msgstr "破損したパケット"
 #. First-pass Japanese translation; fluent-speaker review is welcome.
 #: modules/gui/qt/player/qml/redesign/RedesignSubtitleProviderSetup.qml:24
 #, qt-format
-msgid "VLC could not save this change. Check the key and try again."
+msgid "VLC cannot save this change. Check the key and try again."
 msgstr "変更を保存できませんでした。キーを確認して、もう一度お試しください。"
 
 #. First-pass Japanese translation; fluent-speaker review is welcome.
@@ -45380,20 +45378,14 @@ msgstr "VLC はこのフォルダーを読み込めません。もう一度お�
 #. First-pass Japanese translation; fluent-speaker review is welcome.
 #: modules/gui/qt/player/qml/redesign/RedesignTrackAssignmentDialog.qml:259
 #, qt-format
-msgid "VLC could not search for subtitles. Try again."
+msgid "VLC cannot search for subtitles. Try again."
 msgstr "字幕を検索できませんでした。もう一度お試しください。"
 
 #. First-pass Japanese translation; fluent-speaker review is welcome.
 #: modules/gui/qt/player/qml/redesign/RedesignTrackAssignmentDialog.qml:282
 #, qt-format
-msgid "VLC could not save the API key. Check it and try again."
+msgid "VLC cannot save the API key. Check it and try again."
 msgstr "API キーを保存できませんでした。キーを確認して、もう一度お試しください。"
-
-#. First-pass Japanese translation; fluent-speaker review is welcome.
-#: modules/gui/qt/player/qml/redesign/RedesignTrackAssignmentDialog.qml:325
-#, qt-format
-msgid "VLC could not read these files. Try again."
-msgstr "これらのファイルを読み込めませんでした。もう一度お試しください。"
 
 #. First-pass Japanese translation; fluent-speaker review is welcome.
 #: modules/gui/qt/player/qml/redesign/RedesignTrackAssignmentDialog.qml:366
@@ -46308,7 +46300,7 @@ msgstr "字幕サーバーが要求を完了できませんでした。もう一
 #. First-pass Japanese translation; fluent-speaker review is welcome.
 #: modules/gui/qt/util/subtitle_source_service.cpp:156
 #, qt-format
-msgid "VLC could not connect to the subtitle server. Try again."
+msgid "VLC cannot connect to the subtitle server. Try again."
 msgstr "字幕サーバーに接続できませんでした。もう一度お試しください。"
 
 #. First-pass Japanese translation; fluent-speaker review is welcome.
@@ -46363,7 +46355,7 @@ msgstr "このダウンロードには有効な字幕が含まれていません
 #: modules/gui/qt/util/subtitle_source_service.cpp:374
 #: modules/gui/qt/util/subtitle_source_service.cpp:490
 #, qt-format
-msgid "VLC could not save these subtitles."
+msgid "VLC cannot save these subtitles."
 msgstr "これらの字幕を保存できませんでした。"
 
 #. First-pass Japanese translation; fluent-speaker review is welcome.
@@ -46375,7 +46367,7 @@ msgstr "http:// または https:// で始まる字幕ファイルへの直接リ
 #. First-pass Japanese translation; fluent-speaker review is welcome.
 #: modules/gui/qt/util/subtitle_source_service.cpp:471
 #, qt-format
-msgid "VLC could not create the subtitle folder."
+msgid "VLC cannot create the subtitle folder."
 msgstr "字幕フォルダーを作成できませんでした。"
 
 #. First-pass Japanese translation; fluent-speaker review is welcome.

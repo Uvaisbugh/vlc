@@ -40821,7 +40821,6 @@ msgstr "Yol:"
 #~ msgid "Addon Manager"
 #~ msgstr "Eklenti Yöneticisi"
 
-
 #. Redesign translation by Codex (first pass; review welcome).
 msgid "System language"
 msgstr "Sistem dili"
@@ -42513,7 +42512,7 @@ msgstr "İzin verilen aralıkta bir değer yazın."
 #. First-pass Turkish translation; fluent-speaker review is welcome.
 #: modules/gui/qt/dialogs/preferences/redesign_preferences.cpp:2431
 #, qt-format
-msgid "The preferences file could not be saved. Your edits are still open."
+msgid "VLC cannot save the preferences file. Your changes are still open."
 msgstr "Ayar dosyası kaydedilemedi. Düzenlemeleriniz açık tutuluyor."
 
 #. First-pass Turkish translation; fluent-speaker review is welcome.
@@ -42918,8 +42917,7 @@ msgstr "VLC bu dosyaları okuyamıyor. Yeniden seçin."
 #. First-pass Turkish translation; fluent-speaker review is welcome.
 #: modules/gui/qt/medialibrary/medialib.cpp:498
 #, qt-format
-msgid ""
-"VLC could not read the saved folder matches. Save again to replace them."
+msgid "VLC cannot read the saved folder matches. Save again to replace them."
 msgstr "VLC kayıtlı klasör eşleştirmelerini okuyamadı. Değiştirmek için yeniden kaydedin."
 
 #. First-pass Turkish translation; fluent-speaker review is welcome.
@@ -43000,13 +42998,13 @@ msgstr "Bu VLC derlemesi kayıtlı izleri değiştiremiyor."
 #. First-pass Turkish translation; fluent-speaker review is welcome.
 #: modules/gui/qt/medialibrary/medialib.cpp:777
 #, qt-format
-msgid "VLC could not save the tracks for %1. Try again."
+msgid "VLC cannot save the tracks for %1. Try again."
 msgstr "VLC %1 için izleri kaydedemedi. Yeniden deneyin."
 
 #. First-pass Turkish translation; fluent-speaker review is welcome.
 #: modules/gui/qt/medialibrary/medialib.cpp:788
 #, qt-format
-msgid "VLC could not save the folder matches. Try Save again."
+msgid "VLC cannot save the folder matches. Try Save again."
 msgstr "VLC klasör eşleştirmelerini kaydedemedi. Yeniden Kaydet seçeneğini seçin."
 
 #. First-pass Turkish translation; fluent-speaker review is welcome.
@@ -43072,7 +43070,7 @@ msgstr "VLC bu ortamı okuyamıyor. Dosyayı yeniden seçin."
 #. First-pass Turkish translation; fluent-speaker review is welcome.
 #: modules/gui/qt/medialibrary/medialib.cpp:990
 #, qt-format
-msgid "VLC could not save this track: %1"
+msgid "VLC cannot save this track: %1"
 msgstr "VLC bu izi kaydedemedi: %1"
 
 #. First-pass Turkish translation; fluent-speaker review is welcome.
@@ -43085,7 +43083,7 @@ msgstr "VLC bu dosyayı okuyamıyor: %1"
 #: modules/gui/qt/medialibrary/medialib.cpp:1066
 #: modules/gui/qt/player/qml/redesign/RedesignLibrary.qml:546
 #, qt-format
-msgid "VLC could not add this folder: %1"
+msgid "VLC cannot add this folder: %1"
 msgstr "VLC bu klasörü ekleyemedi: %1"
 
 #. First-pass Turkish translation; fluent-speaker review is welcome.
@@ -47346,7 +47344,7 @@ msgstr "Akıcı oynatma"
 #. First-pass Turkish translation; fluent-speaker review is welcome.
 #: modules/gui/qt/player/qml/redesign/RedesignPreferencesCatalog.qml:156
 #, qt-format
-msgid "Drop frames when the system can't keep up"
+msgid "Skip late video frames"
 msgstr "Sistem yetişemediğinde kareleri atla"
 
 #. First-pass Turkish translation; fluent-speaker review is welcome.
@@ -48139,7 +48137,7 @@ msgstr "Bozuk paketler"
 #. First-pass Turkish translation; fluent-speaker review is welcome.
 #: modules/gui/qt/player/qml/redesign/RedesignSubtitleProviderSetup.qml:24
 #, qt-format
-msgid "VLC could not save this change. Check the key and try again."
+msgid "VLC cannot save this change. Check the key and try again."
 msgstr "VLC bu değişikliği kaydedemedi. Anahtarı denetleyip yeniden deneyin."
 
 #. First-pass Turkish translation; fluent-speaker review is welcome.
@@ -48336,20 +48334,14 @@ msgstr "VLC bu klasörü okuyamıyor. Yeniden deneyin."
 #. First-pass Turkish translation; fluent-speaker review is welcome.
 #: modules/gui/qt/player/qml/redesign/RedesignTrackAssignmentDialog.qml:259
 #, qt-format
-msgid "VLC could not search for subtitles. Try again."
+msgid "VLC cannot search for subtitles. Try again."
 msgstr "VLC altyazı arayamadı. Yeniden deneyin."
 
 #. First-pass Turkish translation; fluent-speaker review is welcome.
 #: modules/gui/qt/player/qml/redesign/RedesignTrackAssignmentDialog.qml:282
 #, qt-format
-msgid "VLC could not save the API key. Check it and try again."
+msgid "VLC cannot save the API key. Check it and try again."
 msgstr "VLC API anahtarını kaydedemedi. Denetleyip yeniden deneyin."
-
-#. First-pass Turkish translation; fluent-speaker review is welcome.
-#: modules/gui/qt/player/qml/redesign/RedesignTrackAssignmentDialog.qml:325
-#, qt-format
-msgid "VLC could not read these files. Try again."
-msgstr "VLC bu dosyaları okuyamadı. Yeniden deneyin."
 
 #. First-pass Turkish translation; fluent-speaker review is welcome.
 #: modules/gui/qt/player/qml/redesign/RedesignTrackAssignmentDialog.qml:366
@@ -49258,7 +49250,7 @@ msgstr "Altyazı sunucusu bu isteği tamamlayamadı. Yeniden deneyin."
 #. First-pass Turkish translation; fluent-speaker review is welcome.
 #: modules/gui/qt/util/subtitle_source_service.cpp:156
 #, qt-format
-msgid "VLC could not connect to the subtitle server. Try again."
+msgid "VLC cannot connect to the subtitle server. Try again."
 msgstr "VLC altyazı sunucusuna bağlanamadı. Yeniden deneyin."
 
 #. First-pass Turkish translation; fluent-speaker review is welcome.
@@ -49313,7 +49305,7 @@ msgstr "Bu indirmede geçerli altyazı yok."
 #: modules/gui/qt/util/subtitle_source_service.cpp:374
 #: modules/gui/qt/util/subtitle_source_service.cpp:490
 #, qt-format
-msgid "VLC could not save these subtitles."
+msgid "VLC cannot save these subtitles."
 msgstr "VLC bu altyazıları kaydedemedi."
 
 #. First-pass Turkish translation; fluent-speaker review is welcome.
@@ -49325,7 +49317,7 @@ msgstr "http:// veya https:// ile başlayan doğrudan altyazı dosyası bağlant
 #. First-pass Turkish translation; fluent-speaker review is welcome.
 #: modules/gui/qt/util/subtitle_source_service.cpp:471
 #, qt-format
-msgid "VLC could not create the subtitle folder."
+msgid "VLC cannot create the subtitle folder."
 msgstr "VLC altyazı klasörünü oluşturamadı."
 
 #. First-pass Turkish translation; fluent-speaker review is welcome.

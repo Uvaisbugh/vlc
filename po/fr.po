@@ -37782,7 +37782,7 @@ msgid "Enter a value within the allowed range."
 msgstr "Saisissez une valeur dans l’intervalle autorisé."
 
 #. Redesign translation by Codex (first pass; review welcome).
-msgid "The preferences file could not be saved. Your edits are still open."
+msgid "VLC cannot save the preferences file. Your changes are still open."
 msgstr "Le fichier de préférences n’a pas pu être enregistré. Vos modifications restent ouvertes."
 
 #. Redesign translation by Codex (first pass; review welcome).
@@ -37866,7 +37866,7 @@ msgid "VLC cannot read these files. Select them again."
 msgstr "VLC ne peut pas lire ces fichiers. Sélectionnez-les à nouveau."
 
 #. Redesign translation by Codex (first pass; review welcome).
-msgid "VLC could not read the saved folder matches. Save again to replace them."
+msgid "VLC cannot read the saved folder matches. Save again to replace them."
 msgstr "VLC n’a pas pu lire les associations de dossiers enregistrées. Enregistrez à nouveau pour les remplacer."
 
 #. Redesign translation by Codex (first pass; review welcome).
@@ -37918,11 +37918,11 @@ msgid "This VLC build cannot replace saved tracks."
 msgstr "Cette version de VLC ne peut pas remplacer les pistes enregistrées."
 
 #. Redesign translation by Codex (first pass; review welcome).
-msgid "VLC could not save the tracks for %1. Try again."
+msgid "VLC cannot save the tracks for %1. Try again."
 msgstr "VLC n’a pas pu enregistrer les pistes pour %1. Réessayez."
 
 #. Redesign translation by Codex (first pass; review welcome).
-msgid "VLC could not save the folder matches. Try Save again."
+msgid "VLC cannot save the folder matches. Try Save again."
 msgstr "VLC n’a pas pu enregistrer les associations de dossiers. Essayez à nouveau d’enregistrer."
 
 #. Redesign translation by Codex (first pass; review welcome).
@@ -37958,7 +37958,7 @@ msgid "VLC cannot read this media. Select the file again."
 msgstr "VLC ne peut pas lire ce média. Sélectionnez le fichier à nouveau."
 
 #. Redesign translation by Codex (first pass; review welcome).
-msgid "VLC could not save this track: %1"
+msgid "VLC cannot save this track: %1"
 msgstr "VLC n’a pas pu enregistrer cette piste : %1"
 
 #. Redesign translation by Codex (first pass; review welcome).
@@ -37966,7 +37966,7 @@ msgid "VLC cannot read this file: %1"
 msgstr "VLC ne peut pas lire ce fichier : %1"
 
 #. Redesign translation by Codex (first pass; review welcome).
-msgid "VLC could not add this folder: %1"
+msgid "VLC cannot add this folder: %1"
 msgstr "VLC n’a pas pu ajouter ce dossier : %1"
 
 #. Redesign translation by Codex (first pass; review welcome).
@@ -38158,7 +38158,7 @@ msgid "The subtitle server could not complete this request. Try again."
 msgstr "Le serveur de sous-titres n’a pas pu terminer cette demande. Réessayez."
 
 #. Redesign translation by Codex (first pass; review welcome).
-msgid "VLC could not connect to the subtitle server. Try again."
+msgid "VLC cannot connect to the subtitle server. Try again."
 msgstr "VLC n’a pas pu se connecter au serveur de sous-titres. Réessayez."
 
 #. Redesign translation by Codex (first pass; review welcome).
@@ -38198,7 +38198,7 @@ msgid "This download does not contain valid subtitles."
 msgstr "Ce téléchargement ne contient pas de sous-titres valides."
 
 #. Redesign translation by Codex (first pass; review welcome).
-msgid "VLC could not save these subtitles."
+msgid "VLC cannot save these subtitles."
 msgstr "VLC n’a pas pu enregistrer ces sous-titres."
 
 #. Redesign translation by Codex (first pass; review welcome).
@@ -38206,7 +38206,7 @@ msgid "Use direct subtitle file links that start with http:// or https://."
 msgstr "Utilisez des liens directs vers des fichiers de sous-titres qui commencent par http:// ou https://."
 
 #. Redesign translation by Codex (first pass; review welcome).
-msgid "VLC could not create the subtitle folder."
+msgid "VLC cannot create the subtitle folder."
 msgstr "VLC n’a pas pu créer le dossier de sous-titres."
 
 #. Redesign translation by Codex (first pass; review welcome).
@@ -38826,7 +38826,7 @@ msgid "Smooth Playback"
 msgstr "Fluidité de la lecture"
 
 #. Redesign translation by Codex (first pass; review welcome).
-msgid "Drop frames when the system can't keep up"
+msgid "Skip late video frames"
 msgstr "Abandonner des images si le système ne suit pas"
 
 #. Redesign translation by Codex (first pass; review welcome).
@@ -39906,16 +39906,12 @@ msgid "VLC cannot read this folder. Try again."
 msgstr "VLC ne peut pas lire ce dossier. Réessayez."
 
 #. Redesign translation by Codex (first pass; review welcome).
-msgid "VLC could not search for subtitles. Try again."
+msgid "VLC cannot search for subtitles. Try again."
 msgstr "VLC n’a pas pu rechercher de sous-titres. Réessayez."
 
 #. Redesign translation by Codex (first pass; review welcome).
-msgid "VLC could not save the API key. Check it and try again."
+msgid "VLC cannot save the API key. Check it and try again."
 msgstr "VLC n’a pas pu enregistrer la clé API. Vérifiez-la et réessayez."
-
-#. Redesign translation by Codex (first pass; review welcome).
-msgid "VLC could not read these files. Try again."
-msgstr "VLC n’a pas pu lire ces fichiers. Réessayez."
 
 #. Redesign translation by Codex (first pass; review welcome).
 msgid "VLC cannot save these tracks. Try again."
@@ -40208,7 +40204,7 @@ msgid "Find the full list in the menu."
 msgstr "La liste complète se trouve dans le menu."
 
 #. Redesign translation by Codex (first pass; review welcome).
-msgid "VLC could not save this change. Check the key and try again."
+msgid "VLC cannot save this change. Check the key and try again."
 msgstr "VLC n’a pas pu enregistrer cette modification. Vérifiez la clé et réessayez."
 
 #. Redesign translation by Codex (first pass; review welcome).
@@ -40897,7 +40893,6 @@ msgid "%n plugin"
 msgid_plural "%n plugins"
 msgstr[0] "%n module"
 msgstr[1] "%n modules"
-
 
 #. Redesign translation by Codex (first pass; review welcome).
 msgid "Songs"

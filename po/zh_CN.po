@@ -38685,7 +38685,6 @@ msgstr "声道："
 #~ msgid "Addon Manager"
 #~ msgstr "插件管理器"
 
-
 #. Redesign translation by Codex (first pass; review welcome).
 msgid "System language"
 msgstr "系统语言"
@@ -40385,7 +40384,7 @@ msgstr "请输入允许范围内的值。"
 #. First-pass Simplified Chinese translation; fluent-speaker review is welcome.
 #: modules/gui/qt/dialogs/preferences/redesign_preferences.cpp:2431
 #, qt-format
-msgid "The preferences file could not be saved. Your edits are still open."
+msgid "VLC cannot save the preferences file. Your changes are still open."
 msgstr "无法保存首选项文件。编辑内容仍保持打开。"
 
 #. First-pass Simplified Chinese translation; fluent-speaker review is welcome.
@@ -40796,8 +40795,7 @@ msgstr "VLC 无法读取这些文件。请重新选择。"
 #. First-pass Simplified Chinese translation; fluent-speaker review is welcome.
 #: modules/gui/qt/medialibrary/medialib.cpp:498
 #, qt-format
-msgid ""
-"VLC could not read the saved folder matches. Save again to replace them."
+msgid "VLC cannot read the saved folder matches. Save again to replace them."
 msgstr "VLC 无法读取已保存的文件夹匹配规则。再次保存可将其替换。"
 
 #. First-pass Simplified Chinese translation; fluent-speaker review is welcome.
@@ -40878,13 +40876,13 @@ msgstr "此 VLC 版本无法替换已保存的轨道。"
 #. First-pass Simplified Chinese translation; fluent-speaker review is welcome.
 #: modules/gui/qt/medialibrary/medialib.cpp:777
 #, qt-format
-msgid "VLC could not save the tracks for %1. Try again."
+msgid "VLC cannot save the tracks for %1. Try again."
 msgstr "VLC 无法保存 %1 的轨道。请重试。"
 
 #. First-pass Simplified Chinese translation; fluent-speaker review is welcome.
 #: modules/gui/qt/medialibrary/medialib.cpp:788
 #, qt-format
-msgid "VLC could not save the folder matches. Try Save again."
+msgid "VLC cannot save the folder matches. Try Save again."
 msgstr "VLC 无法保存文件夹匹配规则。请再次选择“保存”。"
 
 #. First-pass Simplified Chinese translation; fluent-speaker review is welcome.
@@ -40950,7 +40948,7 @@ msgstr "VLC 无法读取此媒体。请重新选择文件。"
 #. First-pass Simplified Chinese translation; fluent-speaker review is welcome.
 #: modules/gui/qt/medialibrary/medialib.cpp:990
 #, qt-format
-msgid "VLC could not save this track: %1"
+msgid "VLC cannot save this track: %1"
 msgstr "VLC 无法保存此轨道：%1"
 
 #. First-pass Simplified Chinese translation; fluent-speaker review is welcome.
@@ -40963,7 +40961,7 @@ msgstr "VLC 无法读取此文件：%1"
 #: modules/gui/qt/medialibrary/medialib.cpp:1066
 #: modules/gui/qt/player/qml/redesign/RedesignLibrary.qml:546
 #, qt-format
-msgid "VLC could not add this folder: %1"
+msgid "VLC cannot add this folder: %1"
 msgstr "VLC 无法添加此文件夹：%1"
 
 #. First-pass Simplified Chinese translation; fluent-speaker review is welcome.
@@ -45240,7 +45238,7 @@ msgstr "流畅播放"
 #. First-pass Simplified Chinese translation; fluent-speaker review is welcome.
 #: modules/gui/qt/player/qml/redesign/RedesignPreferencesCatalog.qml:156
 #, qt-format
-msgid "Drop frames when the system can't keep up"
+msgid "Skip late video frames"
 msgstr "系统处理速度不足时丢帧"
 
 #. First-pass Simplified Chinese translation; fluent-speaker review is welcome.
@@ -46033,7 +46031,7 @@ msgstr "损坏数据包"
 #. First-pass Simplified Chinese translation; fluent-speaker review is welcome.
 #: modules/gui/qt/player/qml/redesign/RedesignSubtitleProviderSetup.qml:24
 #, qt-format
-msgid "VLC could not save this change. Check the key and try again."
+msgid "VLC cannot save this change. Check the key and try again."
 msgstr "VLC 无法保存此更改。请检查密钥后重试。"
 
 #. First-pass Simplified Chinese translation; fluent-speaker review is welcome.
@@ -46230,20 +46228,14 @@ msgstr "VLC 无法读取此文件夹。请重试。"
 #. First-pass Simplified Chinese translation; fluent-speaker review is welcome.
 #: modules/gui/qt/player/qml/redesign/RedesignTrackAssignmentDialog.qml:259
 #, qt-format
-msgid "VLC could not search for subtitles. Try again."
+msgid "VLC cannot search for subtitles. Try again."
 msgstr "VLC 无法搜索字幕。请重试。"
 
 #. First-pass Simplified Chinese translation; fluent-speaker review is welcome.
 #: modules/gui/qt/player/qml/redesign/RedesignTrackAssignmentDialog.qml:282
 #, qt-format
-msgid "VLC could not save the API key. Check it and try again."
+msgid "VLC cannot save the API key. Check it and try again."
 msgstr "VLC 无法保存 API 密钥。请检查后重试。"
-
-#. First-pass Simplified Chinese translation; fluent-speaker review is welcome.
-#: modules/gui/qt/player/qml/redesign/RedesignTrackAssignmentDialog.qml:325
-#, qt-format
-msgid "VLC could not read these files. Try again."
-msgstr "VLC 未能读取这些文件。请重试。"
 
 #. First-pass Simplified Chinese translation; fluent-speaker review is welcome.
 #: modules/gui/qt/player/qml/redesign/RedesignTrackAssignmentDialog.qml:366
@@ -47158,7 +47150,7 @@ msgstr "字幕服务器无法完成此请求。请重试。"
 #. First-pass Simplified Chinese translation; fluent-speaker review is welcome.
 #: modules/gui/qt/util/subtitle_source_service.cpp:156
 #, qt-format
-msgid "VLC could not connect to the subtitle server. Try again."
+msgid "VLC cannot connect to the subtitle server. Try again."
 msgstr "VLC 无法连接字幕服务器。请重试。"
 
 #. First-pass Simplified Chinese translation; fluent-speaker review is welcome.
@@ -47213,7 +47205,7 @@ msgstr "此下载内容不包含有效字幕。"
 #: modules/gui/qt/util/subtitle_source_service.cpp:374
 #: modules/gui/qt/util/subtitle_source_service.cpp:490
 #, qt-format
-msgid "VLC could not save these subtitles."
+msgid "VLC cannot save these subtitles."
 msgstr "VLC 无法保存这些字幕。"
 
 #. First-pass Simplified Chinese translation; fluent-speaker review is welcome.
@@ -47225,7 +47217,7 @@ msgstr "请使用以 http:// 或 https:// 开头的字幕文件直接链接。"
 #. First-pass Simplified Chinese translation; fluent-speaker review is welcome.
 #: modules/gui/qt/util/subtitle_source_service.cpp:471
 #, qt-format
-msgid "VLC could not create the subtitle folder."
+msgid "VLC cannot create the subtitle folder."
 msgstr "VLC 无法创建字幕文件夹。"
 
 #. First-pass Simplified Chinese translation; fluent-speaker review is welcome.

@@ -578,7 +578,7 @@ RedesignLibraryView {
         function onModelReset() { root.refreshFolders() }
         function onOperationFailed(operation, url) {
             if (operation === MLFolderModel.Add)
-                DialogsProvider.messageDialog(qsTr("VLC could not add this folder: %1").arg(url.toString()), qsTr("VLC Media Player"))
+                DialogsProvider.messageDialog(qsTr("VLC cannot add this folder: %1").arg(url.toString()), qsTr("VLC Media Player"))
         }
     }
     RedesignPlaylistDialog {

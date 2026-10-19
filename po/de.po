@@ -32999,7 +32999,7 @@ msgid "Delete “%1”?"
 msgstr "„%1“ löschen?"
 
 #. Redesign translation by Codex (first pass; review welcome).
-msgid "VLC could not save this change. Check the key and try again."
+msgid "VLC cannot save this change. Check the key and try again."
 msgstr "VLC konnte diese Änderung nicht speichern. Prüfen Sie den Schlüssel und versuchen Sie es erneut."
 
 #. Redesign translation by Codex (first pass; review welcome).
@@ -33527,7 +33527,7 @@ msgid "Genres"
 msgstr "Genres"
 
 #. Redesign translation by Codex (first pass; review welcome).
-msgid "VLC could not add this folder: %1"
+msgid "VLC cannot add this folder: %1"
 msgstr "VLC konnte diesen Ordner nicht hinzufügen: %1"
 
 #. Redesign translation by Codex (first pass; review welcome).
@@ -34267,7 +34267,7 @@ msgid "Smooth Playback"
 msgstr "Flüssige Wiedergabe"
 
 #. Redesign translation by Codex (first pass; review welcome).
-msgid "Drop frames when the system can't keep up"
+msgid "Skip late video frames"
 msgstr "Bilder bei Systemüberlastung verwerfen"
 
 #. Redesign translation by Codex (first pass; review welcome).
@@ -35107,16 +35107,12 @@ msgid "VLC cannot read this folder. Try again."
 msgstr "VLC kann diesen Ordner nicht lesen. Versuchen Sie es erneut."
 
 #. Redesign translation by Codex (first pass; review welcome).
-msgid "VLC could not search for subtitles. Try again."
+msgid "VLC cannot search for subtitles. Try again."
 msgstr "VLC konnte nicht nach Untertiteln suchen. Versuchen Sie es erneut."
 
 #. Redesign translation by Codex (first pass; review welcome).
-msgid "VLC could not save the API key. Check it and try again."
+msgid "VLC cannot save the API key. Check it and try again."
 msgstr "VLC konnte den API-Schlüssel nicht speichern. Prüfen Sie ihn und versuchen Sie es erneut."
-
-#. Redesign translation by Codex (first pass; review welcome).
-msgid "VLC could not read these files. Try again."
-msgstr "VLC konnte diese Dateien nicht lesen. Versuchen Sie es erneut."
 
 #. Redesign translation by Codex (first pass; review welcome).
 msgid "VLC cannot save these tracks. Try again."
@@ -35699,7 +35695,7 @@ msgid "The subtitle server could not complete this request. Try again."
 msgstr "Der Untertitelserver konnte diese Anfrage nicht abschließen. Versuchen Sie es erneut."
 
 #. Redesign translation by Codex (first pass; review welcome).
-msgid "VLC could not connect to the subtitle server. Try again."
+msgid "VLC cannot connect to the subtitle server. Try again."
 msgstr "VLC konnte keine Verbindung zum Untertitelserver herstellen. Versuchen Sie es erneut."
 
 #. Redesign translation by Codex (first pass; review welcome).
@@ -35735,7 +35731,7 @@ msgid "This download does not contain valid subtitles."
 msgstr "Dieser Download enthält keine gültigen Untertitel."
 
 #. Redesign translation by Codex (first pass; review welcome).
-msgid "VLC could not save these subtitles."
+msgid "VLC cannot save these subtitles."
 msgstr "VLC konnte diese Untertitel nicht speichern."
 
 #. Redesign translation by Codex (first pass; review welcome).
@@ -35743,7 +35739,7 @@ msgid "Use direct subtitle file links that start with http:// or https://."
 msgstr "Verwenden Sie direkte Links zu Untertiteldateien, die mit http:// oder https:// beginnen."
 
 #. Redesign translation by Codex (first pass; review welcome).
-msgid "VLC could not create the subtitle folder."
+msgid "VLC cannot create the subtitle folder."
 msgstr "VLC konnte den Untertitelordner nicht erstellen."
 
 #. Redesign translation by Codex (first pass; review welcome).
@@ -36047,7 +36043,7 @@ msgid "Enter a value within the allowed range."
 msgstr "Geben Sie einen Wert innerhalb des zulässigen Bereichs ein."
 
 #. Redesign translation by Codex (first pass; review welcome).
-msgid "The preferences file could not be saved. Your edits are still open."
+msgid "VLC cannot save the preferences file. Your changes are still open."
 msgstr "Die Einstellungsdatei konnte nicht gespeichert werden. Ihre Änderungen bleiben zur Bearbeitung geöffnet."
 
 #. Redesign translation by Codex (first pass; review welcome).
@@ -36131,7 +36127,6 @@ msgid_plural "%n plugins"
 msgstr[0] "%n Plugin"
 msgstr[1] "%n Plugins"
 
-
 #. Redesign translation by Codex (first pass; review welcome).
 msgid "VLC cannot rescan this folder. Check the folder and try again."
 msgstr "VLC kann diesen Ordner nicht erneut durchsuchen. Prüfen Sie den Ordner und versuchen Sie es erneut."
@@ -36141,7 +36136,7 @@ msgid "VLC cannot read these files. Select them again."
 msgstr "VLC kann diese Dateien nicht lesen. Wählen Sie sie erneut aus."
 
 #. Redesign translation by Codex (first pass; review welcome).
-msgid "VLC could not read the saved folder matches. Save again to replace them."
+msgid "VLC cannot read the saved folder matches. Save again to replace them."
 msgstr "VLC konnte die gespeicherten Ordnerzuordnungen nicht lesen. Speichern Sie erneut, um sie zu ersetzen."
 
 #. Redesign translation by Codex (first pass; review welcome).
@@ -36193,11 +36188,11 @@ msgid "This VLC build cannot replace saved tracks."
 msgstr "Diese VLC-Version kann gespeicherte Spuren nicht ersetzen."
 
 #. Redesign translation by Codex (first pass; review welcome).
-msgid "VLC could not save the tracks for %1. Try again."
+msgid "VLC cannot save the tracks for %1. Try again."
 msgstr "VLC konnte die Spuren für %1 nicht speichern. Versuchen Sie es erneut."
 
 #. Redesign translation by Codex (first pass; review welcome).
-msgid "VLC could not save the folder matches. Try Save again."
+msgid "VLC cannot save the folder matches. Try Save again."
 msgstr "VLC konnte die Ordnerzuordnungen nicht speichern. Wählen Sie erneut „Speichern“."
 
 #. Redesign translation by Codex (first pass; review welcome).
@@ -36229,7 +36224,7 @@ msgid "VLC cannot read this media. Select the file again."
 msgstr "VLC kann dieses Medium nicht lesen. Wählen Sie die Datei erneut aus."
 
 #. Redesign translation by Codex (first pass; review welcome).
-msgid "VLC could not save this track: %1"
+msgid "VLC cannot save this track: %1"
 msgstr "VLC konnte diese Spur nicht speichern: %1"
 
 #. Redesign translation by Codex (first pass; review welcome).

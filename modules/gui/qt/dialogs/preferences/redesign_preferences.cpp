@@ -2460,7 +2460,7 @@ bool RedesignPreferences::save()
     }
     if (config_SaveConfigFile(m_ctx->getIntf()) != 0) {
         for (auto it = previous.cbegin(); it != previous.cend(); ++it) write(it.key().toUtf8(), it.value());
-        m_error = qtr("The preferences file could not be saved. Your edits are still open.");
+        m_error = qtr("VLC cannot save the preferences file. Your changes are still open.");
         ++m_revision; emit changed(); return false;
     }
     // These controls are inherited by the current input and action dispatcher.

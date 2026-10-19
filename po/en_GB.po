@@ -34381,8 +34381,8 @@ msgid "VLC cannot load this language."
 msgstr "VLC cannot load this language."
 
 #. Redesign British English translation by Codex (first pass; review welcome).
-msgid "The preferences file could not be saved. Your edits are still open."
-msgstr "The preferences file could not be saved. Your edits are still open."
+msgid "VLC cannot save the preferences file. Your changes are still open."
+msgstr "VLC cannot save the preferences file. Your changes are still open."
 
 #. Redesign British English translation by Codex (first pass; review welcome).
 msgid "VLC cannot save the default settings. Your settings did not change."
@@ -34469,8 +34469,8 @@ msgid "VLC cannot read these files. Select them again."
 msgstr "VLC cannot read these files. Select them again."
 
 #. Redesign British English translation by Codex (first pass; review welcome).
-msgid "VLC could not read the saved folder matches. Save again to replace them."
-msgstr "VLC could not read the saved folder matches. Save again to replace them."
+msgid "VLC cannot read the saved folder matches. Save again to replace them."
+msgstr "VLC cannot read the saved folder matches. Save again to replace them."
 
 #. Redesign British English translation by Codex (first pass; review welcome).
 msgid "VLC cannot read this folder. Select it again."
@@ -34521,12 +34521,12 @@ msgid "This VLC build cannot replace saved tracks."
 msgstr "This VLC build cannot replace saved tracks."
 
 #. Redesign British English translation by Codex (first pass; review welcome).
-msgid "VLC could not save the tracks for %1. Try again."
-msgstr "VLC could not save the tracks for %1. Try again."
+msgid "VLC cannot save the tracks for %1. Try again."
+msgstr "VLC cannot save the tracks for %1. Try again."
 
 #. Redesign British English translation by Codex (first pass; review welcome).
-msgid "VLC could not save the folder matches. Try Save again."
-msgstr "VLC could not save the folder matches. Try Save again."
+msgid "VLC cannot save the folder matches. Try Save again."
+msgstr "VLC cannot save the folder matches. Try Save again."
 
 #. Redesign British English translation by Codex (first pass; review welcome).
 msgid "VLC cannot save this change. Try again."
@@ -34561,16 +34561,16 @@ msgid "VLC cannot read this media. Select the file again."
 msgstr "VLC cannot read this media. Select the file again."
 
 #. Redesign British English translation by Codex (first pass; review welcome).
-msgid "VLC could not save this track: %1"
-msgstr "VLC could not save this track: %1"
+msgid "VLC cannot save this track: %1"
+msgstr "VLC cannot save this track: %1"
 
 #. Redesign British English translation by Codex (first pass; review welcome).
 msgid "VLC cannot read this file: %1"
 msgstr "VLC cannot read this file: %1"
 
 #. Redesign British English translation by Codex (first pass; review welcome).
-msgid "VLC could not add this folder: %1"
-msgstr "VLC could not add this folder: %1"
+msgid "VLC cannot add this folder: %1"
+msgstr "VLC cannot add this folder: %1"
 
 #. Redesign British English translation by Codex (first pass; review welcome).
 msgid "Install services"
@@ -36369,8 +36369,8 @@ msgid "Smooth Playback"
 msgstr "Smooth Playback"
 
 #. Redesign British English translation by Codex (first pass; review welcome).
-msgid "Drop frames when the system can't keep up"
-msgstr "Drop frames when the system can't keep up"
+msgid "Skip late video frames"
+msgstr "Skip late video frames"
 
 #. Redesign British English translation by Codex (first pass; review welcome).
 msgid "Give VLC higher priority"
@@ -36881,8 +36881,8 @@ msgid "Corrupted packets"
 msgstr "Corrupted packets"
 
 #. Redesign British English translation by Codex (first pass; review welcome).
-msgid "VLC could not save this change. Check the key and try again."
-msgstr "VLC could not save this change. Check the key and try again."
+msgid "VLC cannot save this change. Check the key and try again."
+msgstr "VLC cannot save this change. Check the key and try again."
 
 #. Redesign British English translation by Codex (first pass; review welcome).
 msgid "OpenSubtitles setup"
@@ -37013,16 +37013,12 @@ msgid "VLC cannot read this folder. Try again."
 msgstr "VLC cannot read this folder. Try again."
 
 #. Redesign British English translation by Codex (first pass; review welcome).
-msgid "VLC could not search for subtitles. Try again."
-msgstr "VLC could not search for subtitles. Try again."
+msgid "VLC cannot search for subtitles. Try again."
+msgstr "VLC cannot search for subtitles. Try again."
 
 #. Redesign British English translation by Codex (first pass; review welcome).
-msgid "VLC could not save the API key. Check it and try again."
-msgstr "VLC could not save the API key. Check it and try again."
-
-#. Redesign British English translation by Codex (first pass; review welcome).
-msgid "VLC could not read these files. Try again."
-msgstr "VLC could not read these files. Try again."
+msgid "VLC cannot save the API key. Check it and try again."
+msgstr "VLC cannot save the API key. Check it and try again."
 
 #. Redesign British English translation by Codex (first pass; review welcome).
 msgid "VLC cannot save these tracks. Try again."
@@ -39174,7 +39170,6 @@ msgstr "See All"
 msgid "More options"
 msgstr "More options"
 
-
 #. Redesign British English translation by Codex (first pass; review welcome).
 msgid "<p>Interface design adapted from <a href=\"https://www.figma.com/community/file/1691465999134370980/vlc-redesign\">VLC Redesign</a> by <a href=\"https://www.juxtopposed.com/\">Juxtopposed</a>, licensed under <a href=\"https://creativecommons.org/licenses/by/4.0/\">CC BY 4.0</a>. Modified for VLC's native interface, responsive layouts, controls, and settings.</p><p>Interface font: <a href=\"https://rsms.me/inter/\">Inter</a> by Rasmus Andersson and contributors. Licensed under the <a href=\"https://raw.githubusercontent.com/rsms/inter/master/LICENSE.txt\">SIL Open Font License 1.1</a>. The full font license is in the License tab.</p>"
 msgstr "<p>Interface design adapted from <a href=\"https://www.figma.com/community/file/1691465999134370980/vlc-redesign\">VLC Redesign</a> by <a href=\"https://www.juxtopposed.com/\">Juxtopposed</a>, licensed under <a href=\"https://creativecommons.org/licenses/by/4.0/\">CC BY 4.0</a>. Modified for VLC's native interface, responsive layouts, controls, and settings.</p><p>Interface font: <a href=\"https://rsms.me/inter/\">Inter</a> by Rasmus Andersson and contributors. Licensed under the <a href=\"https://raw.githubusercontent.com/rsms/inter/master/LICENSE.txt\">SIL Open Font License 1.1</a>. The full font licence is in the Licence tab.</p>"
@@ -39204,8 +39199,8 @@ msgid "The subtitle server could not complete this request. Try again."
 msgstr "The subtitle server could not complete this request. Try again."
 
 #. Redesign British English translation by Codex (first pass; review welcome).
-msgid "VLC could not connect to the subtitle server. Try again."
-msgstr "VLC could not connect to the subtitle server. Try again."
+msgid "VLC cannot connect to the subtitle server. Try again."
+msgstr "VLC cannot connect to the subtitle server. Try again."
 
 #. Redesign British English translation by Codex (first pass; review welcome).
 msgid "The subtitle server returned an invalid response. Try again."
@@ -39240,16 +39235,16 @@ msgid "This download does not contain valid subtitles."
 msgstr "This download does not contain valid subtitles."
 
 #. Redesign British English translation by Codex (first pass; review welcome).
-msgid "VLC could not save these subtitles."
-msgstr "VLC could not save these subtitles."
+msgid "VLC cannot save these subtitles."
+msgstr "VLC cannot save these subtitles."
 
 #. Redesign British English translation by Codex (first pass; review welcome).
 msgid "Use direct subtitle file links that start with http:// or https://."
 msgstr "Use direct subtitle file links that start with http:// or https://."
 
 #. Redesign British English translation by Codex (first pass; review welcome).
-msgid "VLC could not create the subtitle folder."
-msgstr "VLC could not create the subtitle folder."
+msgid "VLC cannot create the subtitle folder."
+msgstr "VLC cannot create the subtitle folder."
 
 #. Redesign British English translation by Codex (first pass; review welcome).
 msgid "This link contains an archive. Extract its subtitle files, then add them from Computer."

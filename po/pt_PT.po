@@ -38121,7 +38121,6 @@ msgstr "predefinido"
 msgid "Fingerprinting track..."
 msgstr "A identificar faixa por impressão digital..."
 
-
 #. Redesign translation by Codex (first pass; review welcome).
 msgid "System language"
 msgstr "Idioma do sistema"
@@ -39815,7 +39814,7 @@ msgstr "Insira um valor dentro do intervalo permitido."
 #. First-pass European Portuguese translation; fluent-speaker review is welcome.
 #: modules/gui/qt/dialogs/preferences/redesign_preferences.cpp:2431
 #, qt-format
-msgid "The preferences file could not be saved. Your edits are still open."
+msgid "VLC cannot save the preferences file. Your changes are still open."
 msgstr "Não foi possível guardar o ficheiro de preferências. As suas edições continuam abertas."
 
 #. First-pass European Portuguese translation; fluent-speaker review is welcome.
@@ -40232,8 +40231,7 @@ msgstr "O VLC não consegue ler estes ficheiros. Selecione-os novamente."
 #. First-pass European Portuguese translation; fluent-speaker review is welcome.
 #: modules/gui/qt/medialibrary/medialib.cpp:498
 #, qt-format
-msgid ""
-"VLC could not read the saved folder matches. Save again to replace them."
+msgid "VLC cannot read the saved folder matches. Save again to replace them."
 msgstr "O VLC não conseguiu ler as correspondências de pasta guardadas. Guarde novamente para as substituir."
 
 #. First-pass European Portuguese translation; fluent-speaker review is welcome.
@@ -40314,13 +40312,13 @@ msgstr "Esta compilação do VLC não pode substituir faixas guardadas."
 #. First-pass European Portuguese translation; fluent-speaker review is welcome.
 #: modules/gui/qt/medialibrary/medialib.cpp:777
 #, qt-format
-msgid "VLC could not save the tracks for %1. Try again."
+msgid "VLC cannot save the tracks for %1. Try again."
 msgstr "O VLC não conseguiu guardar as faixas de %1. Tente novamente."
 
 #. First-pass European Portuguese translation; fluent-speaker review is welcome.
 #: modules/gui/qt/medialibrary/medialib.cpp:788
 #, qt-format
-msgid "VLC could not save the folder matches. Try Save again."
+msgid "VLC cannot save the folder matches. Try Save again."
 msgstr "O VLC não conseguiu guardar as correspondências de pasta. Selecione Guardar novamente."
 
 #. First-pass European Portuguese translation; fluent-speaker review is welcome.
@@ -40386,7 +40384,7 @@ msgstr "O VLC não consegue ler este conteúdo multimédia. Selecione o ficheiro
 #. First-pass European Portuguese translation; fluent-speaker review is welcome.
 #: modules/gui/qt/medialibrary/medialib.cpp:990
 #, qt-format
-msgid "VLC could not save this track: %1"
+msgid "VLC cannot save this track: %1"
 msgstr "O VLC não conseguiu guardar esta faixa: %1"
 
 #. First-pass European Portuguese translation; fluent-speaker review is welcome.
@@ -40399,7 +40397,7 @@ msgstr "O VLC não consegue ler este ficheiro: %1"
 #: modules/gui/qt/medialibrary/medialib.cpp:1066
 #: modules/gui/qt/player/qml/redesign/RedesignLibrary.qml:546
 #, qt-format
-msgid "VLC could not add this folder: %1"
+msgid "VLC cannot add this folder: %1"
 msgstr "O VLC não conseguiu adicionar esta pasta: %1"
 
 #. First-pass European Portuguese translation; fluent-speaker review is welcome.
@@ -44697,7 +44695,7 @@ msgstr "Reprodução fluida"
 #. First-pass European Portuguese translation; fluent-speaker review is welcome.
 #: modules/gui/qt/player/qml/redesign/RedesignPreferencesCatalog.qml:156
 #, qt-format
-msgid "Drop frames when the system can't keep up"
+msgid "Skip late video frames"
 msgstr "Descartar fotogramas quando o sistema não acompanhar"
 
 #. First-pass European Portuguese translation; fluent-speaker review is welcome.
@@ -45490,7 +45488,7 @@ msgstr "Pacotes corrompidos"
 #. First-pass European Portuguese translation; fluent-speaker review is welcome.
 #: modules/gui/qt/player/qml/redesign/RedesignSubtitleProviderSetup.qml:24
 #, qt-format
-msgid "VLC could not save this change. Check the key and try again."
+msgid "VLC cannot save this change. Check the key and try again."
 msgstr "O VLC não conseguiu guardar esta alteração. Verifique a chave e tente novamente."
 
 #. First-pass European Portuguese translation; fluent-speaker review is welcome.
@@ -45693,20 +45691,14 @@ msgstr "O VLC não consegue ler esta pasta. Tente novamente."
 #. First-pass European Portuguese translation; fluent-speaker review is welcome.
 #: modules/gui/qt/player/qml/redesign/RedesignTrackAssignmentDialog.qml:259
 #, qt-format
-msgid "VLC could not search for subtitles. Try again."
+msgid "VLC cannot search for subtitles. Try again."
 msgstr "O VLC não conseguiu pesquisar legendas. Tente novamente."
 
 #. First-pass European Portuguese translation; fluent-speaker review is welcome.
 #: modules/gui/qt/player/qml/redesign/RedesignTrackAssignmentDialog.qml:282
 #, qt-format
-msgid "VLC could not save the API key. Check it and try again."
+msgid "VLC cannot save the API key. Check it and try again."
 msgstr "O VLC não conseguiu guardar a chave de API. Verifique-a e tente novamente."
-
-#. First-pass European Portuguese translation; fluent-speaker review is welcome.
-#: modules/gui/qt/player/qml/redesign/RedesignTrackAssignmentDialog.qml:325
-#, qt-format
-msgid "VLC could not read these files. Try again."
-msgstr "O VLC não conseguiu ler estes ficheiros. Tente novamente."
 
 #. First-pass European Portuguese translation; fluent-speaker review is welcome.
 #: modules/gui/qt/player/qml/redesign/RedesignTrackAssignmentDialog.qml:366
@@ -46621,7 +46613,7 @@ msgstr "O servidor de legendas não conseguiu concluir esta pedido. Tente novame
 #. First-pass European Portuguese translation; fluent-speaker review is welcome.
 #: modules/gui/qt/util/subtitle_source_service.cpp:156
 #, qt-format
-msgid "VLC could not connect to the subtitle server. Try again."
+msgid "VLC cannot connect to the subtitle server. Try again."
 msgstr "O VLC não conseguiu se conectar ao servidor de legendas. Tente novamente."
 
 #. First-pass European Portuguese translation; fluent-speaker review is welcome.
@@ -46676,7 +46668,7 @@ msgstr "Esta transferência não contém legendas válidas."
 #: modules/gui/qt/util/subtitle_source_service.cpp:374
 #: modules/gui/qt/util/subtitle_source_service.cpp:490
 #, qt-format
-msgid "VLC could not save these subtitles."
+msgid "VLC cannot save these subtitles."
 msgstr "O VLC não conseguiu guardar estas legendas."
 
 #. First-pass European Portuguese translation; fluent-speaker review is welcome.
@@ -46688,7 +46680,7 @@ msgstr "Use ligações diretas para ficheiros de legenda que comecem com http://
 #. First-pass European Portuguese translation; fluent-speaker review is welcome.
 #: modules/gui/qt/util/subtitle_source_service.cpp:471
 #, qt-format
-msgid "VLC could not create the subtitle folder."
+msgid "VLC cannot create the subtitle folder."
 msgstr "O VLC não conseguiu criar a pasta de legendas."
 
 #. First-pass European Portuguese translation; fluent-speaker review is welcome.

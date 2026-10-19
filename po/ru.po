@@ -37901,7 +37901,6 @@ msgstr "Обновить"
 #~ msgid "Addon Manager"
 #~ msgstr "Менеджер дополнений"
 
-
 #. Redesign translation by Codex (first pass; review welcome).
 msgid "System language"
 msgstr "Язык системы"
@@ -39601,7 +39600,7 @@ msgstr "Введите значение в допустимом диапазон
 #. First-pass Russian translation; fluent-speaker review is welcome.
 #: modules/gui/qt/dialogs/preferences/redesign_preferences.cpp:2431
 #, qt-format
-msgid "The preferences file could not be saved. Your edits are still open."
+msgid "VLC cannot save the preferences file. Your changes are still open."
 msgstr "Не удалось сохранить файл настроек. Ваши изменения остаются открыты."
 
 #. First-pass Russian translation; fluent-speaker review is welcome.
@@ -40012,8 +40011,7 @@ msgstr "VLC не удаётся прочитать эти файлы. Выбер
 #. First-pass Russian translation; fluent-speaker review is welcome.
 #: modules/gui/qt/medialibrary/medialib.cpp:498
 #, qt-format
-msgid ""
-"VLC could not read the saved folder matches. Save again to replace them."
+msgid "VLC cannot read the saved folder matches. Save again to replace them."
 msgstr "VLC не удалось прочитать сохранённые соответствия папок. Сохраните заново, чтобы заменить их."
 
 #. First-pass Russian translation; fluent-speaker review is welcome.
@@ -40094,13 +40092,13 @@ msgstr "Эта сборка VLC не поддерживает замену со�
 #. First-pass Russian translation; fluent-speaker review is welcome.
 #: modules/gui/qt/medialibrary/medialib.cpp:777
 #, qt-format
-msgid "VLC could not save the tracks for %1. Try again."
+msgid "VLC cannot save the tracks for %1. Try again."
 msgstr "VLC не удалось сохранить дорожки для %1. Повторите попытку."
 
 #. First-pass Russian translation; fluent-speaker review is welcome.
 #: modules/gui/qt/medialibrary/medialib.cpp:788
 #, qt-format
-msgid "VLC could not save the folder matches. Try Save again."
+msgid "VLC cannot save the folder matches. Try Save again."
 msgstr "VLC не удалось сохранить соответствия папок. Нажмите «Сохранить» ещё раз."
 
 #. First-pass Russian translation; fluent-speaker review is welcome.
@@ -40166,7 +40164,7 @@ msgstr "VLC не удаётся прочитать этот медиафайл. 
 #. First-pass Russian translation; fluent-speaker review is welcome.
 #: modules/gui/qt/medialibrary/medialib.cpp:990
 #, qt-format
-msgid "VLC could not save this track: %1"
+msgid "VLC cannot save this track: %1"
 msgstr "VLC не удалось сохранить эту дорожку: %1"
 
 #. First-pass Russian translation; fluent-speaker review is welcome.
@@ -40179,7 +40177,7 @@ msgstr "VLC не удаётся прочитать этот файл: %1"
 #: modules/gui/qt/medialibrary/medialib.cpp:1066
 #: modules/gui/qt/player/qml/redesign/RedesignLibrary.qml:546
 #, qt-format
-msgid "VLC could not add this folder: %1"
+msgid "VLC cannot add this folder: %1"
 msgstr "VLC не удалось добавить эту папку: %1"
 
 #. First-pass Russian translation; fluent-speaker review is welcome.
@@ -44507,7 +44505,7 @@ msgstr "Плавное воспроизведение"
 #. First-pass Russian translation; fluent-speaker review is welcome.
 #: modules/gui/qt/player/qml/redesign/RedesignPreferencesCatalog.qml:156
 #, qt-format
-msgid "Drop frames when the system can't keep up"
+msgid "Skip late video frames"
 msgstr "Пропускать кадры при нехватке производительности"
 
 #. First-pass Russian translation; fluent-speaker review is welcome.
@@ -45300,7 +45298,7 @@ msgstr "Повреждённые пакеты"
 #. First-pass Russian translation; fluent-speaker review is welcome.
 #: modules/gui/qt/player/qml/redesign/RedesignSubtitleProviderSetup.qml:24
 #, qt-format
-msgid "VLC could not save this change. Check the key and try again."
+msgid "VLC cannot save this change. Check the key and try again."
 msgstr "VLC не удалось сохранить это изменение. Проверьте ключ и повторите попытку."
 
 #. First-pass Russian translation; fluent-speaker review is welcome.
@@ -45497,20 +45495,14 @@ msgstr "VLC не удаётся прочитать эту папку. Повто
 #. First-pass Russian translation; fluent-speaker review is welcome.
 #: modules/gui/qt/player/qml/redesign/RedesignTrackAssignmentDialog.qml:259
 #, qt-format
-msgid "VLC could not search for subtitles. Try again."
+msgid "VLC cannot search for subtitles. Try again."
 msgstr "VLC не удалось найти субтитры. Повторите попытку."
 
 #. First-pass Russian translation; fluent-speaker review is welcome.
 #: modules/gui/qt/player/qml/redesign/RedesignTrackAssignmentDialog.qml:282
 #, qt-format
-msgid "VLC could not save the API key. Check it and try again."
+msgid "VLC cannot save the API key. Check it and try again."
 msgstr "VLC не удалось сохранить ключ API. Проверьте его и повторите попытку."
-
-#. First-pass Russian translation; fluent-speaker review is welcome.
-#: modules/gui/qt/player/qml/redesign/RedesignTrackAssignmentDialog.qml:325
-#, qt-format
-msgid "VLC could not read these files. Try again."
-msgstr "VLC не удалось прочитать эти файлы. Повторите попытку."
 
 #. First-pass Russian translation; fluent-speaker review is welcome.
 #: modules/gui/qt/player/qml/redesign/RedesignTrackAssignmentDialog.qml:366
@@ -46425,7 +46417,7 @@ msgstr "Сервер субтитров не смог выполнить зап�
 #. First-pass Russian translation; fluent-speaker review is welcome.
 #: modules/gui/qt/util/subtitle_source_service.cpp:156
 #, qt-format
-msgid "VLC could not connect to the subtitle server. Try again."
+msgid "VLC cannot connect to the subtitle server. Try again."
 msgstr "VLC не удалось подключиться к серверу субтитров. Повторите попытку."
 
 #. First-pass Russian translation; fluent-speaker review is welcome.
@@ -46480,7 +46472,7 @@ msgstr "Загруженные данные не содержат коррект
 #: modules/gui/qt/util/subtitle_source_service.cpp:374
 #: modules/gui/qt/util/subtitle_source_service.cpp:490
 #, qt-format
-msgid "VLC could not save these subtitles."
+msgid "VLC cannot save these subtitles."
 msgstr "VLC не удалось сохранить эти субтитры."
 
 #. First-pass Russian translation; fluent-speaker review is welcome.
@@ -46492,7 +46484,7 @@ msgstr "Используйте прямые ссылки на файлы суб�
 #. First-pass Russian translation; fluent-speaker review is welcome.
 #: modules/gui/qt/util/subtitle_source_service.cpp:471
 #, qt-format
-msgid "VLC could not create the subtitle folder."
+msgid "VLC cannot create the subtitle folder."
 msgstr "VLC не удалось создать папку субтитров."
 
 #. First-pass Russian translation; fluent-speaker review is welcome.

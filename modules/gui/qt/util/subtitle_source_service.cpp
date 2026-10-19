@@ -153,7 +153,7 @@ QString SubtitleSourceService::networkError(int status, QNetworkReply::NetworkEr
     if (status == 406 || status == 429) return api ? tr("OpenSubtitles cannot download more files now. Try again later.")
         : tr("The subtitle server cannot download more files now. Try again later.");
     if (status >= 400) return tr("The subtitle server could not complete this request. Try again.");
-    if (error != QNetworkReply::NoError) return tr("VLC could not connect to the subtitle server. Try again.");
+    if (error != QNetworkReply::NoError) return tr("VLC cannot connect to the subtitle server. Try again.");
     if (status >= 300) return tr("The subtitle server returned an invalid response. Try again.");
     return {};
 }
@@ -371,7 +371,7 @@ void SubtitleSourceService::downloadNext(quint64 generation)
                     const auto text = subtitleText(data);
                     if (text.isEmpty()) { finishPreparation(generation, tr("This download does not contain valid subtitles.")); return; }
                     if (!writeSubtitle(path, text)) {
-                        finishPreparation(generation, tr("VLC could not save these subtitles.")); return;
+                        finishPreparation(generation, tr("VLC cannot save these subtitles.")); return;
                     }
                     m_ready.insert(source, QUrl::fromLocalFile(path).toString(QUrl::FullyEncoded)); m_pending.removeFirst();
                     QTimer::singleShot(1000, this, [this, generation] { downloadNext(generation); });
@@ -468,7 +468,7 @@ QString SubtitleSourceService::linkFormat(const QByteArray& bytes) const
 
 void SubtitleSourceService::downloadLink(quint64 generation, const QString& source, const Link& link)
 {
-    if (m_storageDirectory.isEmpty()) { finishPreparation(generation, tr("VLC could not create the subtitle folder.")); return; }
+    if (m_storageDirectory.isEmpty()) { finishPreparation(generation, tr("VLC cannot create the subtitle folder.")); return; }
     for (const auto& format : {"srt", "vtt", "ass", "ssa", "sub", "smi", "ttml", "usf"}) {
         const auto path = linkCachePath(link, QLatin1String(format)); QFile file(path);
         if (file.size() <= m_options.maxFileBytes && file.open(QIODevice::ReadOnly) && linkFormat(file.readAll()) == QLatin1String(format)) {
@@ -487,7 +487,7 @@ void SubtitleSourceService::downloadLink(quint64 generation, const QString& sour
                     : tr("This link does not contain a subtitle file. Use a direct subtitle file link.")); return;
             }
             const auto path = linkCachePath(link, format);
-            if (!writeSubtitle(path, bytes)) { finishPreparation(generation, tr("VLC could not save these subtitles.")); return; }
+            if (!writeSubtitle(path, bytes)) { finishPreparation(generation, tr("VLC cannot save these subtitles.")); return; }
             m_ready.insert(source, QUrl::fromLocalFile(path).toString(QUrl::FullyEncoded)); m_pending.removeFirst();
             QTimer::singleShot(0, this, [this, generation] { downloadNext(generation); });
         });
