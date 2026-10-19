@@ -125,6 +125,8 @@ struct module_config_t
  * \return The configuration item type or 0 if not found.
  */
 VLC_API int config_GetType(const char *name) VLC_USED;
+/** Whether an option is persistent, rather than a volatile or obsolete option. */
+VLC_API bool config_IsPersistent(const char *name) VLC_USED;
 
 /**
  * Gets an integer configuration item's value.

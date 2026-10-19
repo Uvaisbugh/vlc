@@ -532,10 +532,12 @@ FocusScope {
         scaleFactor: view.scaleFactor; lightTheme: view.lightTheme; accentColor: view.accentColor
         onSaved: playerPreferences.discard()
     }
+    RedesignPreferences { id: applicationProfiles; ctx: MainCtx; applicationProfile: true }
     RedesignPlayerPreset {
         id: profileEditor
         objectName: "menuPlayerProfileEditor"
-        backend: playerPreferences
+        backend: applicationProfiles
+        applicationProfile: true
         selectorVisible: false
         videoBackdropContent: rootPlayer.menuBackdropContent
         scaleFactor: view.scaleFactor; lightTheme: view.lightTheme; accentColor: view.accentColor
@@ -548,11 +550,15 @@ FocusScope {
         recentModel: recentMenuModel.item
         recentFilesAvailable: MainCtx.mediaLibraryAvailable
         recentFilesEnabled: { playerPreferences.revision; return !!playerPreferences.value("save-recentplay") }
-        profiles: { playerPreferences.revision; return playerPreferences.playerPresets }
-        selectedProfile: { playerPreferences.revision; return playerPreferences.selectedPlayerPreset }
+        profiles: { applicationProfiles.revision; return applicationProfiles.playerPresets }
+        selectedProfile: { applicationProfiles.revision; return applicationProfiles.selectedPlayerPreset }
         onRecentRequested: mediaId => { if (recentMenuModel.item) recentMenuModel.item.playMedia(mediaId) }
         onClearRecentRequested: if (recentMenuModel.item) recentMenuModel.item.clearHistory()
-        onProfileRequested: profileId => playerPreferences.selectPlayerPreset(profileId)
+        onProfileActionsRequested: (profileId, name, x, y) => profileEditor.openProfileActions(profileId, name, x, y)
+        onProfileRequested: profileId => {
+            if (!applicationProfiles.selectPlayerPreset(profileId))
+                profileEditor.retrySelection(profileId)
+        }
         onActionRequested: action => {
             switch (action) {
             case "file": DialogsProvider.simpleOpenDialog(); break

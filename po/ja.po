@@ -46838,3 +46838,63 @@ msgstr "VLC はこのファイルの音声レベルを読み取れません。"
 #: modules/gui/qt/player/qml/redesign/RedesignMenu.qml:179
 msgid "New"
 msgstr "新規"
+
+#. Application profiles in the redesigned interface
+msgid "Change Profile"
+msgstr "プロファイルを変更"
+
+#. Application profiles in the redesigned interface
+msgid "Default Profile"
+msgstr "既定のプロファイル"
+
+#. Application profiles in the redesigned interface
+msgid "Delete Profile"
+msgstr "プロファイルを削除"
+
+#. Application profiles in the redesigned interface
+msgid "Delete a profile before you add another profile."
+msgstr "別のプロファイルを追加する前に、プロファイルを削除してください。"
+
+#. Application profiles in the redesigned interface
+msgid "Duplicate Profile"
+msgstr "プロファイルを複製"
+
+#. Application profiles in the redesigned interface
+msgid "Enter a profile name with 1 to 80 characters. Use a different name for each profile."
+msgstr "1～80文字のプロファイル名を入力してください。各プロファイルには異なる名前を使用してください。"
+
+#. Application profiles in the redesigned interface
+msgid "New Profile"
+msgstr "新しいプロファイル"
+
+#. Application profiles in the redesigned interface
+msgid "Profile name"
+msgstr "プロファイル名"
+
+#. Application profiles in the redesigned interface
+msgid "Rename Profile"
+msgstr "プロファイル名を変更"
+
+#. Application profiles in the redesigned interface
+msgid "Save all VLC settings in this profile. Some settings apply to the next file or after you restart VLC."
+msgstr "VLCのすべての設定をこのプロファイルに保存します。一部の設定は、次のファイルまたはVLCの再起動後に適用されます。"
+
+#. Application profiles in the redesigned interface
+msgid "This profile is no longer available."
+msgstr "このプロファイルは利用できなくなりました。"
+
+#. Application profiles in the redesigned interface
+msgid "VLC cannot apply this profile. Check its saved settings."
+msgstr "VLCはこのプロファイルを適用できません。保存された設定を確認してください。"
+
+#. Application profiles in the redesigned interface
+msgid "VLC cannot read the saved profiles."
+msgstr "VLCは保存されたプロファイルを読み込めません。"
+
+#. Application profiles in the redesigned interface
+msgid "VLC cannot save the interface settings. Try again."
+msgstr "VLCはインターフェース設定を保存できません。もう一度お試しください。"
+
+#. Application profiles in the redesigned interface
+msgid "VLC cannot save these profiles. Remove unused profiles."
+msgstr "VLCはこれらのプロファイルを保存できません。使用していないプロファイルを削除してください。"

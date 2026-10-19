@@ -15,12 +15,13 @@ C.Menu {
     property bool recentFilesEnabled: true
     property var profiles: []
     property string selectedProfile: ""
-    readonly property string profileName: profiles.find(profile => profile.id === selectedProfile)?.name || qsTr("Default Preset")
+    readonly property string profileName: profiles.find(profile => profile.id === selectedProfile)?.name || qsTr("Default Profile")
     readonly property RedesignTheme theme: RedesignTheme { scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor }
     signal actionRequested(string action)
     signal recentRequested(var mediaId)
     signal clearRecentRequested()
     signal profileRequested(string profileId)
+    signal profileActionsRequested(string profileId, string name, real x, real y)
     width: theme.dp(theme.compactMenus ? 280 : 375)
     padding: theme.menuPadding
     focus: true
@@ -164,9 +165,22 @@ C.Menu {
         delegate: MenuRow { }
         background: MenuSurface { shown: profileMenu.visible }
         Instantiator {
-            model: [{id: "", name: qsTr("Default Preset")}].concat(root.profiles)
+            model: [{id: "", name: qsTr("Default Profile")}].concat(root.profiles)
             delegate: MenuRow {
                 required property var modelData
+                id: profileRow
+                function showActions() {
+                    if (!modelData.id) return
+                    const point = mapToItem(C.Overlay.overlay, width, height)
+                    root.dismiss()
+                    root.profileActionsRequested(modelData.id, modelData.name, point.x, point.y)
+                }
+                Keys.onPressed: event => {
+                    if (event.key === Qt.Key_Menu || (event.key === Qt.Key_F10 && event.modifiers & Qt.ShiftModifier)) {
+                        showActions(); event.accepted = true
+                    }
+                }
+                MouseArea { anchors.fill: parent; acceptedButtons: Qt.RightButton; onClicked: profileRow.showActions() }
                 text: modelData.name
                 checkable: true
                 checked: root.selectedProfile === modelData.id

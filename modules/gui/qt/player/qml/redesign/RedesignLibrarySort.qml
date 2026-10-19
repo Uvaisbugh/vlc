@@ -4,6 +4,11 @@ import QtQuick
 QtObject {
     id: root
     property var ctx
+    property Connections settingsObserver: Connections {
+        target: root.ctx || null
+        ignoreUnknownSignals: true
+        function onSettingsReloaded() { root.load() }
+    }
     property string scope: "media"
     property var fields: ["played", "insertion", "title", "main_artist", "album_title", "track_number", "uri", "disc_number"]
     property string defaultChoice: "unwatched"

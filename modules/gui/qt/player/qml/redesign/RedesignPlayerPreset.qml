@@ -12,12 +12,13 @@ Item {
     property color accentColor: "#d37918"
     property Component videoBackdropContent
     property bool selectorVisible: true
+    property bool applicationProfile: false
     readonly property RedesignTheme theme: RedesignTheme { scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor }
     readonly property var presets: { backend.revision; return backend.playerPresets }
     readonly property string selectedId: { backend.revision; return backend.selectedPlayerPreset }
     readonly property string selectedName: {
         const preset = presets.find(row => row.id === selectedId)
-        return preset ? preset.name : qsTr("Default Preset")
+        return preset ? preset.name : root.applicationProfile ? qsTr("Default Profile") : qsTr("Default Preset")
     }
     property string contextId
     property string contextName
@@ -41,9 +42,22 @@ Item {
         dropdown.close()
         nameDialog.open()
     }
+    function openProfileActions(id, name, x, y) {
+        contextId = id; contextName = name
+        actions.x = Math.max(theme.dp(8), Math.min(x, C.Overlay.overlay.width - actions.width - theme.dp(8)))
+        actions.y = Math.max(theme.dp(8), Math.min(y, C.Overlay.overlay.height - actions.implicitHeight - theme.dp(8)))
+        actions.open()
+    }
+    function retrySelection(id) {
+        nameAction = "select"; contextId = id
+        retryNameSave = backend.pendingPlayerPreset
+        nameDialog.open()
+    }
     function saveName() {
         let success
-        if (retryNameSave) success = backend.save()
+        if (nameAction === "select") success = retryNameSave ? backend.save() : backend.selectPlayerPreset(contextId)
+        else if (retryNameSave) success = backend.save()
+        else if (nameAction === "delete") success = backend.deletePlayerPreset(contextId)
         else if (nameAction === "rename") success = backend.renamePlayerPreset(contextId, presetName.text)
         else if (nameAction === "duplicate") success = backend.duplicatePlayerPreset(contextId, presetName.text)
         else success = backend.createPlayerPreset(presetName.text)
@@ -149,7 +163,7 @@ Item {
     C.Menu {
         id: actions
         objectName: "playerPresetActions"
-        parent: dropdown.contentItem
+        parent: root.applicationProfile ? root.C.Overlay.overlay : dropdown.contentItem
         focus: true
         onOpened: { currentIndex = 0; itemAt(0).forceActiveFocus() }
         width: root.theme.dp(root.theme.compactMenus ? 220 : 260); padding: root.theme.menuPadding
@@ -183,18 +197,24 @@ Item {
         background: RedesignDialogSurface { theme: root.theme; videoBackdropContent: root.videoBackdropContent }
         onOpened: { presetName.forceActiveFocus(); presetName.selectAll() }
         onClosed: {
-            if (root.retryNameSave) root.backend.cancelPlayerPreset()
+            if (root.backend.pendingPlayerPreset && (root.retryNameSave || (root.nameAction === "select" || root.nameAction === "delete"))) root.backend.cancelPlayerPreset()
             root.retryNameSave = false
         }
         contentItem: ColumnLayout {
             spacing: root.theme.dp(20)
-            Text { Layout.fillWidth: true; text: root.nameAction === "rename" ? qsTr("Rename Preset") : root.nameAction === "duplicate" ? qsTr("Duplicate Preset") : qsTr("New Preset"); color: root.theme.bright; font.pixelSize: root.theme.dp(20) }
+            Text { Layout.fillWidth: true; text: root.nameAction === "delete" ? root.applicationProfile ? qsTr("Delete Profile") : qsTr("Delete Preset") : root.nameAction === "select" ? qsTr("Change Profile") : root.applicationProfile ? root.nameAction === "rename" ? qsTr("Rename Profile") : root.nameAction === "duplicate" ? qsTr("Duplicate Profile") : qsTr("New Profile") : root.nameAction === "rename" ? qsTr("Rename Preset") : root.nameAction === "duplicate" ? qsTr("Duplicate Preset") : qsTr("New Preset"); color: root.theme.bright; font.pixelSize: root.theme.dp(20) }
+            Text {
+                Layout.fillWidth: true; visible: root.applicationProfile && root.nameAction !== "select" && root.nameAction !== "delete"
+                text: qsTr("Save all VLC settings in this profile. Some settings apply to the next file or after you restart VLC.")
+                color: root.theme.foreground; font.pixelSize: root.theme.dp(13); wrapMode: Text.WordWrap
+            }
             C.TextField {
                 id: presetName
                 objectName: "playerPresetName"
                 Layout.fillWidth: true; implicitHeight: root.theme.dp(42)
+                visible: root.nameAction !== "select" && root.nameAction !== "delete"
                 maximumLength: 80; readOnly: root.retryNameSave
-                placeholderText: qsTr("Preset name"); font.pixelSize: root.theme.dp(14)
+                placeholderText: root.applicationProfile ? qsTr("Profile name") : qsTr("Preset name"); font.pixelSize: root.theme.dp(14)
                 color: root.theme.bright; placeholderTextColor: root.theme.foreground
                 selectByMouse: true
                 background: Rectangle { color: root.theme.field; radius: root.theme.dp(4); border.color: presetName.activeFocus ? root.theme.accent : root.theme.border }
@@ -205,7 +225,7 @@ Item {
                 Layout.fillWidth: true
                 Item { Layout.fillWidth: true }
                 RedesignButton { objectName: "playerPresetNameCancel"; scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor; caption: qsTr("Cancel"); text: caption; onClicked: nameDialog.close() }
-                RedesignButton { objectName: "playerPresetNameSave"; scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor; caption: root.retryNameSave ? qsTr("Retry") : qsTr("Save"); text: caption; enabled: presetName.text.trim().length > 0; primaryAction: true; onClicked: root.saveName() }
+                RedesignButton { objectName: "playerPresetNameSave"; scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor; caption: root.retryNameSave || root.nameAction === "select" || root.nameAction === "delete" ? qsTr("Retry") : qsTr("Save"); text: caption; enabled: root.nameAction === "select" || root.nameAction === "delete" || presetName.text.trim().length > 0; primaryAction: true; onClicked: root.saveName() }
             }
         }
     }
@@ -214,9 +234,13 @@ Item {
         objectName: "playerPresetDeleteDialog"
         parent: C.Overlay.overlay
         scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
-        title: qsTr("Delete Preset")
+        title: root.applicationProfile ? qsTr("Delete Profile") : qsTr("Delete Preset")
         message: qsTr("Delete “%1”?").arg(root.contextName)
         confirmText: qsTr("Delete"); destructive: true
-        onAccepted: root.backend.deletePlayerPreset(root.contextId)
+        onAccepted: {
+            if (root.backend.deletePlayerPreset(root.contextId)) return
+            root.nameAction = "delete"; root.retryNameSave = root.backend.pendingPlayerPreset
+            nameDialog.open()
+        }
     }
 }

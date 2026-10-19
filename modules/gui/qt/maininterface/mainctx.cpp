@@ -553,6 +553,34 @@ void MainCtx::loadFromSettingsImpl(const bool callSignals)
     }
 }
 
+QVariantMap MainCtx::profileSettings() const
+{
+    QVariantMap values;
+    for (const auto& key : settings->allKeys()) values.insert(key, settings->value(key));
+    // These values are normally flushed at shutdown. Capture the current UI.
+    values.insert(QStringLiteral("MainWindow/ShowRemainingTime"), m_showRemainingTime);
+    values.insert(QStringLiteral("MainWindow/interface-scale"), QString::number(m_intfUserScaleFactor));
+    values.insert(QStringLiteral("MainWindow/playqueue-panel-docked"), m_playqueuePanel->m_docked);
+    values.insert(QStringLiteral("MainWindow/playqueue-panel-visible"), m_playqueuePanel->m_visible);
+    values.insert(QStringLiteral("MainWindow/playqueue-panel-width"), QString::number(m_playqueuePanel->m_width));
+    values.insert(QStringLiteral("MainWindow/navigation-panel-visible"), m_navigationPanel->m_visible);
+    values.insert(QStringLiteral("MainWindow/navigation-panel-width"), QString::number(m_navigationPanel->m_width));
+    values.insert(QStringLiteral("MainWindow/player-playlist-width"), QString::number(m_playerPlaylistWidth));
+    values.insert(QStringLiteral("MainWindow/artist-albums-width"), QString::number(m_artistAlbumsWidth));
+    values.insert(QStringLiteral("MainWindow/grid-view"), m_gridView);
+    values.insert(QStringLiteral("MainWindow/grouping"), m_grouping);
+    values.insert(QStringLiteral("MainWindow/color-scheme-index"), m_colorScheme->currentIndex());
+    values.insert(QStringLiteral("MainWindow/album-sections"), m_albumSections);
+    values.insert(QStringLiteral("MainWindow/lyrics-mode"), m_lyricsMode);
+    return values;
+}
+
+void MainCtx::reloadFromSettings()
+{
+    loadFromSettingsImpl(true);
+    emit settingsReloaded();
+}
+
 void MainCtx::reloadPrefs()
 {
     loadPrefs(true);

@@ -88,6 +88,13 @@ static void test_runtime(void)
     assert(!var_InheritBool(base->p_libvlc_int, "audio"));
     assert(!var_InheritBool(base->p_libvlc_int, "video"));
     assert(var_InheritFloat(base->p_libvlc_int, "rate") == 1.25f);
+    assert(config_IsPersistent("rate"));
+    assert(config_IsPersistent("startup-options"));
+    assert(config_FindConfig("config") != NULL);
+    assert(!config_IsPersistent("config"));
+    assert(!config_IsPersistent("help"));
+    assert(!config_IsPersistent("not-a-real-vlc-setting"));
+    assert(!config_IsPersistent(NULL));
     vlc_object_t *object = VLC_OBJECT(base->p_libvlc_int);
     assert(config_ValidateStartupOptions(object, "--rate=3 --video --http-user-agent='Sample player'") == VLC_SUCCESS);
     assert(var_InheritFloat(base->p_libvlc_int, "rate") == 1.25f);

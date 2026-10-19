@@ -22,10 +22,10 @@ QtObject {
             artwork: typeof entry.artwork === "string" ? entry.artwork : "",
             icon: typeof entry.icon === "string" ? entry.icon : entry.kind === "folder" ? "folder" : entry.kind === "playlist" ? "playlist" : "music"}
     }
-    Component.onCompleted: {
+    function load() {
         try {
             const saved = JSON.parse(ctx.settingValue(storageKey, "[]"))
-            if (!Array.isArray(saved)) return
+            if (!Array.isArray(saved)) { entries = []; return }
             const restored = []
             for (const value of saved) {
                 const entry = normalize(value)
@@ -33,6 +33,12 @@ QtObject {
             }
             entries = restored
         } catch (error) { entries = [] }
+    }
+    Component.onCompleted: load()
+    property Connections settingsObserver: Connections {
+        target: root.ctx || null
+        ignoreUnknownSignals: true
+        function onSettingsReloaded() { root.load() }
     }
     function contains(entry) { return !!entry && entries.some(item => item.id === identity(entry)) }
     function save(next) {

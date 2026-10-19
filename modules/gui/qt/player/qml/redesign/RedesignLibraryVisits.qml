@@ -6,11 +6,17 @@ QtObject {
     property var ctx
     property var entries: []
     readonly property string storageKey: "Juxtopposed/library-visits"
-    Component.onCompleted: {
+    function load() {
         try {
             const saved = JSON.parse(ctx.settingValue(storageKey, "[]"))
-            if (Array.isArray(saved)) entries = saved.filter(entry => entry && typeof entry.key === "string" && typeof entry.name === "string" && ["folders", "playlists"].includes(entry.kind) && Number.isFinite(entry.count) && entry.count > 0)
+            entries = Array.isArray(saved) ? saved.filter(entry => entry && typeof entry.key === "string" && typeof entry.name === "string" && ["folders", "playlists"].includes(entry.kind) && Number.isFinite(entry.count) && entry.count > 0) : []
         } catch (error) { entries = [] }
+    }
+    Component.onCompleted: load()
+    property Connections settingsObserver: Connections {
+        target: root.ctx || null
+        ignoreUnknownSignals: true
+        function onSettingsReloaded() { root.load() }
     }
     function record(kind, key, name, category) {
         if (!key.length || !name.length || !["folders", "playlists"].includes(kind)) return

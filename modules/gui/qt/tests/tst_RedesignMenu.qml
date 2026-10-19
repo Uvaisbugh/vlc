@@ -39,6 +39,7 @@ TestCase {
     SignalSpy { id: actions; target: menu; signalName: "actionRequested" }
     SignalSpy { id: recent; target: menu; signalName: "recentRequested" }
     SignalSpy { id: profiles; target: menu; signalName: "profileRequested" }
+    SignalSpy { id: profileActions; target: menu; signalName: "profileActionsRequested" }
     function init() {
         menu.dismiss()
         menu.parent = testCase
@@ -52,7 +53,7 @@ TestCase {
         recentFiles.clear()
         recentFiles.append({id: 42, url: "/videos/cat.mkv"})
         recentFiles.append({id: 43, url: "/videos/second.mkv"})
-        actions.clear(); recent.clear(); profiles.clear()
+        actions.clear(); recent.clear(); profiles.clear(); profileActions.clear()
         menu.open()
         tryCompare(menu, "opened", true)
     }
@@ -172,6 +173,24 @@ TestCase {
         tryCompare(submenu, "visible", false)
         tryCompare(menu, "visible", false)
     }
+    function test_profileActionsFromKeyboard() {
+        const submenu = openSubmenu(8)
+        submenu.itemAt(1).forceActiveFocus()
+        keyClick(Qt.Key_F10, Qt.ShiftModifier)
+        compare(profileActions.count, 1)
+        compare(profileActions.signalArguments[0][0], "movies")
+        compare(profileActions.signalArguments[0][1], "Movies")
+        tryCompare(menu, "visible", false)
+        compare(profiles.count, 0)
+    }
+    function test_profileActionsFromRightClick() {
+        const submenu = openSubmenu(8)
+        const row = submenu.itemAt(2)
+        mouseClick(row, row.width / 2, row.height / 2, Qt.RightButton)
+        compare(profileActions.count, 1)
+        compare(profileActions.signalArguments[0][0], "music")
+        compare(profiles.count, 0)
+    }
     function test_profileSelectionAndDefault() {
         let submenu = openSubmenu(8)
         tryCompare(submenu, "count", 5)
@@ -187,7 +206,7 @@ TestCase {
         submenu.itemAt(0).forceActiveFocus()
         keyClick(Qt.Key_Return)
         compare(menu.selectedProfile, "")
-        compare(menu.itemAt(8).text, "Profile (Default Preset)")
+        compare(menu.itemAt(8).text, "Profile (Default Profile)")
     }
     function test_historyWithoutMediaLibrary() {
         menu.recentFilesAvailable = false

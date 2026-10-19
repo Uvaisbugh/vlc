@@ -103,6 +103,11 @@ Item {
             if (ctx) ctx.setSettingValue(storageKey, JSON.stringify(saved))
         }
         onModeChanged: if (ready) apply()
+        property Connections settingsObserver: Connections {
+            target: viewMode.ctx || null
+            ignoreUnknownSignals: true
+            function onSettingsReloaded() { viewMode.load() }
+        }
         onCtxChanged: if (ready) load()
         Component.onCompleted: { load(); ready = true }
     }

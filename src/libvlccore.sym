@@ -86,6 +86,7 @@ config_GetIntChoices
 config_GetPsz
 config_GetPszChoices
 config_GetType
+config_IsPersistent
 config_PutFloat
 config_PutInt
 config_PutPsz
@@ -541,6 +542,7 @@ video_format_LogDifferences
 video_format_Setup
 video_format_Print
 vlc_actions_get_id
+vlc_actions_update
 vlc_actions_get_key_names
 vlc_actions_get_keycodes
 vlc_b64_decode

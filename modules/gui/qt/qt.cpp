@@ -509,6 +509,9 @@ vlc_module_begin ()
     add_string( "qt-player-presets", "", "Player settings presets", nullptr )
         change_private()
 
+    add_string( "qt-application-profiles", "", "Application profiles", nullptr )
+        change_private()
+
     add_string( "qt-player-layout", "", "Player control layout", nullptr )
         change_private()
 

@@ -53720,3 +53720,63 @@ msgstr "VLC non può leggere i livelli audio di questo file."
 #: modules/gui/qt/player/qml/redesign/RedesignMenu.qml:179
 msgid "New"
 msgstr "Nuovo"
+
+#. Application profiles in the redesigned interface
+msgid "Change Profile"
+msgstr "Cambia profilo"
+
+#. Application profiles in the redesigned interface
+msgid "Default Profile"
+msgstr "Profilo predefinito"
+
+#. Application profiles in the redesigned interface
+msgid "Delete Profile"
+msgstr "Elimina profilo"
+
+#. Application profiles in the redesigned interface
+msgid "Delete a profile before you add another profile."
+msgstr "Elimina un profilo prima di aggiungerne un altro."
+
+#. Application profiles in the redesigned interface
+msgid "Duplicate Profile"
+msgstr "Duplica profilo"
+
+#. Application profiles in the redesigned interface
+msgid "Enter a profile name with 1 to 80 characters. Use a different name for each profile."
+msgstr "Inserisci un nome di profilo da 1 a 80 caratteri. Usa un nome diverso per ciascun profilo."
+
+#. Application profiles in the redesigned interface
+msgid "New Profile"
+msgstr "Nuovo profilo"
+
+#. Application profiles in the redesigned interface
+msgid "Profile name"
+msgstr "Nome del profilo"
+
+#. Application profiles in the redesigned interface
+msgid "Rename Profile"
+msgstr "Rinomina profilo"
+
+#. Application profiles in the redesigned interface
+msgid "Save all VLC settings in this profile. Some settings apply to the next file or after you restart VLC."
+msgstr "Salva tutte le impostazioni di VLC in questo profilo. Alcune impostazioni si applicano al file successivo o dopo il riavvio di VLC."
+
+#. Application profiles in the redesigned interface
+msgid "This profile is no longer available."
+msgstr "Questo profilo non è più disponibile."
+
+#. Application profiles in the redesigned interface
+msgid "VLC cannot apply this profile. Check its saved settings."
+msgstr "VLC non può applicare questo profilo. Controlla le impostazioni salvate."
+
+#. Application profiles in the redesigned interface
+msgid "VLC cannot read the saved profiles."
+msgstr "VLC non può leggere i profili salvati."
+
+#. Application profiles in the redesigned interface
+msgid "VLC cannot save the interface settings. Try again."
+msgstr "VLC non può salvare le impostazioni dell’interfaccia. Riprova."
+
+#. Application profiles in the redesigned interface
+msgid "VLC cannot save these profiles. Remove unused profiles."
+msgstr "VLC non può salvare questi profili. Rimuovi i profili inutilizzati."

@@ -39,6 +39,7 @@
 
 #include <vlc_common.h>
 #include <vlc_actions.h>
+#include <vlc_configuration.h>
 #include <vlc_charset.h>
 #include "../libvlc.h"
 
@@ -413,10 +414,16 @@ static int keycmp (const void *a, const void *b)
     return (ka->key < kb->key) ? -1 : (ka->key > kb->key) ? +1 : 0;
 }
 
+struct action_map
+{
+    vlc_mutex_t lock;
+    void *root;
+};
+
 struct vlc_actions_t
 {
-    void *map; /* Key map */
-    void *global_map; /* Grabbed/global key map */
+    struct action_map map; /* Key map */
+    struct action_map global_map; /* Grabbed/global key map */
     const char *ppsz_keys[];
 };
 
@@ -445,15 +452,17 @@ static vlc_action_id_t wheel_action(vlc_object_t *obj, uint32_t keycode)
 static int vlc_key_to_action (vlc_object_t *obj, const char *varname,
                               vlc_value_t prevkey, vlc_value_t curkey, void *d)
 {
-    void *const *map = d;
+    struct action_map *map = d;
     const void **pent;
     uint32_t keycode = curkey.i_int;
 
-    pent = tfind (&keycode, map, keycmp);
+    vlc_mutex_lock(&map->lock);
+    pent = tfind (&keycode, &map->root, keycmp);
     /* Explicit user bindings take precedence over the live wheel defaults. */
     const struct mapping *entry = pent != NULL ? *pent : NULL;
     vlc_action_id_t action = entry != NULL ? entry->action
         : strcmp(varname, "key-pressed") == 0 ? wheel_action(obj, keycode) : ACTIONID_NONE;
+    vlc_mutex_unlock(&map->lock);
     (void) prevkey;
     return action == ACTIONID_NONE ? VLC_SUCCESS : var_SetInteger(obj, "key-action", action);
 }
@@ -471,7 +480,10 @@ static int add_mapping (void **map, uint32_t keycode, vlc_action_id_t action)
 
     void **pent = tsearch (entry, map, keycmp);
     if (unlikely(pent == NULL))
+    {
+        free(entry);
         return ENOMEM;
+    }
     if (*pent != entry)
     {
         free (entry);
@@ -488,12 +500,14 @@ static int add_mapping (void **map, uint32_t keycode, vlc_action_id_t action)
  * \param confname VLC configuration item to read mappings from
  * \param action action ID
  */
-static void init_action (vlc_object_t *obj, void **map,
-                            const char *confname, vlc_action_id_t action)
+static int init_action (vlc_object_t *obj, void **map,
+                        const char *confname, vlc_action_id_t action, bool inherit)
 {
-    char *keys = var_InheritString (obj, confname);
+    if (!inherit && config_GetType(confname) != VLC_VAR_STRING)
+        return VLC_SUCCESS;
+    char *keys = inherit ? var_InheritString(obj, confname) : config_GetPsz(confname);
     if (keys == NULL)
-        return;
+        return VLC_SUCCESS;
 
     for (char *buf, *key = strtok_r (keys, "\t", &buf);
          key != NULL;
@@ -506,10 +520,13 @@ static void init_action (vlc_object_t *obj, void **map,
             continue;
         }
 
-        if (add_mapping (map, code, action) == EEXIST)
+        const int result = add_mapping(map, code, action);
+        if (result == ENOMEM) { free(keys); return VLC_ENOMEM; }
+        if (result == EEXIST)
             msg_Warn (obj, "Key \"%s\" bound to multiple actions", key);
     }
     free (keys);
+    return VLC_SUCCESS;
 }
 
 /**
@@ -525,8 +542,10 @@ int libvlc_InternalActionsInit (libvlc_int_t *libvlc)
 
     if (unlikely(as == NULL))
         return VLC_ENOMEM;
-    as->map = NULL;
-    as->global_map = NULL;
+    vlc_mutex_init(&as->map.lock);
+    vlc_mutex_init(&as->global_map.lock);
+    as->map.root = NULL;
+    as->global_map.root = NULL;
 
     var_Create (obj, "key-pressed", VLC_VAR_INTEGER);
     var_Create (obj, "global-key-pressed", VLC_VAR_INTEGER);
@@ -551,8 +570,8 @@ int libvlc_InternalActionsInit (libvlc_int_t *libvlc)
         char name[12 + MAXACTION];
 
         snprintf (name, sizeof (name), "global-key-%." STRINGIFY(MAXACTION) "s", s_names2actions[i].psz);
-        init_action (obj, &as->map, name + 7, s_names2actions[i].id);
-        init_action (obj, &as->global_map, name, s_names2actions[i].id);
+        init_action (obj, &as->map.root, name + 7, s_names2actions[i].id, true);
+        init_action (obj, &as->global_map.root, name, s_names2actions[i].id, true);
     }
     as->ppsz_keys[ARRAY_SIZE(s_names2actions)] = NULL;
 
@@ -560,6 +579,36 @@ int libvlc_InternalActionsInit (libvlc_int_t *libvlc)
     var_AddCallback (obj, "key-pressed", vlc_key_to_action, &as->map);
     var_AddCallback (obj, "global-key-pressed", vlc_key_to_action,
                      &as->global_map);
+    return VLC_SUCCESS;
+}
+
+/* Rebuild before swapping so dispatch never sees a partial configuration.
+ * Release the map lock before emitting key-action: its callbacks may reload
+ * profiles and must be able to update this map again. */
+int vlc_actions_update(vlc_object_t *obj)
+{
+    vlc_actions_t *as = libvlc_priv(vlc_object_instance(obj))->actions;
+    if (as == NULL) return VLC_EGENERIC;
+    void *local = NULL, *global = NULL;
+    for (size_t i = 0; i < ARRAY_SIZE(s_names2actions); ++i)
+    {
+        char name[12 + MAXACTION];
+        snprintf(name, sizeof(name), "global-key-%s", s_names2actions[i].psz);
+        if (init_action(obj, &local, name + 7, s_names2actions[i].id, false)
+            || init_action(obj, &global, name, s_names2actions[i].id, false))
+        {
+            tdestroy(local, free); tdestroy(global, free);
+            return VLC_ENOMEM;
+        }
+    }
+    vlc_mutex_lock(&as->map.lock);
+    void *old = as->map.root; as->map.root = local;
+    vlc_mutex_unlock(&as->map.lock);
+    tdestroy(old, free);
+    vlc_mutex_lock(&as->global_map.lock);
+    old = as->global_map.root; as->global_map.root = global;
+    vlc_mutex_unlock(&as->global_map.lock);
+    tdestroy(old, free);
     return VLC_SUCCESS;
 }
 
@@ -578,8 +627,8 @@ void libvlc_InternalActionsClean (libvlc_int_t *libvlc)
                      &as->global_map);
     var_DelCallback (libvlc, "key-pressed", vlc_key_to_action, &as->map);
 
-    tdestroy (as->global_map, free);
-    tdestroy (as->map, free);
+    tdestroy (as->global_map.root, free);
+    tdestroy (as->map.root, free);
     free (as);
     libvlc_priv(libvlc)->actions = NULL;
 }

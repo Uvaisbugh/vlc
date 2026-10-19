@@ -40,13 +40,54 @@ TestCase {
     function item(name) { return findChild(selector, name) }
     function init() {
         failOnWarning(/Binding loop/)
-        selector.scaleFactor = 1; selector.width = 360; selector.selectorVisible = true
+        selector.scaleFactor = 1; selector.width = 360; selector.selectorVisible = true; selector.applicationProfile = false
         item("playerPresetMenu").close(); item("playerPresetActions").close()
         item("playerPresetNameDialog").close(); item("playerPresetDeleteDialog").close()
         store.playerPresets = [{id: "show", name: "My Show"}, {id: "quiet", name: "Quiet Movies"}]
         store.selectedPlayerPreset = ""; store.pendingPlayerPreset = false
         store.errorMessage = ""; store.lastAction = ""; store.failSave = false; store.revision++
         wait(10)
+    }
+    function test_applicationProfileContextActions() {
+        selector.applicationProfile = true; selector.selectorVisible = false
+        selector.openProfileActions("show", "My Show", 400, 400)
+        const actions = item("playerPresetActions")
+        tryCompare(actions, "opened", true)
+        compare(shortcuts.useGlobalShortcuts, false)
+        keyClick(Qt.Key_Return)
+        tryCompare(item("playerPresetNameDialog"), "opened", true)
+        compare(item("playerPresetName").text, "My Show")
+        item("playerPresetName").text = "Movies"
+        mouseClick(item("playerPresetNameSave"))
+        compare(store.lastAction, "rename"); compare(store.lastName, "Movies")
+    }
+    function test_failedProfileDeleteCanRetry() {
+        selector.applicationProfile = true; selector.selectorVisible = false
+        selector.openProfileActions("show", "My Show", 400, 400)
+        const actions = item("playerPresetActions")
+        tryCompare(actions, "opened", true)
+        keyClick(Qt.Key_End); keyClick(Qt.Key_Return)
+        tryCompare(item("playerPresetDeleteDialog"), "opened", true)
+        store.failSave = true
+        mouseClick(findChild(item("playerPresetDeleteDialog"), "confirmationAccept"))
+        tryCompare(item("playerPresetNameDialog"), "opened", true)
+        verify(!item("playerPresetName").visible)
+        store.failSave = false
+        mouseClick(item("playerPresetNameSave"))
+        compare(store.lastAction, "retry")
+        tryCompare(item("playerPresetNameDialog"), "opened", false)
+    }
+    function test_applicationProfileFailedSelectionCanRetry() {
+        selector.applicationProfile = true; selector.selectorVisible = false
+        store.pendingPlayerPreset = true; store.failSave = true
+        selector.retrySelection("quiet")
+        tryCompare(item("playerPresetNameDialog"), "opened", true)
+        verify(!item("playerPresetName").visible)
+        compare(item("playerPresetNameSave").caption, "Retry")
+        store.failSave = false
+        mouseClick(item("playerPresetNameSave"))
+        compare(store.lastAction, "retry")
+        tryCompare(item("playerPresetNameDialog"), "opened", false)
     }
     function test_createdPresetSelectionMarkHasStableLayout_data() {
         return [{tag: "normal", scale: 1}, {tag: "fractional", scale: 1.125}, {tag: "large", scale: 2}]

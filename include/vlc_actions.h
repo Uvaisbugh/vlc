@@ -275,6 +275,13 @@ VLC_API vlc_action_id_t
 vlc_actions_get_id(const char *psz_key_name);
 
 /**
+ * Rebuild action dispatch from saved configuration. Global shortcuts still
+ * require platform-specific registration before the operating system sends
+ * newly assigned keys.
+ */
+VLC_API int vlc_actions_update(vlc_object_t *obj);
+
+/**
  * Get keycodes from a action key name and vlc configuration
  * \return The number of keycodes for this action, or 0 in case of an error.
  * The list needs to be released with free()

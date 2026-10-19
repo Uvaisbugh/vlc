@@ -47682,3 +47682,63 @@ msgstr "VLC 无法读取此文件的音频电平。"
 #: modules/gui/qt/player/qml/redesign/RedesignMenu.qml:179
 msgid "New"
 msgstr "新建"
+
+#. Application profiles in the redesigned interface
+msgid "Change Profile"
+msgstr "切换配置"
+
+#. Application profiles in the redesigned interface
+msgid "Default Profile"
+msgstr "默认配置"
+
+#. Application profiles in the redesigned interface
+msgid "Delete Profile"
+msgstr "删除配置"
+
+#. Application profiles in the redesigned interface
+msgid "Delete a profile before you add another profile."
+msgstr "请先删除一个配置，再添加新配置。"
+
+#. Application profiles in the redesigned interface
+msgid "Duplicate Profile"
+msgstr "复制配置"
+
+#. Application profiles in the redesigned interface
+msgid "Enter a profile name with 1 to 80 characters. Use a different name for each profile."
+msgstr "请输入 1 至 80 个字符的配置名称。请为每个配置使用不同的名称。"
+
+#. Application profiles in the redesigned interface
+msgid "New Profile"
+msgstr "新建配置"
+
+#. Application profiles in the redesigned interface
+msgid "Profile name"
+msgstr "配置名称"
+
+#. Application profiles in the redesigned interface
+msgid "Rename Profile"
+msgstr "重命名配置"
+
+#. Application profiles in the redesigned interface
+msgid "Save all VLC settings in this profile. Some settings apply to the next file or after you restart VLC."
+msgstr "将 VLC 的所有设置保存在此配置中。部分设置将在下一个文件或重新启动 VLC 后生效。"
+
+#. Application profiles in the redesigned interface
+msgid "This profile is no longer available."
+msgstr "此配置已不可用。"
+
+#. Application profiles in the redesigned interface
+msgid "VLC cannot apply this profile. Check its saved settings."
+msgstr "VLC 无法应用此配置。请检查其已保存的设置。"
+
+#. Application profiles in the redesigned interface
+msgid "VLC cannot read the saved profiles."
+msgstr "VLC 无法读取已保存的配置。"
+
+#. Application profiles in the redesigned interface
+msgid "VLC cannot save the interface settings. Try again."
+msgstr "VLC 无法保存界面设置。请重试。"
+
+#. Application profiles in the redesigned interface
+msgid "VLC cannot save these profiles. Remove unused profiles."
+msgstr "VLC 无法保存这些配置。请移除不使用的配置。"

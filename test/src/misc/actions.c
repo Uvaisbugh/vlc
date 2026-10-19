@@ -2,6 +2,7 @@
 #include "../../libvlc/test.h"
 #include "../lib/libvlc_internal.h"
 #include <vlc_actions.h>
+#include <vlc_configuration.h>
 
 struct observed_action
 {
@@ -83,10 +84,48 @@ static void test_wheel(bool explicit_binding)
     libvlc_release(vlc);
 }
 
+static int reload_in_callback(vlc_object_t *obj, const char *name,
+                              vlc_value_t before, vlc_value_t after, void *opaque)
+{
+    (void)name; (void)before; (void)after; (void)opaque;
+    assert(vlc_actions_update(obj) == VLC_SUCCESS);
+    return VLC_SUCCESS;
+}
+
+static void test_live_shortcuts(void)
+{
+    const char *args[test_defaults_nargs + 2];
+    memcpy(args, test_defaults_args, sizeof(test_defaults_args));
+    args[test_defaults_nargs] = "--ignore-config";
+    args[test_defaults_nargs + 1] = "--key-play-pause=Ctrl+Alt+P";
+    libvlc_instance_t *vlc = libvlc_new(ARRAY_SIZE(args), args);
+    assert(vlc != NULL);
+    libvlc_int_t *core = vlc->p_libvlc_int;
+    struct observed_action observed = {0};
+    var_AddCallback(core, "key-action", on_action, &observed);
+    uint32_t p = vlc_str2keycode("Ctrl+Alt+P"), q = vlc_str2keycode("Ctrl+Alt+Q");
+    check_key(core, &observed, p, ACTIONID_PLAY_PAUSE);
+    char *old = config_GetPsz("key-play-pause");
+    config_PutPsz("key-play-pause", "Ctrl+Alt+Q");
+    assert(vlc_actions_update(VLC_OBJECT(core)) == VLC_SUCCESS);
+    check_key(core, &observed, p, ACTIONID_NONE);
+    check_key(core, &observed, q, ACTIONID_PLAY_PAUSE);
+    var_AddCallback(core, "key-action", reload_in_callback, NULL);
+    check_key(core, &observed, q, ACTIONID_PLAY_PAUSE);
+    var_DelCallback(core, "key-action", reload_in_callback, NULL);
+    config_PutPsz("key-play-pause", "");
+    assert(vlc_actions_update(VLC_OBJECT(core)) == VLC_SUCCESS);
+    check_key(core, &observed, q, ACTIONID_NONE);
+    config_PutPsz("key-play-pause", old); free(old);
+    var_DelCallback(core, "key-action", on_action, &observed);
+    libvlc_release(vlc);
+}
+
 int main(void)
 {
     test_init();
     test_wheel(false);
     test_wheel(true);
+    test_live_shortcuts();
     return 0;
 }

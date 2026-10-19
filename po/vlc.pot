@@ -38816,3 +38816,63 @@ msgstr ""
 #: modules/gui/qt/player/qml/redesign/RedesignMenu.qml:179
 msgid "New"
 msgstr ""
+
+#. Application profiles in the redesigned interface
+msgid "Change Profile"
+msgstr ""
+
+#. Application profiles in the redesigned interface
+msgid "Default Profile"
+msgstr ""
+
+#. Application profiles in the redesigned interface
+msgid "Delete Profile"
+msgstr ""
+
+#. Application profiles in the redesigned interface
+msgid "Delete a profile before you add another profile."
+msgstr ""
+
+#. Application profiles in the redesigned interface
+msgid "Duplicate Profile"
+msgstr ""
+
+#. Application profiles in the redesigned interface
+msgid "Enter a profile name with 1 to 80 characters. Use a different name for each profile."
+msgstr ""
+
+#. Application profiles in the redesigned interface
+msgid "New Profile"
+msgstr ""
+
+#. Application profiles in the redesigned interface
+msgid "Profile name"
+msgstr ""
+
+#. Application profiles in the redesigned interface
+msgid "Rename Profile"
+msgstr ""
+
+#. Application profiles in the redesigned interface
+msgid "Save all VLC settings in this profile. Some settings apply to the next file or after you restart VLC."
+msgstr ""
+
+#. Application profiles in the redesigned interface
+msgid "This profile is no longer available."
+msgstr ""
+
+#. Application profiles in the redesigned interface
+msgid "VLC cannot apply this profile. Check its saved settings."
+msgstr ""
+
+#. Application profiles in the redesigned interface
+msgid "VLC cannot read the saved profiles."
+msgstr ""
+
+#. Application profiles in the redesigned interface
+msgid "VLC cannot save the interface settings. Try again."
+msgstr ""
+
+#. Application profiles in the redesigned interface
+msgid "VLC cannot save these profiles. Remove unused profiles."
+msgstr ""

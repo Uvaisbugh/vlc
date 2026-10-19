@@ -25,6 +25,7 @@ class RedesignPreferences : public QObject
     Q_PROPERTY(int translationRevision READ translationRevision NOTIFY translationRevisionChanged FINAL)
     Q_PROPERTY(QString errorMessage READ errorMessage NOTIFY changed FINAL)
     Q_PROPERTY(bool editPlayerPreset MEMBER m_editPlayerPreset)
+    Q_PROPERTY(bool applicationProfile READ applicationProfile WRITE setApplicationProfile NOTIFY changed FINAL)
     Q_PROPERTY(QVariantList playerPresets READ playerPresets NOTIFY changed FINAL)
     Q_PROPERTY(QString selectedPlayerPreset READ selectedPlayerPreset NOTIFY changed FINAL)
     Q_PROPERTY(bool pendingPlayerPreset READ pendingPlayerPreset NOTIFY changed FINAL)
@@ -55,7 +56,9 @@ public:
     Q_INVOKABLE QStringList subtitleSearchLanguages() const;
     QVariantList playerPresets() const;
     QString selectedPlayerPreset() const;
-    bool pendingPlayerPreset() const { return m_edits.contains(QStringLiteral("qt-player-presets")); }
+    bool applicationProfile() const { return m_applicationProfile; }
+    void setApplicationProfile(bool value);
+    bool pendingPlayerPreset() const { return m_edits.contains(presetStorageOption()); }
     Q_INVOKABLE bool createPlayerPreset(const QString& name);
     Q_INVOKABLE bool selectPlayerPreset(const QString& id);
     Q_INVOKABLE bool renamePlayerPreset(const QString& id, const QString& name);
@@ -100,7 +103,12 @@ private:
     QVariantList audioDeviceChoices() const;
     static QVariant read(const QByteArray& name);
     static void write(const QByteArray& name, const QVariant& value);
+    QString presetStorageOption() const;
     QVariantMap playerPresetState() const;
+    QVariantMap presetState(bool application) const;
+    QVariantMap presetSnapshot(bool application) const;
+    QVariantMap captureApplicationProfile(QVariantMap state) const;
+    bool updateActiveApplicationProfile();
     QVariantMap playerPresetOptions() const;
     bool storePlayerPresetState(const QVariantMap& state);
     bool playerPresetError(const QString& message);
@@ -117,7 +125,13 @@ private:
     int m_translationRevision = 0;
     bool m_autoSave = false;
     bool m_editPlayerPreset = false;
+    bool m_applicationProfile = false;
+    bool m_profileInterfacePending = false;
+    QVariantMap m_profileInterface;
     bool m_presetTransaction = false;
+    bool m_libraryStartupBeforePreset = false;
+    bool m_autoPreparseBeforePreset = false;
+    bool m_singleInstanceBeforePreset = false;
     QVariantMap m_editsBeforePreset;
     QTimer m_saveTimer;
     QTimer m_stereoTestTimer;

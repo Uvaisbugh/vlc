@@ -26,6 +26,7 @@
 
 #include "qt.hpp"
 
+#include <QVariantMap>
 #include <QtQuick/QQuickView>
 #include <QApplication>
 #include <QQuickItem>
@@ -269,7 +270,8 @@ public:
     inline QUrl getDialogFilePath() const { return m_dialogFilepath; }
     inline void setDialogFilePath(const QUrl& filepath ){ m_dialogFilepath = filepath; }
     inline bool hasAcrylicSurface() const { return m_hasAcrylicSurface; }
-    inline void reloadFromSettings() { loadFromSettingsImpl(true); }
+    void reloadFromSettings();
+    QVariantMap profileSettings() const;
     inline bool getUseGlobalShortcuts() const { return m_useGlobalShortcuts; }
     void setUseGlobalShortcuts(bool useGlobalShortcuts );
     inline int maxVolume() const { return m_maxVolume; }
@@ -599,6 +601,7 @@ signals:
     void albumSectionsChanged( bool );
     void lyricsModeChanged( bool );
     void colorSchemeChanged( QString );
+    void settingsReloaded();
     void redesignAccentChanged();
     void backdropBlurEnabledChanged();
     void compactMenusChanged();

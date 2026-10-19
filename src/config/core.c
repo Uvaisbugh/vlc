@@ -75,6 +75,13 @@ int config_GetType(const char *name)
     }
 }
 
+bool config_IsPersistent(const char *name)
+{
+    const struct vlc_param *param = name ? vlc_param_Find(name) : NULL;
+    return param != NULL && CONFIG_ITEM(param->item.i_type)
+        && !param->obsolete && !param->unsaved;
+}
+
 bool config_IsSafe( const char *name )
 {
     const struct vlc_param *param = vlc_param_Find(name);
