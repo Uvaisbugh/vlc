@@ -47,7 +47,8 @@ private:
     };
     struct Work { QString mrl; std::shared_ptr<ExportedFile> file; int64_t id; quint64 generation; };
     void startNext();
-    void storeArtwork(const Work& work);
+    void finishRequest(const Work& work, const QString& artwork);
+    void storeArtwork(const Work& work, const QString& artwork);
     MainCtx* m_ctx = nullptr;
     MediaLib* m_ml = nullptr;
     std::unique_ptr<MLMediaStore> m_store;

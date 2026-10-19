@@ -63,7 +63,7 @@ void MLFileArtwork::request(const QUrl& url, bool generateVideo)
     if (previous != m_requested.cend() && (previous.value() || !generateVideo)) return;
     m_requested.insert(mrl, generateVideo);
     // External media records cache previews without adding or scanning a folder.
-    m_store->insert(mrl, generateVideo);
+    m_store->insert(mrl, true);
 }
 
 void MLFileArtwork::mediaUpdated(const QString& mrl, const MLMedia& media)
@@ -75,13 +75,19 @@ void MLFileArtwork::mediaUpdated(const QString& mrl, const MLMedia& media)
     const QString artwork = media.valid() ? media.smallCover() : QString {};
     if (!artwork.isEmpty())
         emit artworkChanged(QUrl::fromEncoded(mrl.toUtf8()), artwork);
-    if (!media.valid() || !m_requested[mrl] || media.type() == VLC_ML_MEDIA_TYPE_AUDIO) return;
+    if (!media.valid() || !artwork.isEmpty()) return;
+    const bool audio = !m_requested[mrl] || media.type() == VLC_ML_MEDIA_TYPE_AUDIO;
     vlc_ml_thumbnail_status_t status;
     media.smallCover(&status);
-    if (status != VLC_ML_THUMBNAIL_STATUS_MISSING && status != VLC_ML_THUMBNAIL_STATUS_FAILURE) return;
+    if (!audio && status != VLC_ML_THUMBNAIL_STATUS_MISSING && status != VLC_ML_THUMBNAIL_STATUS_FAILURE) return;
     const auto id = media.getId().id;
     if (m_attempted.contains(id)) return;
     m_attempted.insert(id);
+    if (audio) {
+        m_pending.push_back({mrl, nullptr, id, m_generation.load()});
+        startNext();
+        return;
+    }
     const auto directory = QDir(QStandardPaths::writableLocation(QStandardPaths::CacheLocation))
             .filePath(QStringLiteral("folder-thumbnails"));
     auto file = std::make_shared<ExportedFile>();
@@ -130,7 +136,9 @@ void MLFileArtwork::startNext()
     m_pending.pop_front();
     if (!m_preparser) {
         vlc_preparser_cfg cfg {};
-        cfg.types = VLC_PREPARSER_TYPE_THUMBNAIL_TO_FILES;
+        cfg.types = VLC_PREPARSER_TYPE_THUMBNAIL_TO_FILES | VLC_PREPARSER_TYPE_PARSE
+                | VLC_PREPARSER_TYPE_FETCHMETA_LOCAL;
+        cfg.max_parser_threads = 1;
         cfg.max_thumbnailer_threads = 1;
         cfg.timeout = VLC_TICK_FROM_SEC(15);
         cfg.external_process = false;
@@ -146,26 +154,49 @@ void MLFileArtwork::startNext()
             if (request->work.generation != request->owner->m_generation) return;
             QMetaObject::invokeMethod(request->owner, [owner = request->owner, work = request->work, success] {
                 if (work.generation != owner->m_generation) { QFile::remove(work.file->path); return; }
-                vlc_preparser_req_Release(owner->m_request);
-                owner->m_request = nullptr;
-                if (success) owner->storeArtwork(work);
-                owner->startNext();
+                owner->finishRequest(work, success
+                    ? QUrl::fromLocalFile(work.file->path).toString(QUrl::FullyEncoded) : QString {});
             });
         }
     };
+    static const vlc_preparser_cbs audioCallbacks = {
+        [](vlc_preparser_req* handle, int status, void* opaque) {
+            std::unique_ptr<Request> request(static_cast<Request*>(opaque));
+            if (request->work.generation != request->owner->m_generation) return;
+            QString artwork;
+            if (status == VLC_SUCCESS) {
+                char* uri = input_item_GetArtURL(vlc_preparser_req_GetItem(handle));
+                const auto url = QUrl::fromEncoded(QByteArray(uri ? uri : ""));
+                free(uri);
+                if (url.isLocalFile()) artwork = url.toString(QUrl::FullyEncoded);
+            }
+            QMetaObject::invokeMethod(request->owner,
+                [owner = request->owner, work = request->work, artwork] {
+                    if (work.generation == owner->m_generation)
+                        owner->finishRequest(work, artwork);
+                });
+        }, nullptr, nullptr
+    };
     input_item_t* item = input_item_New(qtu(work.mrl), nullptr);
     if (m_preparser && item) {
-        vlc_thumbnailer_arg args {};
-        args.seek.type = decltype(args.seek)::VLC_THUMBNAILER_SEEK_POS;
-        args.seek.pos = .15;
-        args.seek.speed = decltype(args.seek)::VLC_THUMBNAILER_SEEK_FAST;
-        vlc_thumbnailer_output output {};
-        output.format = VLC_THUMBNAILER_FORMAT_JPEG;
-        output.width = 512; output.height = 320; output.crop = true;
-        const auto path = work.file->path.toUtf8();
-        output.file_path = path.constData(); output.creat_mode = 0600;
         auto request = std::make_unique<Request>(Request {this, work});
-        m_request = vlc_preparser_req_NewThumbnailToFiles(m_preparser, item, &args, &output, 1, &callbacks, request.get());
+        if (!work.file) {
+            // Read tags and nearby cover files without an online artwork search.
+            m_request = vlc_preparser_req_NewParse(m_preparser, item,
+                VLC_PREPARSER_TYPE_PARSE | VLC_PREPARSER_TYPE_FETCHMETA_LOCAL,
+                &audioCallbacks, request.get());
+        } else {
+            vlc_thumbnailer_arg args {};
+            args.seek.type = decltype(args.seek)::VLC_THUMBNAILER_SEEK_POS;
+            args.seek.pos = .15;
+            args.seek.speed = decltype(args.seek)::VLC_THUMBNAILER_SEEK_FAST;
+            vlc_thumbnailer_output output {};
+            output.format = VLC_THUMBNAILER_FORMAT_JPEG;
+            output.width = 512; output.height = 320; output.crop = true;
+            const auto path = work.file->path.toUtf8();
+            output.file_path = path.constData(); output.creat_mode = 0600;
+            m_request = vlc_preparser_req_NewThumbnailToFiles(m_preparser, item, &args, &output, 1, &callbacks, request.get());
+        }
         if (m_request) {
             Request* context = request.release();
             if (vlc_preparser_Submit(m_preparser, m_request) != VLC_SUCCESS) {
@@ -179,22 +210,30 @@ void MLFileArtwork::startNext()
     if (!m_request) QTimer::singleShot(0, this, &MLFileArtwork::startNext);
 }
 
-void MLFileArtwork::storeArtwork(const Work& work)
+void MLFileArtwork::finishRequest(const Work& work, const QString& artwork)
+{
+    vlc_preparser_req_Release(m_request);
+    m_request = nullptr;
+    if (!artwork.isEmpty()) storeArtwork(work, artwork);
+    startNext();
+}
+
+void MLFileArtwork::storeArtwork(const Work& work, const QString& artwork)
 {
     struct Result { QString artwork; };
-    m_ml->runOnMLThread<Result>(this, [work](vlc_medialibrary_t* ml, Result& result) {
+    m_ml->runOnMLThread<Result>(this, [work, artwork](vlc_medialibrary_t* ml, Result& result) {
         ml_unique_ptr<vlc_ml_media_t> media(vlc_ml_get_media(ml, work.id));
         if (media) {
             // Keep artwork that became available while this decode was running.
             result.artwork = MLMedia(media.get()).smallCover();
             if (result.artwork.isEmpty()) {
-                const auto uri = QUrl::fromLocalFile(work.file->path).toString(QUrl::FullyEncoded);
-                vlc_ml_media_set_thumbnail(ml, work.id, qtu(uri), VLC_ML_THUMBNAIL_SMALL);
+                vlc_ml_media_set_thumbnail(ml, work.id, qtu(artwork), VLC_ML_THUMBNAIL_SMALL);
                 media.reset(vlc_ml_get_media(ml, work.id));
                 if (media) result.artwork = MLMedia(media.get()).smallCover();
             }
         }
-        work.file->imported = QUrl::fromEncoded(result.artwork.toUtf8()) == QUrl::fromLocalFile(work.file->path);
+        if (work.file)
+            work.file->imported = QUrl::fromEncoded(result.artwork.toUtf8()) == QUrl::fromLocalFile(work.file->path);
     }, [this, work](quint64, Result& result) {
         if (!result.artwork.isEmpty() && work.generation == m_generation && m_requested.contains(work.mrl))
             emit artworkChanged(QUrl::fromEncoded(work.mrl.toUtf8()), result.artwork);
