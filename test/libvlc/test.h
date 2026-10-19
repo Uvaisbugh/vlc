@@ -43,6 +43,9 @@
 #include <stdbool.h>
 #include <unistd.h>
 #include <signal.h>
+#ifdef _WIN32
+# include <windows.h>
+#endif
 
 /*********************************************************************
  * Some useful global var
@@ -65,9 +68,27 @@ static const char test_default_sample[] = "mock://";
 
 static inline void test_setup(void)
 {
-    setenv("VLC_PLUGIN_PATH", TOP_BUILDDIR"/modules", 1);
-    setenv("VLC_LIB_PATH", TOP_BUILDDIR"/modules", 1);
+    /* Standalone test executables can use an exported player package. */
+    const char *modules = getenv("VLC_TEST_PLUGIN_PATH");
+    if (modules == NULL || modules[0] == '\0') modules = TOP_BUILDDIR"/modules";
+#ifdef _WIN32
+    assert(_putenv_s("VLC_PLUGIN_PATH", modules) == 0);
+    assert(_putenv_s("VLC_LIB_PATH", modules) == 0);
+#else
+    setenv("VLC_PLUGIN_PATH", modules, 1);
+    setenv("VLC_LIB_PATH", modules, 1);
+#endif
 }
+
+#ifdef _WIN32
+static inline DWORD WINAPI test_watchdog(void *opaque)
+{
+    unsigned seconds = (uintptr_t)opaque;
+    while (seconds-- != 0) Sleep(1000);
+    fputs("testapi: timeout\n", stderr);
+    ExitProcess(124);
+}
+#endif
 
 static inline void test_init (void)
 {
@@ -88,7 +109,16 @@ static inline void test_init (void)
             alarm_timeout = val;
     }
     if (alarm_timeout != 0)
+    {
+#ifdef _WIN32
+        HANDLE watchdog = CreateThread(NULL, 0, test_watchdog,
+                                      (void *)(uintptr_t)alarm_timeout, 0, NULL);
+        assert(watchdog != NULL);
+        CloseHandle(watchdog);
+#else
         alarm (alarm_timeout);
+#endif
+    }
 
     test_setup();
 }
