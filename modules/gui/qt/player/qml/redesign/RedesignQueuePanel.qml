@@ -60,18 +60,20 @@ Item {
             RowLayout {
                 visible: !root.floating
                 anchors.fill: parent; anchors.leftMargin: theme.dp(14); anchors.rightMargin: theme.dp(14)
+                spacing: theme.dp(17)
                 Repeater {
                     model: [qsTr("Queue"), qsTr("Bookmarks"), qsTr("Chapters")]
                     RedesignButton {
                         required property int index
                         required property string modelData
-                        Layout.fillWidth: true
+                        Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1
                         scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
                         caption: root.width > theme.dp(360) ? modelData : ""; text: modelData; selected: root.tab === index
                         iconName: ["queue", "bookmarks", "chapters"][index]
                         iconSize: theme.dp(20)
                         captionFontSize: 12
                         selectedForeground: theme.foreground
+                        selectedIconForeground: Qt.darker(theme.accent, 1.23)
                         foreground: root.tab === index ? theme.foreground : Qt.darker(theme.foreground, 1.5)
                         background: Rectangle { color: parent.hovered ? theme.hover : "transparent"; radius: theme.dp(6) }
                         enabled: index !== 1 || MainCtx.mediaLibraryAvailable
