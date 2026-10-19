@@ -19,6 +19,7 @@
 #include "mlfoldersmodel.hpp"
 #include "medialibrary/medialib.hpp"
 #include <cassert>
+#include <algorithm>
 
 static const char* const ML_FOLDER_ADD_QUEUE = "ML_FOLDER_ADD_QUEUE";
 static const char* const ML_FOLDER_BAN_QUEUE = "ML_FOLDER_BAN_QUEUE";
@@ -37,7 +38,7 @@ MLFoldersBaseModel::MLFoldersBaseModel( QObject *parent )
     connect(&m_refreshTimer, &QTimer::timeout, this, &MLFoldersBaseModel::update);
     connect(this, &MLFoldersBaseModel::onMLEntryPointModified, this, [this] {
         // Coalesce folder events while the library imports or removes media.
-        m_refreshTimer.start();
+        if (!m_refreshTimer.isActive()) m_refreshTimer.start();
     });
 }
 
@@ -183,10 +184,17 @@ void MLFoldersBaseModel::updateImpl(vlc_ml_folder_list_t* (*folderListFunc)( vlc
     //UI thread
     [this, publishRoots = folderListFunc == vlc_ml_list_entry_points](quint64, Ctx& ctx)
     {
-        beginResetModel();
-        m_mrls = std::move(ctx.r);
         m_updatePending = false;
-        endResetModel();
+        const bool unchanged = m_mrls.size() == ctx.r.size()
+            && std::equal(m_mrls.cbegin(), m_mrls.cend(), ctx.r.cbegin(),
+                [](const EntryPoint& a, const EntryPoint& b) {
+                    return a.mrl == b.mrl && a.banned == b.banned && a.containsAudio == b.containsAudio;
+                });
+        if (!unchanged) {
+            beginResetModel();
+            m_mrls = std::move(ctx.r);
+            endResetModel();
+        }
         if (publishRoots && m_mediaLib) {
             QStringList roots;
             for (const auto& entry : m_mrls) if (!entry.banned && !entry.mrl.isEmpty()) roots.append(entry.mrl);
