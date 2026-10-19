@@ -66,15 +66,21 @@ Item {
                     RedesignButton {
                         required property int index
                         required property string modelData
+                        objectName: "queueTab_" + index
                         Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1
                         scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
                         caption: root.width > theme.dp(360) ? modelData : ""; text: modelData; selected: root.tab === index
                         iconName: ["queue", "bookmarks", "chapters"][index]
+                        selectedIconName: ["queue", "bookmarks-two-tone", "chapters-two-tone"][index]
                         iconSize: theme.dp(20)
                         captionFontSize: 12
+                        captionSpacing: 8
+                        topPadding: 0; bottomPadding: theme.dp(2)
                         selectedForeground: theme.foreground
-                        selectedIconForeground: Qt.darker(theme.accent, 1.23)
-                        foreground: root.tab === index ? theme.foreground : Qt.darker(theme.foreground, 1.5)
+                        selectedIconForeground: theme.playerLabel
+                        iconForeground: root.lightTheme ? Qt.lighter(theme.foreground, 1.5) : "#404040"
+                        iconDetailColor: selected ? theme.menuAccent : iconForeground
+                        foreground: root.lightTheme ? Qt.lighter(theme.foreground, 1.5) : theme.playerLabel
                         background: Rectangle { color: parent.hovered ? theme.hover : "transparent"; radius: theme.dp(6) }
                         enabled: index !== 1 || MainCtx.mediaLibraryAvailable
                         onClicked: root.tab = index

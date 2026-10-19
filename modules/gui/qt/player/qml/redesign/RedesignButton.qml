@@ -18,6 +18,7 @@ T.Button {
     property bool filled: false
     property bool selected: false
     property color foreground: primaryAction && enabled ? theme.accent : theme.foreground
+    property color iconForeground: foreground
     property color selectedForeground: theme.accent
     property color selectedIconForeground: theme.accent
     property real iconSize: theme.dp(24)
@@ -68,7 +69,7 @@ T.Button {
             anchors.verticalCenter: parent.verticalCenter
             name: root.selected ? root.selectedIconName : root.iconName
             sidebarReveal: root.iconReveal
-            color: root.iconName === "cone" ? theme.accent : root.accent ? "#161616" : root.selected ? root.selectedIconForeground : root.hovered || root.visualFocus ? theme.bright : root.foreground
+            color: root.iconName === "cone" ? theme.accent : root.accent ? "#161616" : root.selected ? root.selectedIconForeground : root.hovered || root.visualFocus ? theme.bright : root.iconForeground
             detailColor: root.iconDetailColor === undefined ? color : root.iconDetailColor
             opacity: root.enabled ? 1 : root.primaryAction ? 0.5 : 0.35
         }

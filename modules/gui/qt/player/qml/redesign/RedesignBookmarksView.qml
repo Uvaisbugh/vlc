@@ -71,12 +71,14 @@ FocusScope {
             Text {
                 objectName: "bookmarkSummary"; Layout.fillWidth: true
                 text: qsTr("%n bookmark", "%n bookmarks", list.count)
-                color: theme.foreground; font.pixelSize: theme.dp(14); elide: Text.ElideRight
+                font.capitalization: Font.Capitalize
+                color: theme.playerLabel; font.pixelSize: theme.dp(14); elide: Text.ElideRight
             }
             RedesignButton {
                 objectName: "bookmarkRemoveButton"
                 scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
                 width: theme.dp(36); iconName: "remove"; text: qsTr("Remove bookmark")
+                foreground: theme.playerLabel
                 enabled: root.selectedIndex >= 0 && root.selectedIndex < list.count
                 onClicked: root.removeSelection()
             }
@@ -84,6 +86,7 @@ FocusScope {
                 objectName: "bookmarkAddButton"
                 scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
                 width: theme.dp(36); iconName: "add"; text: qsTr("Bookmark current time")
+                foreground: theme.playerLabel
                 enabled: root.canAdd; onClicked: root.addRequested()
             }
         }
@@ -132,7 +135,7 @@ FocusScope {
                     }
                     Text {
                         objectName: "bookmarkTime" + row.index
-                        text: root.timeText(row.timeMS); color: theme.foreground; font.pixelSize: theme.dp(14)
+                        text: root.timeText(row.timeMS); color: theme.playerLabel; font.pixelSize: theme.dp(14)
                     }
                 }
                 TapHandler {

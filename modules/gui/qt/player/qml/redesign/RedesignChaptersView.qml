@@ -102,7 +102,7 @@ FocusScope {
                 Text {
                     objectName: "chapterTime" + row.index
                     text: root.clockText(row.chapterTime)
-                    color: theme.foreground; font.pixelSize: theme.dp(14)
+                    color: theme.playerLabel; font.pixelSize: theme.dp(14)
                 }
             }
         }
