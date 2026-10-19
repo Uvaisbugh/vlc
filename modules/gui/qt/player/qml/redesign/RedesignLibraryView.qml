@@ -45,7 +45,7 @@ Item {
     property bool canGoBack: false
     property bool canGoForward: false
     property bool canEnqueue: true
-    property string defaultItemIcon: category === 4 ? "queue" : category === 2 ? "music" : "video"
+    property string defaultItemIcon: category === 4 ? "queue" : category === 2 ? "music" : category === 3 ? "network" : "video"
     property bool showingFolders: false
     property bool showAddRow: category > 0 && category < 5
     property string addLabel: playlistOpen ? qsTr("Add files") : category === 4 ? qsTr("Create playlist") : category === 3 ? qsTr("Add Network Stream") : qsTr("Add")

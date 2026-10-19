@@ -197,7 +197,7 @@ RedesignLibraryView {
     heading: breadcrumbs.map(entry => entry.label).join(" › ")
     canGoBack: backStack.length > 0
     canGoForward: forwardStack.length > 0
-    defaultItemIcon: homeSection === "artists" ? "artist" : homeSection === "listening" ? "music" : category === 4 && !selectedPlaylist ? "playlist" : category === 2 ? "music" : "video"
+    defaultItemIcon: homeSection === "artists" ? "artist" : homeSection === "listening" ? "music" : category === 4 && !selectedPlaylist ? "playlist" : category === 2 ? "music" : category === 3 ? "network" : "video"
     showingFolders: category === 1 && !currentFolder || showingSongFolders || homeSection === "folders"
     showAddRow: category > 0 && category < 5 && !selectedCollection && (category !== 1 || !currentFolder || (folderLoader.item && folderLoader.item.directoryCount > 0))
     canEnqueue: !(category === 2 && musicSection === "")
