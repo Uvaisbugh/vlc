@@ -547,17 +547,19 @@ Item {
                             surroundColor: mediaButton.down || mediaButton.selected ? theme.selected : mediaButton.hovered ? theme.hover : theme.panel
                         }
                         Text {
+                            objectName: "libraryTitle" + delegate.index
                             x: root.grid ? root.expanded ? 0 : theme.dp(4) : thumbnail.width + theme.dp(10)
                             y: root.grid ? thumbnail.y + thumbnail.height + theme.dp(root.expanded ? 20 : 6) : (parent.height - height) / 2
                             width: root.grid ? parent.width - (root.expanded ? 0 : theme.dp(8)) : Math.max(0, parent.width - x - theme.dp(26))
-                            text: delegate.displayTitle; elide: Text.ElideRight
+                            text: delegate.displayTitle; textFormat: Text.PlainText; elide: Text.ElideRight
                             color: mediaButton.hovered || mediaButton.visualFocus ? theme.bright : root.expanded ? theme.foreground : theme.playerLabel
                             font.pixelSize: theme.dp(root.expanded && root.grid ? 16 : 14)
                         }
                         Text {
+                            objectName: "libraryArtist" + delegate.index
                             visible: root.expanded && root.grid && delegate.itemArtist.length > 0
                             x: 0; y: thumbnail.height + theme.dp(50); width: parent.width
-                            text: delegate.itemArtist; elide: Text.ElideRight
+                            text: delegate.itemArtist; textFormat: Text.PlainText; elide: Text.ElideRight
                             color: theme.foreground; font.pixelSize: theme.dp(16)
                         }
                     }

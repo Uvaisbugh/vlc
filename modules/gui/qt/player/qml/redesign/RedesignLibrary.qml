@@ -149,7 +149,7 @@ RedesignLibraryView {
         : category === 2 ? "music/" + musicSection : "category/" + category
     sortFields: {
         if (homeSectionsVisible || category === 2 && !musicSection && !currentFolder) return []
-        if (currentFolder) return category === 1 ? ["played", "title", "insertion", "uri"] : ["title", "insertion", "uri"]
+        if (currentFolder) return category === 1 ? ["played", "title", "insertion", "uri"] : ["title", "main_artist", "insertion", "uri"]
         if (showingSongFolders) return ["title", "uri"]
         if (homeSection === "folders" || category === 1) return ["title", "uri"]
         if (homeSection === "playlists" || homeSection === "artists") return ["title"]
@@ -181,7 +181,7 @@ RedesignLibraryView {
         {key: "artists", title: homeTitles.artists, model: playedArtists, icon: "artist", emptyText: qsTr("Play music to see artists here.")}
     ]
     itemCount: homeSectionsVisible ? recentVideo.maximumCount + recentAudio.maximumCount + frequentFolders.count + frequentPlaylists.count + playedArtists.maximumCount : currentFolder ? (folderLoader.item ? folderLoader.item.count : 0) : activeModel && activeModel.count !== undefined ? activeModel.count : libraryMediaCount
-    loading: !!currentFolder && !!folderLoader.item && folderLoader.item.watchStatesPending
+    loading: !!currentFolder && !!folderLoader.item && (folderLoader.item.watchStatesPending || folderLoader.item.audioMetadataPending)
     readonly property var activeModel: homeSection ? homeModels[homeSection] : currentFolder ? folderLoader.item : selectedPlaylist ? playlistMedia : selectedCollection ? collectionTracks : category === 4 ? playlists : category === 2 ? (musicSection === "" ? musicCategories : musicSection === "Albums" ? albums : musicSection === "Artists" ? artists : musicSection === "Genres" ? genres : folderEntries) : category === 3 ? streams : category === 0 || category === 5 ? recent : folderEntries
     mediaModel: activeModel
     breadcrumbs: {
@@ -264,7 +264,7 @@ RedesignLibraryView {
             const url = folder.get(index, "fileUrl")
             if (!url) return null
             const isDirectory = folder.get(index, "fileIsDir")
-            return pinTarget(isDirectory ? "folder" : "file", folderPath.location(url), folder.get(index, "fileName"), category, isDirectory ? "folder" : category === 2 ? "music" : "video", isDirectory ? "" : folder.get(index, "thumbnail"), "")
+            return pinTarget(isDirectory ? "folder" : "file", folderPath.location(url), folder.get(index, "title") || folder.get(index, "fileName"), category, isDirectory ? "folder" : category === 2 ? "music" : "video", isDirectory ? "" : folder.get(index, "thumbnail"), "")
         }
         if (category === 1 || showingSongFolders) {
             const item = folderEntries.get(index)
@@ -478,6 +478,12 @@ RedesignLibraryView {
         onWatchStatesReady: serial => {
             if (folderLoader.item) folderLoader.item.finishWatchStates(serial)
         }
+        onAudioMetadataReady: serial => {
+            if (folderLoader.item) folderLoader.item.finishAudioMetadata(serial)
+        }
+        onMediaMetadataChanged: (url, title, artist) => {
+            if (folderLoader.item) folderLoader.item.setMetadata(url, title, artist)
+        }
         onArtworkChanged: (url, artwork) => {
             if (folderLoader.item) folderLoader.item.setArtwork(url, artwork)
             if (!artwork) return
@@ -491,12 +497,14 @@ RedesignLibraryView {
         active: root.currentFolder.length > 0
         sourceComponent: RedesignFolderModel {
             folder: root.currentFolder
+            audioMetadataEnabled: root.category === 2
             nameFilters: DialogsProvider.mediaNameFilters(root.category === 2)
             sortReversed: root.descending
             sortCriteria: root.sortField
             searchPattern: root.searchText
             onArtworkRequested: url => folderArtwork.request(url, root.category !== 2)
             onWatchStatesRequested: (urls, serial) => folderArtwork.requestWatchStates(urls, serial)
+            onAudioMetadataRequested: (urls, serial) => folderArtwork.requestAudioMetadata(urls, serial)
             onWatchStatesCancelled: folderArtwork.cancelWatchStates()
         }
     }

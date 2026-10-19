@@ -69,7 +69,8 @@ private:
 
     void setMedia(const QString &mrl, MLMedia media);
     struct Details { MLMedia media; QString artist; };
-    static Details details(vlc_medialibrary_t* ml, const vlc_ml_media_t* media, bool audioMetadata);
+    static Details details(vlc_medialibrary_t* ml, const vlc_ml_media_t* media, bool audioMetadata,
+                           QHash<int64_t, QString>* artists = nullptr);
     void notifyMetadata(const QString& mrl, const Details& details);
     struct Batch {
         struct Entry { QString mrl; quint64 revision; };
@@ -78,6 +79,7 @@ private:
         quint64 generation;
         std::atomic_bool cancelled {false};
         std::function<void()> completed;
+        QHash<int64_t, QString> artists;
     };
     void readNextBatch();
     std::shared_ptr<Batch> m_batch;

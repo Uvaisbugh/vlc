@@ -31,11 +31,25 @@ void MLFileArtwork::setCtx(MainCtx* ctx)
     if (m_preparser) vlc_preparser_Delete(m_preparser);
     m_preparser = nullptr;
     m_store.reset();
+    m_metadataStore.reset();
     m_ctx = ctx;
     m_ml = ctx ? ctx->getMediaLibrary() : nullptr;
     if (m_ml) {
         m_store = std::make_unique<MLMediaStore>(m_ml);
+        m_metadataStore = std::make_unique<MLMediaStore>(m_ml);
+        m_store->setReadAudioMetadata(true);
+        m_metadataStore->setReadAudioMetadata(true);
         connect(m_store.get(), &MLMediaStore::updated, this, &MLFileArtwork::mediaUpdated);
+        connect(m_metadataStore.get(), &MLMediaStore::updated, this, [this](const QString& mrl, const MLMedia& media) {
+            if (m_stateRequested.contains(mrl))
+                emit mediaPlayedChanged(QUrl::fromEncoded(mrl.toUtf8()), media.valid() && media.playCount() > 0);
+        });
+        for (const auto store : {m_store.get(), m_metadataStore.get()})
+            connect(store, &MLMediaStore::audioMetadataUpdated, this,
+                [this](const QString& mrl, const QString& title, const QString& artist) {
+                    if (m_requested.contains(mrl) || m_stateRequested.contains(mrl))
+                        emit mediaMetadataChanged(QUrl::fromEncoded(mrl.toUtf8()), title, artist);
+                });
     }
     emit ctxChanged();
 }
@@ -53,6 +67,7 @@ void MLFileArtwork::clear()
     m_stateRequested.clear();
     m_attempted.clear();
     if (m_store) m_store->clear();
+    if (m_metadataStore) m_metadataStore->clear();
 }
 
 void MLFileArtwork::request(const QUrl& url, bool generateVideo)
@@ -75,8 +90,9 @@ void MLFileArtwork::mediaUpdated(const QString& mrl, const MLMedia& media)
     const QString artwork = media.valid() ? media.smallCover() : QString {};
     if (!artwork.isEmpty())
         emit artworkChanged(QUrl::fromEncoded(mrl.toUtf8()), artwork);
-    if (!media.valid() || !artwork.isEmpty()) return;
+    if (!media.valid()) return;
     const bool audio = !m_requested[mrl] || media.type() == VLC_ML_MEDIA_TYPE_AUDIO;
+    if (!artwork.isEmpty() && (!audio || media.type() == VLC_ML_MEDIA_TYPE_AUDIO)) return;
     vlc_ml_thumbnail_status_t status;
     media.smallCover(&status);
     if (!audio && status != VLC_ML_THUMBNAIL_STATUS_MISSING && status != VLC_ML_THUMBNAIL_STATUS_FAILURE) return;
@@ -84,7 +100,7 @@ void MLFileArtwork::mediaUpdated(const QString& mrl, const MLMedia& media)
     if (m_attempted.contains(id)) return;
     m_attempted.insert(id);
     if (audio) {
-        m_pending.push_back({mrl, nullptr, id, m_generation.load()});
+        m_pending.push_back({mrl, nullptr, id, m_generation.load(), media.type() != VLC_ML_MEDIA_TYPE_AUDIO});
         startNext();
         return;
     }
@@ -105,8 +121,23 @@ void MLFileArtwork::mediaUpdated(const QString& mrl, const MLMedia& media)
 
 void MLFileArtwork::requestWatchStates(const QList<QUrl>& urls, quint64 serial)
 {
-    if (!m_store) {
-        QTimer::singleShot(0, this, [this, serial] { emit watchStatesReady(serial); });
+    requestMetadataBatch(urls, serial, false);
+}
+
+void MLFileArtwork::requestAudioMetadata(const QList<QUrl>& urls, quint64 serial)
+{
+    requestMetadataBatch(urls, serial, true);
+}
+
+void MLFileArtwork::requestMetadataBatch(const QList<QUrl>& urls, quint64 serial, bool audio)
+{
+    const auto ready = [this, serial, audio, generation = m_generation.load()] {
+        if (generation != m_generation) return;
+        if (audio) emit audioMetadataReady(serial);
+        else emit watchStatesReady(serial);
+    };
+    if (!m_metadataStore) {
+        QTimer::singleShot(0, this, ready);
         return;
     }
     QStringList mrls;
@@ -117,15 +148,15 @@ void MLFileArtwork::requestWatchStates(const QList<QUrl>& urls, quint64 serial)
         m_stateRequested.insert(mrl);
         mrls.append(mrl);
     }
-    m_store->insertMany(mrls, [this, serial, generation = m_generation.load()] {
-        if (generation == m_generation) emit watchStatesReady(serial);
-    });
+    // Keep metadata reads separate from visible artwork lookups and external
+    // record creation, so a batch cannot invalidate those in-flight results.
+    m_metadataStore->insertMany(mrls, ready);
 }
 
 void MLFileArtwork::cancelWatchStates()
 {
     m_stateRequested.clear();
-    if (m_store) m_store->cancelBatch();
+    if (m_metadataStore) m_metadataStore->cancelBatch();
 }
 
 void MLFileArtwork::startNext()
@@ -163,17 +194,27 @@ void MLFileArtwork::startNext()
         [](vlc_preparser_req* handle, int status, void* opaque) {
             std::unique_ptr<Request> request(static_cast<Request*>(opaque));
             if (request->work.generation != request->owner->m_generation) return;
-            QString artwork;
+            QString artwork, title, artist;
             if (status == VLC_SUCCESS) {
-                char* uri = input_item_GetArtURL(vlc_preparser_req_GetItem(handle));
+                const auto item = vlc_preparser_req_GetItem(handle);
+                char* uri = input_item_GetArtURL(item);
                 const auto url = QUrl::fromEncoded(QByteArray(uri ? uri : ""));
                 free(uri);
                 if (url.isLocalFile()) artwork = url.toString(QUrl::FullyEncoded);
+                if (request->work.readMetadata) {
+                    char* value = input_item_GetTitle(item);
+                    title = qfu(value); free(value);
+                    value = input_item_GetArtist(item);
+                    artist = qfu(value); free(value);
+                }
             }
             QMetaObject::invokeMethod(request->owner,
-                [owner = request->owner, work = request->work, artwork] {
-                    if (work.generation == owner->m_generation)
+                [owner = request->owner, work = request->work, artwork, title, artist, status] {
+                    if (work.generation == owner->m_generation) {
+                        if (work.readMetadata && status == VLC_SUCCESS)
+                            emit owner->mediaMetadataChanged(QUrl::fromEncoded(work.mrl.toUtf8()), title, artist);
                         owner->finishRequest(work, artwork);
+                    }
                 });
         }, nullptr, nullptr
     };

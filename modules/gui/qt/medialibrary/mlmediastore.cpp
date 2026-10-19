@@ -30,14 +30,20 @@ static const char *UPDATE_QUEUE = "MLMEDIASTORE_UPDATEQUEUE";
 
 MLMediaStore::~MLMediaStore() = default;
 
-MLMediaStore::Details MLMediaStore::details(vlc_medialibrary_t* ml, const vlc_ml_media_t* media, bool audioMetadata)
+MLMediaStore::Details MLMediaStore::details(vlc_medialibrary_t* ml, const vlc_ml_media_t* media, bool audioMetadata,
+                                          QHash<int64_t, QString>* artists)
 {
     if (!media) return {};
     Details result {MLMedia(media), {}};
     if (audioMetadata && media->i_type == VLC_ML_MEDIA_TYPE_AUDIO
             && media->i_subtype == VLC_ML_MEDIA_SUBTYPE_ALBUMTRACK && media->album_track.i_artist_id > 0) {
-        ml_unique_ptr<vlc_ml_artist_t> artist(vlc_ml_get_artist(ml, media->album_track.i_artist_id));
-        if (artist) result.artist = qfu(artist->psz_name);
+        const auto id = media->album_track.i_artist_id;
+        if (artists && artists->contains(id)) result.artist = artists->value(id);
+        else {
+            ml_unique_ptr<vlc_ml_artist_t> artist(vlc_ml_get_artist(ml, id));
+            if (artist) result.artist = qfu(artist->psz_name);
+            if (artists) artists->insert(id, result.artist);
+        }
     }
     return result;
 }
@@ -144,7 +150,7 @@ void MLMediaStore::readNextBatch()
             for (const auto& entry : chunk) {
                 if (batch->cancelled) break;
                 ml_unique_ptr<vlc_ml_media_t> media {vlc_ml_get_media_by_mrl(ml, qtu(entry.mrl))};
-                result.push_back(details(ml, media.get(), audioMetadata));
+                result.push_back(details(ml, media.get(), audioMetadata, &batch->artists));
             }
         },
         [this, batch, chunk](quint64, QVector<Details>& result) {

@@ -199,9 +199,16 @@ private slots:
         QCOMPARE(updated.count(), 1);
         QCOMPARE(metadata.count(), enabled ? 1 : 0);
         if (enabled) QCOMPARE(metadata[0], (QVariantList{mrl, "Track title", "Artist"}));
+        QStringList files;
+        for (int i = 0; i < 80; ++i) files.append(QStringLiteral("file://server/music/%1.mp3").arg(i));
+        finished = false;
+        store.insertMany(files, [&] { finished = true; });
+        QTRY_VERIFY(finished);
+        QCOMPARE(updated.count(), 81);
+        QCOMPARE(artistReads.load(), enabled ? 2 : 0); // One artist read across both 64-item chunks.
         store.insert(mrl);
-        QTRY_COMPARE(updated.count(), 2);
-        QCOMPARE(artistReads.load(), enabled ? 2 : 0);
+        QTRY_COMPARE(updated.count(), 82);
+        QCOMPARE(artistReads.load(), enabled ? 3 : 0);
         QVERIFY(workerOnly.load());
         QCOMPARE(writes.load(), 0);
     }

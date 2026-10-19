@@ -15,6 +15,99 @@ class TestRedesignFolderModel : public QObject
         QVERIFY(file.open(QIODevice::WriteOnly));
     }
 private slots:
+    void audioMetadataSortAndSearchKeepFileIdentity() {
+        QTemporaryDir directory;
+        QDir dir(directory.path());
+        QVERIFY(dir.mkdir("folder"));
+        for (const auto* name : {"01.mp3", "02.mp3", "03.mp3"}) touch(dir.filePath(name));
+        RedesignFolderModel model;
+        model.setAudioMetadataEnabled(true);
+        QSignalSpy requested(&model, &RedesignFolderModel::audioMetadataRequested);
+        QSignalSpy artwork(&model, &RedesignFolderModel::artworkRequested);
+        model.setFolder(QUrl::fromLocalFile(directory.path()));
+        QTRY_COMPARE(model.count(), 4);
+        QTRY_COMPARE(requested.count(), 1);
+        QCOMPARE(requested[0][0].value<QList<QUrl>>().size(), 3);
+        const auto a = model.get(1, "fileUrl").toUrl();
+        const auto b = model.get(2, "fileUrl").toUrl();
+        const auto c = model.get(3, "fileUrl").toUrl();
+        QPersistentModelIndex selected(model.index(1));
+        QSignalSpy reset(&model, &RedesignFolderModel::modelReset);
+        model.setMetadata(a, "Zulu", "Alpha artist");
+        model.setMetadata(b, "Alpha", "Zulu artist");
+        model.setMetadata(c, "", "Beta artist");
+        model.finishAudioMetadata(requested[0][1].toULongLong());
+        QTRY_COMPARE(model.get(1, "fileUrl").toUrl(), c);
+        QCOMPARE(model.get(2, "fileUrl").toUrl(), b);
+        QCOMPARE(selected.row(), 3);
+        QCOMPARE(artwork.count(), 0); // Cached metadata does not decode unseen media.
+        QCOMPARE(model.get(0, "title").toString(), "folder");
+        QCOMPARE(model.get(1, "title").toString(), "03.mp3"); // Untagged title fallback.
+        QCOMPARE(model.get(2, "title").toString(), "Alpha");
+        QCOMPARE(model.get(2, "main_artist").toString(), "Zulu artist");
+        model.setSortCriteria("main_artist");
+        QTRY_COMPARE(model.get(1, "fileUrl").toUrl(), a);
+        QCOMPARE(selected.row(), 1);
+        model.setSortReversed(true);
+        QTRY_COMPARE(model.get(1, "fileUrl").toUrl(), b);
+        QCOMPARE(model.get(3, "fileUrl").toUrl(), a);
+        QCOMPARE(reset.count(), 0);
+        model.setSearchPattern("BETA ARTIST");
+        QTRY_COMPARE(model.count(), 1);
+        QCOMPARE(model.get(0, "fileUrl").toUrl(), c);
+        model.setSearchPattern("Zulu");
+        QTRY_COMPARE(model.count(), 2); // Title and artist matches both work.
+        model.setSearchPattern("02.mp3");
+        QTRY_COMPARE(model.count(), 1);
+        QCOMPARE(model.get(0, "fileUrl").toUrl(), b);
+        model.setSearchPattern("");
+        QTRY_COMPARE(model.count(), 4);
+        QCOMPARE(requested.count(), 1); // Sort and search use the cached folder snapshot.
+    }
+    void audioMetadataCanRevealAHiddenSearchResult() {
+        QTemporaryDir directory;
+        touch(QDir(directory.path()).filePath("01.mp3"));
+        RedesignFolderModel model;
+        model.setAudioMetadataEnabled(true);
+        model.setSearchPattern("Artist");
+        QSignalSpy requested(&model, &RedesignFolderModel::audioMetadataRequested);
+        model.setFolder(QUrl::fromLocalFile(directory.path()));
+        QTRY_COMPARE(requested.count(), 1);
+        QCOMPARE(model.count(), 0);
+        const auto url = requested[0][0].value<QList<QUrl>>()[0];
+        model.setMetadata(url, "A title", "An Artist");
+        model.finishAudioMetadata(requested[0][1].toULongLong());
+        QTRY_COMPARE(model.count(), 1);
+        QCOMPARE(model.get(0, "fileUrl").toUrl(), url);
+        QVERIFY(!model.audioMetadataPending());
+    }
+    void oldAudioMetadataCannotChangeAnotherFolderOrVideoView() {
+        QTemporaryDir first, second;
+        touch(QDir(first.path()).filePath("01.mp3"));
+        touch(QDir(second.path()).filePath("01.mp3"));
+        RedesignFolderModel model;
+        model.setAudioMetadataEnabled(true);
+        QSignalSpy requested(&model, &RedesignFolderModel::audioMetadataRequested);
+        model.setFolder(QUrl::fromLocalFile(first.path()));
+        QTRY_COMPARE(requested.count(), 1);
+        QTRY_COMPARE(model.count(), 1);
+        const auto url = model.get(0, "fileUrl").toUrl();
+        model.setFolder(QUrl::fromLocalFile(second.path()));
+        QTRY_COMPARE(requested.count(), 2);
+        model.setMetadata(url, "Old title", "Old artist");
+        model.finishAudioMetadata(requested[0][1].toULongLong());
+        QVERIFY(model.audioMetadataPending());
+        QTRY_COMPARE(model.count(), 1);
+        QCOMPARE(model.get(0, "title").toString(), "01.mp3");
+        const auto current = model.get(0, "fileUrl").toUrl();
+        model.setMetadata(current, "Current", "Artist");
+        QCOMPARE(model.get(0, "title").toString(), "Current");
+        model.setAudioMetadataEnabled(false);
+        model.setMetadata(current, "Late", "Late");
+        model.finishAudioMetadata(requested[1][1].toULongLong());
+        QCOMPARE(model.get(0, "title").toString(), "01.mp3");
+        QVERIFY(!model.audioMetadataPending());
+    }
     void watchSortingKeepsDirectoriesFirstAndPreservesFileIdentity() {
         QTemporaryDir directory;
         QDir dir(directory.path());

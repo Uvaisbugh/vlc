@@ -26,27 +26,35 @@ QUrl normalizeFolderUrl(const QUrl& folder)
 }
 
 void sortEntries(QFileInfoList& entries, const QString& sort, bool reversed,
-                 const QHash<QUrl, bool>& played)
+                 const QHash<QUrl, bool>& played, const QHash<QUrl, RedesignFolderMetadata>& metadata)
 {
-    std::sort(entries.begin(), entries.end(), [&sort, reversed, &played](const QFileInfo& a, const QFileInfo& b) {
+    std::sort(entries.begin(), entries.end(), [&sort, reversed, &played, &metadata](const QFileInfo& a, const QFileInfo& b) {
         if (a.isDir() != b.isDir()) return a.isDir();
+        const auto title = [&metadata](const QFileInfo& file) {
+            const auto value = metadata.value(QUrl::fromLocalFile(file.absoluteFilePath())).title;
+            return value.isEmpty() ? file.fileName() : value;
+        };
         int primary;
         if (sort == "played") {
             const bool av = !a.isDir() && played.value(QUrl::fromLocalFile(a.absoluteFilePath()), false);
             const bool bv = !b.isDir() && played.value(QUrl::fromLocalFile(b.absoluteFilePath()), false);
             if (av != bv) return reversed ? av : !av;
             // Watch groups keep a predictable title order in both directions.
-            primary = QString::compare(a.fileName(), b.fileName(), Qt::CaseInsensitive);
+            primary = QString::compare(title(a), title(b), Qt::CaseInsensitive);
             if (primary) return primary < 0;
         } else {
-            if (sort == "insertion") {
+            if (sort == "main_artist") {
+                primary = QString::compare(metadata.value(QUrl::fromLocalFile(a.absoluteFilePath())).artist,
+                    metadata.value(QUrl::fromLocalFile(b.absoluteFilePath())).artist, Qt::CaseInsensitive);
+                if (!primary) primary = QString::compare(title(a), title(b), Qt::CaseInsensitive);
+            } else if (sort == "insertion") {
                 const auto av = a.lastModified();
                 const auto bv = b.lastModified();
                 primary = av < bv ? -1 : av > bv ? 1 : 0;
             } else if (sort == "uri") {
                 primary = QUrl::fromLocalFile(a.absoluteFilePath()).toEncoded().compare(
                     QUrl::fromLocalFile(b.absoluteFilePath()).toEncoded());
-            } else primary = QString::compare(a.fileName(), b.fileName(), Qt::CaseInsensitive);
+            } else primary = QString::compare(title(a), title(b), Qt::CaseInsensitive);
             if (primary) return reversed ? primary > 0 : primary < 0;
         }
         return a.fileName() < b.fileName();
@@ -62,16 +70,20 @@ RedesignFolderModel::RedesignFolderModel(QObject* parent)
         [](RedesignFolderScanResult* result) { result->deleteLater(); });
     connect(m_results.get(), &RedesignFolderScanResult::ready, this,
         [this](quint64 serial, const QFileInfoList& entries) {
-            if (serial == m_serial)
-                replaceEntries(entries);
+            if (serial != m_serial) return;
+            m_allEntries = entries;
+            m_forceReset = true;
+            if (m_audioMetadataEnabled) requestAudioMetadata();
+            if (m_sortCriteria == "played") requestWatchStates();
+            scheduleSort();
         });
     connect(m_results.get(), &RedesignFolderScanResult::infoReady, this, &RedesignFolderModel::infoReady);
-    connect(m_results.get(), &RedesignFolderScanResult::watchSorted, this,
+    connect(m_results.get(), &RedesignFolderScanResult::sorted, this,
         [this](quint64 serial, const QFileInfoList& entries) {
-            m_watchSortRunning = false;
-            if (serial == m_watchSortSerial && m_sortCriteria == "played" && !m_watchStatesPending)
-                applyWatchOrder(entries);
-            if (m_watchSortNeeded) QTimer::singleShot(0, this, &RedesignFolderModel::startWatchSort);
+            m_sortRunning = false;
+            if (serial == m_sortSerial)
+                applyOrder(entries);
+            if (m_sortNeeded) QTimer::singleShot(0, this, &RedesignFolderModel::startSort);
         });
     connect(&m_watcher, &QFileSystemWatcher::directoryChanged, this,
         &RedesignFolderModel::scheduleRefresh);
@@ -85,6 +97,8 @@ void RedesignFolderModel::setFolder(const QUrl& folder)
     m_folder = normalized;
     ++m_folderSerial;
     m_artwork.clear();
+    m_metadata.clear();
+    m_metadataRequested.clear();
     m_progress.clear();
     m_played.clear();
     m_watchRequested.clear();
@@ -94,6 +108,7 @@ void RedesignFolderModel::setFolder(const QUrl& folder)
         m_watcher.removePaths(watched);
     if (m_folder.isLocalFile() && QFileInfo(m_folder.toLocalFile()).isDir())
         m_watcher.addPath(m_folder.toLocalFile());
+    m_allEntries.clear();
     replaceEntries({});
     scheduleRefresh();
     emit folderChanged();
@@ -103,6 +118,8 @@ void RedesignFolderModel::refresh()
 {
     ++m_folderSerial;
     m_artwork.clear();
+    m_metadata.clear();
+    m_metadataRequested.clear();
     m_progress.clear();
     m_played.clear();
     m_watchRequested.clear();
@@ -161,19 +178,23 @@ void RedesignFolderModel::setSortReversed(bool reversed)
     if (m_sortReversed == reversed)
         return;
     m_sortReversed = reversed;
-    if (m_sortCriteria == "played") scheduleWatchSort();
-    else scheduleRefresh();
+    scheduleSort();
     emit sortReversedChanged();
 }
 
 void RedesignFolderModel::setSortCriteria(const QString& criteria)
 {
-    if (criteria != "title" && criteria != "insertion" && criteria != "uri" && criteria != "played")
+    if (criteria != "title" && criteria != "insertion" && criteria != "uri" && criteria != "played" && criteria != "main_artist")
         return;
     if (m_sortCriteria == criteria) return;
     m_sortCriteria = criteria;
     if (criteria == "played") requestWatchStates();
-    else scheduleRefresh();
+    else {
+        ++m_watchRequestSerial;
+        setWatchStatesPending(false);
+        if (!m_audioMetadataEnabled) emit watchStatesCancelled();
+        scheduleSort();
+    }
     emit sortCriteriaChanged();
 }
 
@@ -188,8 +209,66 @@ void RedesignFolderModel::setSearchPattern(const QString& pattern)
     if (m_searchPattern == pattern)
         return;
     m_searchPattern = pattern;
-    scheduleRefresh();
+    if (m_sortCriteria == "played") {
+        emit watchStatesCancelled();
+        requestWatchStates();
+    }
+    scheduleSort();
     emit searchPatternChanged();
+}
+
+void RedesignFolderModel::setAudioMetadataEnabled(bool enabled)
+{
+    if (m_audioMetadataEnabled == enabled) return;
+    m_audioMetadataEnabled = enabled;
+    m_metadata.clear();
+    m_metadataRequested.clear();
+    ++m_audioMetadataSerial;
+    setAudioMetadataPending(false);
+    if (enabled) requestAudioMetadata();
+    else emit watchStatesCancelled();
+    scheduleSort();
+    emit audioMetadataEnabledChanged();
+}
+
+void RedesignFolderModel::setAudioMetadataPending(bool pending)
+{
+    if (m_audioMetadataPending == pending) return;
+    m_audioMetadataPending = pending;
+    emit audioMetadataPendingChanged();
+}
+
+void RedesignFolderModel::requestAudioMetadata()
+{
+    const auto serial = ++m_audioMetadataSerial;
+    QList<QUrl> urls;
+    for (const auto& file : std::as_const(m_allEntries)) {
+        if (file.isDir()) continue;
+        const auto url = QUrl::fromLocalFile(file.absoluteFilePath());
+        urls.append(url);
+        m_metadataRequested.insert(url);
+    }
+    setAudioMetadataPending(!urls.isEmpty());
+    if (!urls.isEmpty()) emit audioMetadataRequested(urls, serial);
+}
+
+void RedesignFolderModel::finishAudioMetadata(quint64 serial)
+{
+    if (serial != m_audioMetadataSerial || !m_audioMetadataEnabled || !m_audioMetadataPending) return;
+    setAudioMetadataPending(false);
+    scheduleSort();
+}
+
+void RedesignFolderModel::setMetadata(const QUrl& url, const QString& title, const QString& artist)
+{
+    if (!m_audioMetadataEnabled || (!m_metadataRequested.contains(url) && !m_artworkRequested.contains(url))) return;
+    const auto old = m_metadata.value(url);
+    if (old.title == title && old.artist == artist) return;
+    m_metadata.insert(url, {title, artist});
+    const auto row = m_rowsByUrl.value(url, -1);
+    if (row >= 0) emit dataChanged(index(row), index(row), {Title, Artist, Qt::DisplayRole});
+    if (!m_audioMetadataPending && (m_sortCriteria == "title" || m_sortCriteria == "main_artist" || !m_searchPattern.isEmpty()))
+        scheduleSort();
 }
 
 int RedesignFolderModel::rowCount(const QModelIndex& parent) const
@@ -200,7 +279,7 @@ int RedesignFolderModel::rowCount(const QModelIndex& parent) const
 QHash<int, QByteArray> RedesignFolderModel::roleNames() const
 {
     return {{FileName, "fileName"}, {FileUrl, "fileUrl"}, {FileIsDir, "fileIsDir"},
-            {Thumbnail, "thumbnail"}, {Progress, "progress"}};
+            {Thumbnail, "thumbnail"}, {Progress, "progress"}, {Title, "title"}, {Artist, "main_artist"}};
 }
 
 QVariant RedesignFolderModel::data(const QModelIndex& index, int role) const
@@ -209,13 +288,18 @@ QVariant RedesignFolderModel::data(const QModelIndex& index, int role) const
         return {};
     const auto& file = m_entries.at(index.row());
     switch (role) {
-    case Qt::DisplayRole:
     case FileName: return file.fileName();
     case FileUrl: return QUrl::fromLocalFile(file.absoluteFilePath());
     case FileIsDir: return file.isDir();
+    case Qt::DisplayRole:
+    case Title:
+    case Artist:
     case Thumbnail:
     case Progress: {
-        if (file.isDir()) return role == Thumbnail ? QVariant(QString {}) : QVariant(0.0);
+        if (file.isDir()) {
+            if (role == Title || role == Qt::DisplayRole) return file.fileName();
+            return role == Progress ? QVariant(0.0) : QVariant(QString {});
+        }
         const auto url = QUrl::fromLocalFile(file.absoluteFilePath());
         if (!m_artworkRequested.contains(url)) {
             m_artworkRequested.insert(url);
@@ -225,7 +309,11 @@ QVariant RedesignFolderModel::data(const QModelIndex& index, int role) const
                     emit self->artworkRequested(url);
             });
         }
-        return role == Thumbnail ? QVariant(m_artwork.value(url)) : QVariant(m_progress.value(url, 0.0));
+        if (role == Thumbnail) return m_artwork.value(url);
+        if (role == Progress) return m_progress.value(url, 0.0);
+        const auto info = m_audioMetadataEnabled ? m_metadata.value(url) : RedesignFolderMetadata {};
+        if (role == Artist) return info.artist;
+        return info.title.isEmpty() ? file.fileName() : info.title;
     }
     default: return {};
     }
@@ -261,7 +349,7 @@ void RedesignFolderModel::setPlayed(const QUrl& url, bool played)
     const bool previous = m_played.value(url, false);
     m_played.insert(url, played);
     if (previous != played && m_rowsByUrl.contains(url) && m_sortCriteria == "played" && !m_watchStatesPending)
-        scheduleWatchSort();
+        scheduleSort();
 }
 
 void RedesignFolderModel::setWatchStatesPending(bool pending)
@@ -273,17 +361,17 @@ void RedesignFolderModel::setWatchStatesPending(bool pending)
 
 void RedesignFolderModel::requestWatchStates()
 {
-    ++m_watchSortSerial;
+    ++m_sortSerial;
     const auto serial = ++m_watchRequestSerial;
     QList<QUrl> urls;
-    for (const auto& file : std::as_const(m_entries)) {
-        if (file.isDir()) continue;
+    for (const auto& file : std::as_const(m_allEntries)) {
+        if (file.isDir() || !file.fileName().contains(m_searchPattern, Qt::CaseInsensitive)) continue;
         const auto url = QUrl::fromLocalFile(file.absoluteFilePath());
         urls.append(url);
         m_watchRequested.insert(url);
     }
     setWatchStatesPending(!urls.isEmpty());
-    if (urls.isEmpty()) scheduleWatchSort();
+    if (urls.isEmpty()) scheduleSort();
     else emit watchStatesRequested(urls, serial);
 }
 
@@ -291,36 +379,53 @@ void RedesignFolderModel::finishWatchStates(quint64 serial)
 {
     if (serial != m_watchRequestSerial || m_sortCriteria != "played" || !m_watchStatesPending) return;
     setWatchStatesPending(false);
-    scheduleWatchSort();
+    scheduleSort();
 }
 
-void RedesignFolderModel::scheduleWatchSort()
+void RedesignFolderModel::scheduleSort()
 {
-    ++m_watchSortSerial;
-    if (m_watchSortNeeded) return;
-    m_watchSortNeeded = true;
-    QTimer::singleShot(0, this, &RedesignFolderModel::startWatchSort);
+    ++m_sortSerial;
+    if (m_sortNeeded) return;
+    m_sortNeeded = true;
+    QTimer::singleShot(0, this, &RedesignFolderModel::startSort);
 }
 
-void RedesignFolderModel::startWatchSort()
+void RedesignFolderModel::startSort()
 {
-    if (m_watchSortRunning || !m_watchSortNeeded || m_watchStatesPending || m_sortCriteria != "played") return;
-    m_watchSortNeeded = false;
-    m_watchSortRunning = true;
+    if (m_sortRunning || !m_sortNeeded) return;
+    m_sortNeeded = false;
+    m_sortRunning = true;
     const auto results = m_results;
-    const auto serial = m_watchSortSerial;
+    const auto serial = m_sortSerial;
     const auto played = m_played;
     const auto reversed = m_sortReversed;
-    auto entries = m_entries;
-    QThreadPool::globalInstance()->start([results, serial, played, reversed, entries = std::move(entries)]() mutable {
-        sortEntries(entries, QStringLiteral("played"), reversed, played);
-        emit results->watchSorted(serial, entries);
+    const auto sort = m_sortCriteria;
+    const auto search = m_searchPattern;
+    const auto metadata = m_audioMetadataEnabled ? m_metadata : QHash<QUrl, RedesignFolderMetadata> {};
+    auto entries = m_allEntries;
+    QThreadPool::globalInstance()->start([results, serial, played, reversed, sort, search, metadata, entries = std::move(entries)]() mutable {
+        if (!search.isEmpty())
+            entries.erase(std::remove_if(entries.begin(), entries.end(), [&search, &metadata](const QFileInfo& file) {
+                const auto info = metadata.value(QUrl::fromLocalFile(file.absoluteFilePath()));
+                return !file.fileName().contains(search, Qt::CaseInsensitive)
+                    && !info.title.contains(search, Qt::CaseInsensitive) && !info.artist.contains(search, Qt::CaseInsensitive);
+            }), entries.end());
+        sortEntries(entries, sort, reversed, played, metadata);
+        emit results->sorted(serial, entries);
     });
 }
 
-void RedesignFolderModel::applyWatchOrder(const QFileInfoList& entries)
+void RedesignFolderModel::applyOrder(const QFileInfoList& entries)
 {
-    if (entries.size() != m_entries.size()) return;
+    if (m_forceReset) {
+        m_forceReset = false;
+        replaceEntries(entries);
+        return;
+    }
+    bool sameFiles = entries.size() == m_entries.size();
+    if (sameFiles) for (const auto& file : entries)
+        sameFiles &= m_rowsByUrl.contains(QUrl::fromLocalFile(file.absoluteFilePath()));
+    if (!sameFiles) { replaceEntries(entries); return; }
     bool changed = false;
     for (qsizetype row = 0; row < entries.size(); ++row)
         changed |= entries[row].absoluteFilePath() != m_entries[row].absoluteFilePath();
@@ -351,8 +456,10 @@ void RedesignFolderModel::scheduleRefresh()
 {
     ++m_serial;
     ++m_watchRequestSerial;
-    ++m_watchSortSerial;
-    m_watchSortNeeded = false;
+    ++m_audioMetadataSerial;
+    setAudioMetadataPending(false);
+    ++m_sortSerial;
+    m_sortNeeded = false;
     setWatchStatesPending(false);
     emit watchStatesCancelled();
     if (m_refreshPending)
@@ -370,11 +477,7 @@ void RedesignFolderModel::scan()
     const auto folder = m_folder;
     const auto filters = m_nameFilters;
     const auto serial = m_serial;
-    const auto reversed = m_sortReversed;
-    const auto sort = m_sortCriteria;
-    const auto search = m_searchPattern;
-    const auto played = m_played;
-    QThreadPool::globalInstance()->start([results, folder, filters, serial, reversed, sort, search, played] {
+    QThreadPool::globalInstance()->start([results, folder, filters, serial] {
         QFileInfoList entries;
         if (folder.isLocalFile()) {
             QDir directory(folder.toLocalFile());
@@ -382,11 +485,6 @@ void RedesignFolderModel::scan()
                 QDir::AllEntries | QDir::AllDirs | QDir::Readable | QDir::NoDotAndDotDot,
                 QDir::NoSort);
         }
-        if (!search.isEmpty())
-            entries.erase(std::remove_if(entries.begin(), entries.end(), [&search](const QFileInfo& file) {
-                return !file.fileName().contains(search, Qt::CaseInsensitive);
-            }), entries.end());
-        sortEntries(entries, sort, reversed, played);
         emit results->ready(serial, entries);
     });
 }
@@ -401,7 +499,6 @@ void RedesignFolderModel::replaceEntries(const QFileInfoList& entries)
     endResetModel();
     if (oldCount != count() || oldDirectoryCount != directoryCount())
         emit countChanged();
-    if (m_sortCriteria == "played") requestWatchStates();
 }
 
 void RedesignFolderModel::rebuildRows()

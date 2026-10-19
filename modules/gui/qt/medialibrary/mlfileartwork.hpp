@@ -30,6 +30,7 @@ public:
     void setCtx(MainCtx* ctx);
     Q_INVOKABLE void request(const QUrl& url, bool generateVideo);
     Q_INVOKABLE void requestWatchStates(const QList<QUrl>& urls, quint64 serial);
+    Q_INVOKABLE void requestAudioMetadata(const QList<QUrl>& urls, quint64 serial);
     Q_INVOKABLE void cancelWatchStates();
     Q_INVOKABLE void clear();
 signals:
@@ -38,20 +39,24 @@ signals:
     void mediaProgressChanged(const QUrl& url, qreal progress);
     void mediaPlayedChanged(const QUrl& url, bool played);
     void watchStatesReady(quint64 serial);
+    void audioMetadataReady(quint64 serial);
+    void mediaMetadataChanged(const QUrl& url, const QString& title, const QString& artist);
 private:
+    void requestMetadataBatch(const QList<QUrl>& urls, quint64 serial, bool audio);
     void mediaUpdated(const QString& mrl, const MLMedia& media);
     struct ExportedFile {
         QString path;
         bool imported = false;
         ~ExportedFile();
     };
-    struct Work { QString mrl; std::shared_ptr<ExportedFile> file; int64_t id; quint64 generation; };
+    struct Work { QString mrl; std::shared_ptr<ExportedFile> file; int64_t id; quint64 generation; bool readMetadata = false; };
     void startNext();
     void finishRequest(const Work& work, const QString& artwork);
     void storeArtwork(const Work& work, const QString& artwork);
     MainCtx* m_ctx = nullptr;
     MediaLib* m_ml = nullptr;
     std::unique_ptr<MLMediaStore> m_store;
+    std::unique_ptr<MLMediaStore> m_metadataStore;
     QHash<QString, bool> m_requested;
     QSet<QString> m_stateRequested;
     QSet<int64_t> m_attempted;
