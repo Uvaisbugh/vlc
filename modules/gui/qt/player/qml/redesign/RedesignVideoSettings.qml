@@ -112,10 +112,10 @@ ColumnLayout {
         property string help
         property string emptyText
         Layout.fillWidth: true; Layout.minimumHeight: theme.dp(68)
-        Text { Layout.fillWidth: true; text: parent.label; color: theme.playerLabel; font.pixelSize: theme.dp(14); wrapMode: Text.WordWrap }
+        Text { Layout.fillWidth: true; Layout.preferredWidth: theme.dp(129); Layout.minimumWidth: 0; text: parent.label; color: theme.playerLabel; font.pixelSize: theme.dp(14); wrapMode: Text.WordWrap }
         RedesignComboBox {
             objectName: parent.optionName + "Choice"
-            Layout.preferredWidth: Math.min(theme.dp(217), root.width * .61); Layout.minimumWidth: 0
+            Layout.fillWidth: true; Layout.preferredWidth: theme.dp(217); Layout.maximumWidth: theme.dp(217); Layout.minimumWidth: 0
             implicitHeight: theme.dp(46)
             scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
             model: parent.choices; textRole: "label"; valueRole: "value"

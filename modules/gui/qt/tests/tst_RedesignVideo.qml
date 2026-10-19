@@ -46,6 +46,20 @@ TestCase {
         function reset(name) { stage(name, describe(name).defaultValue) }
     }
     RedesignVideoSettings { id: video; x: 24; width: 356; backend: store }
+    Component { id: freshPanel; RedesignVideoSettings { width: 0; backend: store } }
+    function test_newPanelSettlesWithoutRecursiveLayout() {
+        failOnWarning(/Detected recursive rearrange/)
+        const panel = createTemporaryObject(freshPanel, testCase)
+        verify(panel !== null)
+        for (const width of [356, 260, 356]) {
+            panel.width = width
+            verify(waitForRendering(panel))
+            const section = findChild(panel, "videoGeometrySection")
+            section.expanded = true
+            verify(waitForRendering(panel))
+            verify(panel.implicitHeight > 0)
+        }
+    }
     function item(name) { return findChild(video, name) }
     function init() {
         video.width = 356

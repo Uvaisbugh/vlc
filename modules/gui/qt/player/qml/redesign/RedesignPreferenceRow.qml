@@ -37,6 +37,9 @@ ColumnLayout {
     readonly property real factor: presentation.factor || 1
     readonly property bool fullWidth: !!presentation.fullWidth
     readonly property bool compact: !!presentation.compact
+    readonly property real preferredEditorWidth: compact ? editor === "language"
+        ? Math.min(theme.dp(184), Math.max(theme.dp(138), languageMetrics.advanceWidth + theme.dp(56)))
+        : theme.dp(compactEditorWidth) : theme.dp(320)
     readonly property string helpText: presentation.help || description.help || ""
     readonly property RedesignTheme theme: RedesignTheme { scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor }
     readonly property bool available: description.kind !== undefined
@@ -74,7 +77,11 @@ ColumnLayout {
         implicitHeight: available ? Math.max(theme.dp(root.presentation.rowHeight || (root.presentation.inlineSlider ? 42 : 44)), labelText.implicitHeight + theme.dp(10)) : 0
         Item {
             id: labelArea
-            Layout.fillWidth: true; Layout.preferredWidth: 1
+            Layout.fillWidth: true
+            // Use intrinsic size hints so the editor cannot change this row's
+            // implicit width while its parent is arranging the controls.
+            Layout.preferredWidth: Math.max(0, root.preferredEditorWidth * (root.compact ? 39 / 61 : 57 / 43) - theme.dp(10))
+            Layout.minimumWidth: 0
             implicitHeight: Math.max(labelText.implicitHeight, theme.dp(20))
             HoverHandler { id: rowHover }
             Text {
@@ -110,9 +117,9 @@ ColumnLayout {
             active: visible
             enabled: root.editorEnabled
             Layout.minimumWidth: root.editorComponent === toggleEditor && item ? item.implicitWidth : 0
-            Layout.preferredWidth: root.compact ? root.editor === "language"
-                ? Math.min(theme.dp(184),Math.max(theme.dp(138),languageMetrics.advanceWidth+theme.dp(56))) : Math.min(theme.dp(root.compactEditorWidth), root.width * .61)
-                : Math.min(theme.dp(320), Math.max(theme.dp(150), root.width * 0.43))
+            Layout.fillWidth: true
+            Layout.preferredWidth: root.preferredEditorWidth
+            Layout.maximumWidth: root.preferredEditorWidth
             Layout.preferredHeight: item ? item.implicitHeight || theme.dp(34) : theme.dp(34)
             sourceComponent: root.editorComponent
         }
