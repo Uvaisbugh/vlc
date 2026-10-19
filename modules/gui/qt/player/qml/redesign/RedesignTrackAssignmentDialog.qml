@@ -687,8 +687,7 @@ C.Dialog {
             scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
             caption: root.saving ? qsTr("Saving…") : qsTr("Save"); text: caption
             enabled: !root.saving && !root.loading && !root.loadingSources && !root.loadingDrop && !root.matching && (root.changedRows.length > 0 || root.folderRuleChanged)
-            foreground: root.theme.accent
-            background: Rectangle { radius: root.theme.dp(6); color: root.theme.progress; border.color: parent.visualFocus ? root.theme.accent : "transparent"; opacity: parent.enabled ? 1 : 0.4 }
+            primaryAction: true
             onClicked: root.submit()
         }
     }

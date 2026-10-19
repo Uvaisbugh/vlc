@@ -354,7 +354,7 @@ Item {
                         anchors.horizontalCenter: parent.horizontalCenter; y: root.theme.dp(14)
                         width: root.theme.dp(28); height: root.theme.dp(32)
                         stroke: cell.activeFocus ? root.theme.accent : root.theme.playerLabel
-                        RedesignIcon { anchors.centerIn: parent; width: root.theme.dp(24); height: width; name: cell.modelData.icon; color: cell.modelData.id === "thumbnail" ? root.theme.background : root.theme.foreground }
+                        RedesignIcon { anchors.centerIn: parent; width: root.theme.dp(24); height: width; name: cell.modelData.icon; color: cell.modelData.id === "thumbnail" ? root.theme.lightTheme ? "#a3a3a3" : "#303030" : root.theme.foreground }
                     }
                     Text {
                         x: root.theme.dp(5); y: root.theme.dp(62); width: parent.width - root.theme.dp(10); height: root.theme.dp(40)
@@ -389,8 +389,7 @@ Item {
                 x: parent.width - width - root.theme.dp(20); y: parent.height - root.theme.dp(52); width: root.theme.dp(100); height: root.theme.dp(32)
                 scaleFactor: root.theme.scaleFactor; lightTheme: root.theme.lightTheme; accentColor: root.theme.accentColor
                 caption: qsTr("Save"); text: caption; enabled: root.model.dirty && !root.saving; onClicked: root.save()
-                foreground: root.theme.accent
-                background: Rectangle { radius: root.theme.dp(6); color: parent.hovered ? root.theme.selected : root.theme.progress; border.width: parent.visualFocus ? 1 : 0; border.color: root.theme.accent }
+                primaryAction: true
             }
         }
     }

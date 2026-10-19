@@ -191,8 +191,7 @@ C.Dialog {
             caption: root.canSavePlaylist ? (root.busy ? qsTr("Saving…") : qsTr("Save"))
                                           : (root.busy ? qsTr("Opening…") : qsTr("Open"))
             text: caption
-            enabled: root.valid && !root.busy; foreground: root.theme.accent
-            background: Rectangle { color: parent.hovered ? root.theme.hover : root.theme.progress; radius: root.theme.dp(6); border.color: parent.visualFocus ? root.theme.accent : "transparent"; opacity: parent.enabled ? 1 : .35 }
+            enabled: root.valid && !root.busy; primaryAction: true
             onClicked: root.submit()
         }
     }

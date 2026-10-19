@@ -172,8 +172,7 @@ C.Popup {
             y: parent.height - theme.dp(52); width: theme.dp(100); height: theme.dp(32)
             scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
             caption: qsTr("Save"); text: caption; enabled: root.dirty; onClicked: root.saveRequested()
-            foreground: theme.accent
-            background: Rectangle { radius: theme.dp(6); color: parent.hovered ? theme.selected : theme.progress; border.width: parent.visualFocus ? 1 : 0; border.color: theme.accent }
+            primaryAction: true
         }
     }
     Component {

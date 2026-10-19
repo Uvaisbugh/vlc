@@ -86,6 +86,10 @@ TestCase {
         compare(setup.skipCount, 1); compare(dismissed.count, 1)
         onboarding.forceActiveFocus(); keyClick(Qt.Key_Escape)
         compare(setup.skipCount, 2); compare(dismissed.count, 2)
+        onboarding.page = 1
+        verify(!item("onboardingClose").visible)
+        mouseClick(findChild(item("onboardingPlayerPreview"), "windowCloseButton"))
+        compare(setup.skipCount, 3); compare(dismissed.count, 3)
         compare(finished.count, 0)
     }
     function test_privacyExplanationCanOpenAndClose() {

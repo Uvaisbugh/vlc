@@ -53,6 +53,7 @@ FocusScope {
         RedesignButton {
             objectName: "onboardingClose"
             x: 1038; y: 12; width: 32; height: 32; z: 1
+            visible: root.page !== 1
             iconName: "close"; text: qsTr("Close setup")
             accentColor: root.accentColor
             onClicked: root.dismiss()
@@ -137,6 +138,7 @@ FocusScope {
                 videoContent: Component { Rectangle { color: root.previewLight ? "#dedede" : "#090909" } }
                 mediaTitle: ""; locationTitle: ""; volume: .3; position: .08
                 timeText: "00:02:10"; lengthText: "00:25:40"
+                onCloseRequested: root.dismiss()
             }
             Label { x: 100; y: 180; width: 890; text: qsTr("Select your preferred theme and color."); horizontalAlignment: Text.AlignHCenter; font.pixelSize: 24 }
             Row {

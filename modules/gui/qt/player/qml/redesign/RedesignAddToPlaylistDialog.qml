@@ -270,8 +270,7 @@ C.Dialog {
                 scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
                 implicitHeight: root.theme.dp(32); implicitWidth: root.theme.dp(100)
                 caption: root.busy ? qsTr("Saving…") : qsTr("Add"); text: caption
-                foreground: root.theme.accent
-                background: Rectangle { color: parent.hovered ? root.theme.hover : root.theme.progress; radius: root.theme.dp(6); border.color: parent.visualFocus ? root.theme.accent : "transparent"; opacity: parent.enabled ? 1 : .35 }
+                primaryAction: true
                 enabled: root.valid && !root.busy
                 onClicked: root.submit()
             }

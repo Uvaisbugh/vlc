@@ -149,6 +149,13 @@ FocusScope {
         anchors.fill: parent; z: 100
         enabled: root.presentationOnly; visible: enabled
         acceptedButtons: Qt.AllButtons
+        onClicked: mouse => {
+            if (mouse.button !== Qt.LeftButton) return
+            const point = closeButton.mapFromItem(root, mouse.x, mouse.y)
+            if (closeButton.visible && point.x >= 0 && point.y >= 0
+                && point.x < closeButton.width && point.y < closeButton.height)
+                root.closeRequested()
+        }
         onWheel: wheel => wheel.accepted = true
     }
 
