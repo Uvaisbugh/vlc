@@ -1070,6 +1070,27 @@ TestCase {
         compare(visits.entries[0].count, 2)
         compare(visits.entries[0].last, before.last)
     }
+    function test_folderVisitsKeepTheirMediaCategory() {
+        let visits = createTemporaryObject(visitsComponent, testCase)
+        visits.record("folders", "file:///Music", "Music", 2)
+        visits.record("folders", "file:///Shows", "Shows", 1)
+        compare(visits.ranked("folders", "Music")[0].category, 2)
+        compare(visits.ranked("folders", "Shows")[0].category, 1)
+        visits.record("folders", "file:///Music", "Music")
+        compare(visits.ranked("folders", "Music")[0].category, 2)
+        visits.destroy()
+        visits = createTemporaryObject(visitsComponent, testCase)
+        compare(visits.ranked("folders", "Music")[0].category, 2)
+        compare(visits.ranked("folders", "Music")[0].count, 2)
+        visits.record("folders", "file:///Music", "Music", 1)
+        compare(visits.ranked("folders", "Music")[0].category, 1)
+    }
+    function test_legacyFolderVisitsKeepTheVideoDefault() {
+        settings.saved = JSON.stringify([{kind: "folders", key: "file:///Shows", name: "Shows", count: 1}])
+        const visits = createTemporaryObject(visitsComponent, testCase)
+        visits.record("folders", "file:///Shows", "Shows")
+        compare(visits.ranked("folders", "")[0].category, 1)
+    }
     function test_savedVisitsAreRankedOnLoad() {
         settings.saved = JSON.stringify([
             {kind: "folders", key: "low", name: "Low", count: 1, last: 20},

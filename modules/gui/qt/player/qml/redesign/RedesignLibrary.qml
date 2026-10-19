@@ -253,7 +253,7 @@ RedesignLibraryView {
     function targetForItem(index, section) {
         if (section) {
             const item = homeItem(section, index)
-            if (section === "folders") return pinTarget("folder", folderPath.location(item.key), item.name, 1, "folder", "", "")
+            if (section === "folders") return pinTarget("folder", folderPath.location(item.key), item.name, item.category, "folder", "", "")
             if (section === "playlists") return pinTarget("playlist", item.key, item.name, 4, "playlist", "", "")
             if (section === "artists") return pinTarget("collection", item.id.toString(), item.name, 2, "artist", item.small_cover || item.cover || "", "Artists")
             return mediaTarget(item, section === "listening" ? 2 : 1)
@@ -311,7 +311,7 @@ RedesignLibraryView {
     }
     function snapshot() { return { category: category, homeSection: homeSection, playlist: selectedPlaylist, collection: selectedCollection, folder: currentFolder, musicSection: musicSection, name: selectedName, search: searchText } }
     function remember() { backStack = [...backStack, snapshot()]; forwardStack = [] }
-    function restore(state) { category = state.category; homeSection = state.homeSection || ""; selectedPlaylist = state.playlist; selectedCollection = state.collection; currentFolder = state.folder; musicSection = state.musicSection; selectedName = state.name; searchText = state.search; if (currentFolder) visits.record("folders", currentFolder, nameFromUrl(currentFolder)); else if (selectedPlaylist) visits.record("playlists", selectedPlaylist.toString(), selectedName) }
+    function restore(state) { category = state.category; homeSection = state.homeSection || ""; selectedPlaylist = state.playlist; selectedCollection = state.collection; currentFolder = state.folder; musicSection = state.musicSection; selectedName = state.name; searchText = state.search; if (currentFolder) visits.record("folders", currentFolder, nameFromUrl(currentFolder), category); else if (selectedPlaylist) visits.record("playlists", selectedPlaylist.toString(), selectedName) }
     function openFolder(url, mediaCategory) {
         remember()
         currentFolder = folderPath.location(url)
@@ -319,7 +319,7 @@ RedesignLibraryView {
         homeSection = ""
         selectedPlaylist = undefined; selectedCollection = undefined; musicSection = category === 2 ? "Songs" : ""
         selectedName = nameFromUrl(url)
-        visits.record("folders", currentFolder, selectedName)
+        visits.record("folders", currentFolder, selectedName, category)
         searchText = ""
     }
     function openArtistByName(name) {
@@ -389,13 +389,13 @@ RedesignLibraryView {
         const model = homeModels[section]
         if (section === "folders" || section === "playlists") {
             const item = model.get(index)
-            return {key: item.key, name: item.name}
+            return {key: item.key, name: item.name, category: item.category}
         }
         return model.getDataAt(index)
     }
     function openHomeItem(section, index) {
         const item = homeItem(section, index)
-        if (section === "folders") { openFolder(item.key); return }
+        if (section === "folders") { openFolder(item.key, item.category); return }
         if (section === "playlists" || section === "artists") {
             remember()
             homeSection = ""; currentFolder = ""; musicSection = ""; searchText = ""
@@ -423,7 +423,9 @@ RedesignLibraryView {
             if (homeSection === kind && sortField !== "frequency")
                 items.sort((a, b) => compareEntries(a, b))
             for (const item of items)
-                (kind === "folders" ? frequentFolders : frequentPlaylists).append({key: item.key, name: item.name, iconName: kind === "folders" ? "folder" : "playlist"})
+                (kind === "folders" ? frequentFolders : frequentPlaylists).append({key: item.key, name: item.name,
+                    category: kind === "folders" ? item.category === 2 ? 2 : 1 : 4,
+                    iconName: kind === "folders" ? "folder" : "playlist"})
         }
     }
     function compareEntries(a, b) {

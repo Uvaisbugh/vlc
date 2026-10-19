@@ -12,11 +12,14 @@ QtObject {
             if (Array.isArray(saved)) entries = saved.filter(entry => entry && typeof entry.key === "string" && typeof entry.name === "string" && ["folders", "playlists"].includes(entry.kind) && Number.isFinite(entry.count) && entry.count > 0)
         } catch (error) { entries = [] }
     }
-    function record(kind, key, name) {
+    function record(kind, key, name, category) {
         if (!key.length || !name.length || !["folders", "playlists"].includes(kind)) return
         const next = entries.filter(entry => entry.kind !== kind || entry.key !== key)
         const previous = entries.find(entry => entry.kind === kind && entry.key === key)
-        next.push({kind: kind, key: key, name: name, count: previous ? previous.count + 1 : 1, last: Date.now()})
+        const entry = {kind: kind, key: key, name: name, count: previous ? previous.count + 1 : 1, last: Date.now()}
+        if (kind === "folders") entry.category = category === 1 || category === 2 ? category
+            : previous && previous.category === 2 ? 2 : 1
+        next.push(entry)
         next.sort((a, b) => b.count - a.count || b.last - a.last)
         entries = next.slice(0, 400)
         ctx.setSettingValue(storageKey, JSON.stringify(entries))
