@@ -158,7 +158,7 @@ C.Popup {
             objectName: "shortcutCancel"
             x: theme.dp(20); y: parent.height - theme.dp(52); width: theme.dp(100); height: theme.dp(32)
             scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
-            caption: qsTr("Cancel"); text: caption; onClicked: root.cancelRequested()
+            caption: qsTr("Cancel"); captionFontWeight: Font.Medium; text: caption; onClicked: root.cancelRequested()
             background: Rectangle { radius: theme.dp(6); color: parent.hovered ? theme.hover : theme.background; border.width: parent.visualFocus ? 1 : 0; border.color: theme.accent }
         }
         Text {

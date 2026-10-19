@@ -237,7 +237,7 @@ Item {
             RowLayout {
                 Layout.fillWidth: true
                 Item { Layout.fillWidth: true }
-                RedesignButton { objectName: "playerPresetNameCancel"; scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor; caption: qsTr("Cancel"); text: caption; onClicked: nameDialog.close() }
+                RedesignButton { objectName: "playerPresetNameCancel"; scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor; caption: qsTr("Cancel"); captionFontWeight: Font.Medium; text: caption; onClicked: nameDialog.close() }
                 RedesignButton { objectName: "playerPresetNameSave"; scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor; caption: root.retryNameSave || root.nameAction === "select" || root.nameAction === "delete" ? qsTr("Retry") : qsTr("Save"); text: caption; enabled: root.nameAction === "select" || root.nameAction === "delete" || presetName.text.trim().length > 0; primaryAction: true; onClicked: root.saveName() }
             }
         }

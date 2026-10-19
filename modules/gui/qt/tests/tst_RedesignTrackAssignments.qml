@@ -43,6 +43,33 @@ TestCase {
         tryCompare(dialog,"opened",true); load([rows()[0]])
     }
     function cleanup() { dialog.saving=false; dialog.close(); tryCompare(dialog,"visible",false) }
+    function test_fifteenEpisodeRowsFitWithFolderInformation_data() {
+        return [{tag:"normal",scale:1},{tag:"fractional",scale:1.125}]
+    }
+    function test_fifteenEpisodeRowsFitWithFolderInformation(data) {
+        width=1920*data.scale; height=1080*data.scale; dialog.scaleFactor=data.scale
+        dialog.selectScope(1)
+        const episodes=Array.from({length:15},(_,index)=>{
+            const name="The_Wand_S01E"+String(index+1).padStart(2,"0")+".mp4"
+            return {url:"file:///show/"+name,name:name,baseline:[]}
+        })
+        load(episodes); dialog.folderRuleDefinition="fixture-rule"
+        const list=findChild(dialog,"trackAssignmentList")
+        tryVerify(()=>!!list.itemAtIndex(14))
+        verify(findChild(dialog,"trackAssignmentError").visible)
+        compare(list.contentY,0)
+        const last=list.itemAtIndex(14)
+        tryVerify(()=>last.mapToItem(list,0,last.height).y<=list.height)
+        for(let index=0;index<15;++index) {
+            const label=findChild(list.itemAtIndex(index),"trackAssignmentName_"+index)
+            tryVerify(()=>!label.truncated)
+        }
+        const choose=findChild(list.itemAtIndex(0),"trackAssignmentChoose_0")
+        // Wider Inter filenames use space from the dashed connector.
+        fuzzyCompare(choose.mapToItem(dialog.background,0,0).x,547*data.scale,2)
+        const message=findChild(dialog,"trackAssignmentError"), save=findChild(dialog,"trackAssignmentSave")
+        verify(message.mapToItem(dialog.background,0,message.height).y<=save.mapToItem(dialog.background,0,0).y)
+    }
     function test_referenceLayout_data() {
         const cases = []
         for (const mode of ["file", "folder", "online"])

@@ -179,7 +179,7 @@ C.Dialog {
             x: root.theme.dp(20); anchors.verticalCenter: parent.verticalCenter
             implicitWidth: root.theme.dp(100); implicitHeight: root.theme.dp(32)
             scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
-            caption: qsTr("Cancel"); text: caption; enabled: !root.busy
+            caption: qsTr("Cancel"); captionFontWeight: Font.Medium; text: caption; enabled: !root.busy
             background: Rectangle { color: parent.hovered ? root.theme.hover : root.theme.background; radius: root.theme.dp(6); border.color: parent.visualFocus ? root.theme.accent : "transparent" }
             onClicked: root.reject()
         }

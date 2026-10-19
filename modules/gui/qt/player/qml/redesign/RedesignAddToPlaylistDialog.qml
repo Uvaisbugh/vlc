@@ -260,7 +260,7 @@ C.Dialog {
                 objectName: "addToPlaylistCancel"
                 scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
                 implicitHeight: root.theme.dp(32); implicitWidth: root.theme.dp(100)
-                caption: qsTr("Cancel"); text: caption; enabled: !root.busy
+                caption: qsTr("Cancel"); captionFontWeight: Font.Medium; text: caption; enabled: !root.busy
                 background: Rectangle { color: parent.hovered ? root.theme.hover : root.theme.background; radius: root.theme.dp(6); border.color: parent.visualFocus ? root.theme.accent : "transparent" }
                 onClicked: root.reject()
             }

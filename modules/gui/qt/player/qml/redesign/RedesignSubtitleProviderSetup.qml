@@ -60,7 +60,7 @@ C.Popup {
         }
         RowLayout {
             Layout.fillWidth: true
-            RedesignButton { scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor; caption: qsTr("Cancel"); text: caption; onClicked: root.close() }
+            RedesignButton { scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor; caption: qsTr("Cancel"); captionFontWeight: Font.Medium; text: caption; onClicked: root.close() }
             Item { Layout.fillWidth: true }
             RedesignButton {
                 objectName: "subtitleProviderSaveKey"

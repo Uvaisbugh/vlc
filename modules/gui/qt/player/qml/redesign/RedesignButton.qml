@@ -24,7 +24,7 @@ T.Button {
     property real iconReveal: 0
     property var iconDetailColor
     property real captionFontSize: 14
-    property int captionFontWeight: Font.Normal
+    property int captionFontWeight: primaryAction ? Font.Medium : Font.Normal
     property real captionSpacing: 6
     property real captionMaximumWidth: Infinity
     readonly property RedesignTheme theme: RedesignTheme { scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor }

@@ -14,6 +14,12 @@ C.Dialog {
     property bool subtitles: true
     property var context: ({})
     property var rows: []
+    readonly property real fileNameColumnWidth: {
+        fileNameMetrics.font
+        return Math.min(theme.dp(240), rows.reduce((width, row) =>
+            Math.max(width, fileNameMetrics.advanceWidth(String(row.name)) + theme.dp(2)), theme.dp(156)))
+    }
+    FontMetrics { id: fileNameMetrics; font.family: Qt.application.font.family; font.pixelSize: root.theme.dp(14) }
     property var sources: []
     property var drafts: ({})
     property var selectedRows: ({})
@@ -572,13 +578,15 @@ C.Dialog {
                         RedesignIcon { sourceSize: Qt.size(root.theme.dp(24) * Screen.devicePixelRatio, root.theme.dp(24) * Screen.devicePixelRatio); visible: root.fileMode; Layout.preferredWidth: root.theme.dp(24); Layout.preferredHeight: root.theme.dp(24); name: root.subtitles ? "subtitle-file" : "audio-file"; color: root.theme.playerLabel }
                         Text {
                             objectName: "trackAssignmentName_" + entry.index
-                            Layout.fillWidth: root.fileMode; Layout.preferredWidth: root.fileMode ? -1 : root.theme.dp(156)
+                            Layout.fillWidth: root.fileMode; Layout.preferredWidth: root.fileMode ? -1 : root.fileNameColumnWidth
                             Layout.minimumWidth: 0; Layout.topMargin: root.fileMode ? 0 : root.theme.dp(4)
                             text: entry.modelData.name; textFormat: Text.PlainText; font.pixelSize: root.theme.dp(14); color: root.theme.playerHeading; elide: Text.ElideMiddle
                         }
                         Item {
                             objectName: "trackAssignmentConnector_" + entry.index
-                            visible: !root.fileMode; Layout.preferredWidth: root.theme.dp(280); Layout.maximumWidth: root.theme.dp(280)
+                            visible: !root.fileMode
+                            Layout.preferredWidth: root.theme.dp(436) - root.fileNameColumnWidth
+                            Layout.maximumWidth: Layout.preferredWidth
                             Layout.minimumWidth: 0; Layout.preferredHeight: root.theme.dp(1)
                             Layout.leftMargin: -root.theme.dp(3); Layout.topMargin: root.theme.dp(4)
                             Row { anchors.fill: parent; spacing: root.theme.dp(8); clip: true
@@ -629,7 +637,7 @@ C.Dialog {
 
     }
     footer: Item {
-        implicitHeight: root.theme.dp(72) + (error.visible ? error.implicitHeight + root.theme.dp(12) : 0)
+        implicitHeight: Math.max(root.theme.dp(72), error.visible ? error.implicitHeight + root.theme.dp(60) : 0)
         Text {
             id: error
             objectName: "trackAssignmentError"
@@ -650,7 +658,7 @@ C.Dialog {
             x: root.theme.dp(20); anchors.bottom: parent.bottom; anchors.bottomMargin: root.theme.dp(20)
             implicitWidth: root.theme.dp(100); implicitHeight: root.theme.dp(32)
             scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
-            caption: qsTr("Cancel"); text: caption; enabled: !root.saving || root.cancelableSave; onClicked: root.reject()
+            caption: qsTr("Cancel"); captionFontWeight: Font.Medium; text: caption; enabled: !root.saving || root.cancelableSave; onClicked: root.reject()
             background: Rectangle { radius: root.theme.dp(6); color: parent.hovered ? root.theme.hover : root.theme.background; border.color: parent.visualFocus ? root.theme.accent : "transparent" }
         }
         RedesignButton {

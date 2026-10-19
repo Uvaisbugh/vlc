@@ -443,7 +443,7 @@ Item {
                 objectName: "customizationCancel"
                 x: root.theme.dp(20); y: parent.height - root.theme.dp(52); width: root.theme.dp(100); height: root.theme.dp(32)
                 scaleFactor: root.theme.scaleFactor; lightTheme: root.theme.lightTheme; accentColor: root.theme.accentColor
-                caption: qsTr("Cancel"); text: caption; enabled: !root.saving; onClicked: root.cancel()
+                caption: qsTr("Cancel"); captionFontWeight: Font.Medium; text: caption; enabled: !root.saving; onClicked: root.cancel()
                 background: Rectangle { radius: root.theme.dp(6); color: parent.hovered ? root.theme.hover : root.theme.background; border.width: parent.visualFocus ? 1 : 0; border.color: root.theme.accent }
             }
             Text {

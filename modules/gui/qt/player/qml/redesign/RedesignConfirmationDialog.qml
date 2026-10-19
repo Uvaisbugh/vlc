@@ -43,7 +43,7 @@ C.Dialog {
                 objectName: "confirmationCancel"
                 Layout.preferredWidth: root.theme.dp(100); Layout.preferredHeight: root.theme.dp(36)
                 scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
-                caption: qsTr("Cancel"); text: caption
+                caption: qsTr("Cancel"); captionFontWeight: Font.Medium; text: caption
                 background: Rectangle { color: parent.hovered ? root.theme.hover : root.theme.background; radius: root.theme.dp(4); border.color: parent.visualFocus ? root.theme.accent : "transparent" }
                 onClicked: root.reject()
                 Keys.onReturnPressed: root.reject()
