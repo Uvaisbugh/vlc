@@ -165,6 +165,218 @@ static void TestBookmarks(vlc_medialibrary_t *ml, int64_t media_id)
     vlc_ml_release(bookmarks);
 }
 
+struct resume_test
+{
+    vlc_cond_t changed;
+    unsigned queries;
+    unsigned repeats;
+    unsigned completed;
+    bool restore;
+    bool finish;
+    double position;
+};
+
+static void ResumeStateChanged(vlc_player_t *player,
+                               enum vlc_player_state state, void *data)
+{
+    (void)player; (void)state;
+    struct resume_test *test = data;
+    vlc_cond_signal(&test->changed);
+}
+
+static void ResumePositionChanged(vlc_player_t *player, vlc_tick_t time,
+                                  double position, void *data)
+{
+    (void)player; (void)time;
+    struct resume_test *test = data;
+    test->position = position;
+    vlc_cond_signal(&test->changed);
+}
+
+static void ResumeMediaChanged(vlc_player_t *player, input_item_t *item,
+                               void *data)
+{
+    struct resume_test *test = data;
+    /* Finish several loops quickly while retaining a realistic clip length. */
+    if (item && test->finish)
+        vlc_player_SetPosition(player, .97);
+}
+
+static void ResumeQueried(vlc_player_t *player, void *data)
+{
+    struct resume_test *test = data;
+    ++test->queries;
+    if (test->restore)
+        vlc_player_RestorePlaybackPos(player);
+}
+
+static void ResumeStopping(vlc_player_t *player, input_item_t *item,
+                           enum vlc_player_media_stopping_reason reason,
+                           void *data)
+{
+    struct resume_test *test = data;
+    if (reason == VLC_PLAYER_MEDIA_STOPPING_EOS)
+    {
+        ++test->completed;
+        if (test->repeats > 0)
+        {
+            --test->repeats;
+            vlc_player_SetNextMedia(player, item);
+        }
+    }
+}
+
+static void ResumeOpen(vlc_player_t *player, struct resume_test *test,
+                       input_item_t *item, unsigned queries)
+{
+    test->queries = 0;
+    test->position = -1.;
+    /* Keep the video track for media classification, without a decoder. */
+    input_item_AddOption(item, ":no-video", VLC_INPUT_OPTION_TRUSTED);
+    assert(vlc_player_SetCurrentMedia(player, item) == VLC_SUCCESS);
+    assert(vlc_player_Start(player) == VLC_SUCCESS);
+    while (vlc_player_GetState(player) != VLC_PLAYER_STATE_PAUSED)
+        vlc_player_CondWait(player, &test->changed);
+    assert(test->queries == queries);
+}
+
+static void ResumeWaitPosition(vlc_player_t *player, struct resume_test *test,
+                               double position)
+{
+    while (test->position < position - .000001 ||
+           test->position > position + .000001)
+        vlc_player_CondWait(player, &test->changed);
+}
+
+static void ResumeStop(vlc_player_t *player, struct resume_test *test)
+{
+    vlc_player_Stop(player);
+    while (vlc_player_GetState(player) != VLC_PLAYER_STATE_STOPPED)
+        vlc_player_CondWait(player, &test->changed);
+}
+
+static void ResumeCheckProgress(vlc_medialibrary_t *ml, const char *mrl,
+                                float expected)
+{
+    vlc_ml_media_t *media = vlc_ml_get_media_by_mrl(ml, mrl);
+    assert(media && media->i_duration <= 0);
+    assert(media->f_progress >= expected - .000001f &&
+           media->f_progress <= expected + .000001f);
+    vlc_ml_media_release(media);
+}
+
+static void TestResumeProgress(vlc_object_t *root, vlc_medialibrary_t *ml)
+{
+    /* Only a player parented directly to the instance saves playback states. */
+    vlc_player_t *player = vlc_player_New(VLC_OBJECT(vlc_object_instance(root)),
+                                         VLC_PLAYER_LOCK_NORMAL);
+    assert(player);
+    struct resume_test test = {0};
+    vlc_cond_init(&test.changed);
+    const struct vlc_player_cbs callbacks = {
+        .on_state_changed = ResumeStateChanged,
+        .on_position_changed = ResumePositionChanged,
+        .on_current_media_changed = ResumeMediaChanged,
+        .on_playback_restore_queried = ResumeQueried,
+        .on_stopping_current_media = ResumeStopping,
+    };
+    vlc_player_Lock(player);
+    vlc_player_listener_id *listener =
+        vlc_player_AddListener(player, &callbacks, &test);
+    assert(listener);
+    vlc_player_SetStartPaused(player, true);
+
+    /* Short frames and no read-ahead keep paused seeks accurate without
+     * spending time playing through these synthetic media. */
+    const char *mrl = "mock://video_track_count=1;video_width=16;"
+                      "video_height=16;video_frame_rate=100000;pts_delay=0;"
+                      "length=33000000";
+    input_item_t *item = input_item_New(mrl, "Resume progress");
+    assert(item);
+    ResumeOpen(player, &test, item, 0);
+    vlc_player_SetPosition(player, .23);
+    ResumeWaitPosition(player, &test, .23);
+    ResumeStop(player, &test);
+    ResumeCheckProgress(ml, mrl, .23f);
+
+    /* Reopening mid-file asks once, and Continue restores the saved position. */
+    test.restore = true;
+    ResumeOpen(player, &test, item, 1);
+    ResumeWaitPosition(player, &test, .23);
+    test.restore = false;
+    vlc_player_SetPosition(player, .99);
+    ResumeWaitPosition(player, &test, .99);
+    ResumeStop(player, &test);
+    ResumeCheckProgress(ml, mrl, -1.f);
+
+    /* A completed file no longer prompts; restarting near the beginning also
+     * clears any old resume point. */
+    ResumeOpen(player, &test, item, 0);
+    vlc_player_SetPosition(player, .01);
+    ResumeWaitPosition(player, &test, .01);
+    ResumeStop(player, &test);
+    ResumeCheckProgress(ml, mrl, -1.f);
+    input_item_Release(item);
+
+    /* The strict cutoffs retain positions exactly on each margin, including
+     * float-rounded positions that used to differ from the library policy. */
+    const struct { unsigned seconds; float margin; } boundaries[] = {
+        {1800, .05f}, {3600, .04f}, {7200, .03f},
+        {10800, .02f}, {14400, .01f},
+    };
+    for (size_t i = 0; i < ARRAY_SIZE(boundaries); ++i)
+    {
+        char *uri;
+        vlc_tick_t length = VLC_TICK_FROM_SEC(boundaries[i].seconds);
+        assert(asprintf(&uri, "mock://video_track_count=1;video_width=16;"
+                        "video_height=16;video_frame_rate=100000;pts_delay=0;"
+                        "length=%"PRId64, length) >= 0);
+        item = input_item_New(uri, "Resume boundary");
+        assert(item);
+        const float positions[] = {
+            boundaries[i].margin, 1.f - boundaries[i].margin,
+        };
+        for (size_t j = 0; j < ARRAY_SIZE(positions); ++j)
+        {
+            ResumeOpen(player, &test, item, j == 0 ? 0 : 1);
+            vlc_player_SetPosition(player, positions[j]);
+            ResumeWaitPosition(player, &test, positions[j]);
+            ResumeStop(player, &test);
+            ResumeCheckProgress(ml, uri, positions[j]);
+        }
+        input_item_Release(item);
+        free(uri);
+    }
+
+    /* Repeat through new player inputs, as the playlist does, rather than
+     * repeating inside a single input (which never restores library state). */
+    mrl = "mock://video_track_count=1;video_width=16;video_height=16;"
+          "video_frame_rate=100;length=33000000";
+    item = input_item_New(mrl, "Repeat resume progress");
+    assert(item);
+    test.queries = 0;
+    test.repeats = 2;
+    test.finish = true;
+    vlc_player_SetStartPaused(player, false);
+    assert(vlc_player_SetCurrentMedia(player, item) == VLC_SUCCESS);
+    assert(vlc_player_Start(player) == VLC_SUCCESS);
+    while (test.completed < 3 ||
+           vlc_player_GetState(player) != VLC_PLAYER_STATE_STOPPED)
+        vlc_player_CondWait(player, &test.changed);
+    assert(test.completed == 3 && test.repeats == 0);
+    assert(test.queries == 0);
+    ResumeCheckProgress(ml, mrl, -1.f);
+    test.finish = false;
+    vlc_player_SetStartPaused(player, true);
+    ResumeOpen(player, &test, item, 0);
+    ResumeStop(player, &test);
+    input_item_Release(item);
+
+    vlc_player_RemoveListener(player, listener);
+    vlc_player_Unlock(player);
+    vlc_player_Delete(player);
+}
+
 static int OpenIntf(vlc_object_t *root)
 {
     vlc_medialibrary_t *ml = vlc_ml_instance_get(root);
@@ -191,6 +403,7 @@ static int OpenIntf(vlc_object_t *root)
 
     TestAssociatedTracks(root, ml, media, MOCK_URL);
     TestBookmarks(ml, media->i_id);
+    TestResumeProgress(root, ml);
 
     vlc_ml_media_release(media);
 
@@ -232,7 +445,8 @@ int main(void)
     const char * const args[] = {
         "-vvv", "--vout=dummy", "--aout=dummy", "--text-renderer=dummy",
         "--no-auto-preparse", "--media-library", "--ignore-config",
-        "--no-restore-playback-states", "--no-sub-autodetect-file"
+        "--no-restore-playback-states", "--no-sub-autodetect-file",
+        "--restore-playback-pos=1", "--save-recentplay"
     };
 
     libvlc_instance_t *vlc = libvlc_new(ARRAY_SIZE(args), args);

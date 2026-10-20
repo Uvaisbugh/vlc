@@ -247,19 +247,19 @@ vlc_player_CompareAssignState(char **target_ptr, char **input_ptr)
 /* Same start/end margins as the media library's
  * Media::computePositionType(), which only applies them when it knows the
  * media duration. */
-static double
+static float
 vlc_player_GetMlProgressMargin(vlc_tick_t length)
 {
     const vlc_tick_t hour = VLC_TICK_FROM_SEC(3600);
     if (length < hour)
-        return .05;
+        return .05f;
     if (length < 2 * hour)
-        return .04;
+        return .04f;
     if (length < 3 * hour)
-        return .03;
+        return .03f;
     if (length < 4 * hour)
-        return .02;
-    return .01;
+        return .02f;
+    return .01f;
 }
 
 void
@@ -299,19 +299,21 @@ vlc_player_UpdateMLStates(vlc_player_t *player, struct vlc_player_input* input)
 
     if ( var_GetBool( input->thread, "save-recentplay" ) )
     {
-        double position = input->position;
+        /* Match the float precision used by Media::computePositionType(),
+         * including positions exactly at a margin. */
+        float position = input->position;
         /* Directly opened files are added as external media, which the media
          * library never parses, so it has no duration for them and stores any
          * position as resumable. A file played to the end would then offer to
          * resume on its next start, including on every repeat loop. Clear the
          * progress near either end ourselves, using the length we know.
-         * ponytail: no play count bump for such media, which the media library
+         * There is no play count bump for such media, which the media library
          * only does when it knows the duration. */
         if (media->i_duration <= 0 && input->length > 0)
         {
-            const double margin = vlc_player_GetMlProgressMargin(input->length);
-            if (position < margin || position > 1. - margin)
-                position = -1.;
+            const float margin = vlc_player_GetMlProgressMargin(input->length);
+            if (position < margin || position > 1.f - margin)
+                position = -1.f;
         }
         vlc_ml_media_update_progress( ml, media->i_id, position );
     }
