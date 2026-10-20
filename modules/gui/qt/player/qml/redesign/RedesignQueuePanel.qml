@@ -60,7 +60,7 @@ Item {
             RowLayout {
                 visible: !root.floating
                 anchors.fill: parent; anchors.leftMargin: theme.dp(14); anchors.rightMargin: theme.dp(14)
-                spacing: theme.dp(17)
+                spacing: theme.dp(18)
                 Repeater {
                     model: [qsTr("Queue"), qsTr("Bookmarks"), qsTr("Chapters")]
                     RedesignButton {

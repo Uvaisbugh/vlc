@@ -150,10 +150,20 @@ TestCase {
         compare(media.get(2).title, "First")
         compare(playSpy.count, 0)
     }
+    function test_listKeepsOrdinaryArrowNavigation() {
+        const list = findChild(queue, "queueList")
+        list.currentIndex = 0
+        list.forceActiveFocus()
+        keyClick(Qt.Key_Down)
+        compare(list.currentIndex, 1)
+        compare(moveSpy.count, 0)
+        compare(media.get(0).title, "First")
+    }
     function test_keyboardMoveAndDeleteKeepSelectionOnMovedItem() {
         mouseClick(findChild(queue, "queueMoveHandle_0"))
         compare(queue.selectedIndex, 0)
         verify(queue.activeFocus)
+        findChild(queue, "queueList").forceActiveFocus()
         keyClick(Qt.Key_Down, Qt.AltModifier)
         compare(media.get(1).title, "First")
         compare(queue.selectedIndex, 1)

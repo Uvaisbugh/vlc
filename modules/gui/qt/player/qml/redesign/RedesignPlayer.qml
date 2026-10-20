@@ -459,6 +459,7 @@ FocusScope {
                 onRemoveRequested: index => queueModel.removeItems([index])
                 onMoveRequested: (from, to) => queueModel.moveItemsPre([from], to)
                 onLibraryDropRequested: source => source.libraryView.enqueueRequested(source.mediaIndex)
+                onFilesDropped: urls => MainPlaylistController.append(Array.from(urls), false)
                 } }
             }
         }

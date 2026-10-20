@@ -36,6 +36,7 @@ FocusScope {
     // The destination is the insertion point before removal, as in moveItemsPre.
     signal moveRequested(int from, int to)
     signal libraryDropRequested(var source)
+    signal filesDropped(var urls)
     Accessible.role: Accessible.Pane
     Accessible.name: qsTr("Queue")
 
@@ -110,29 +111,38 @@ FocusScope {
         Keys.forwardTo: [root]
         scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
     }
+    component QueueToolButton: QueueButton {
+        foreground: theme.playerLabel
+        selectedIconForeground: theme.playerLabel
+        iconDetailColor: selected ? theme.menuAccent : theme.playerLabel
+        topPadding: theme.dp(2)
+    }
     ColumnLayout {
         anchors.fill: parent
-        anchors.leftMargin: theme.dp(28); anchors.rightMargin: theme.dp(12)
+        anchors.leftMargin: theme.dp(28); anchors.rightMargin: theme.dp(24)
         anchors.topMargin: theme.dp(16); anchors.bottomMargin: theme.dp(12)
         spacing: theme.dp(12)
         RowLayout {
             Layout.fillWidth: true
+            Layout.rightMargin: -theme.dp(10)
             spacing: 0
             Text {
                 objectName: "queueSummary"
                 Layout.fillWidth: true
                 text: qsTr("%n item", "%n items", root.itemCount) + (root.totalDurationText.length > 0 ? " - " + root.totalDurationText : "")
-                elide: Text.ElideRight; color: theme.foreground; font.pixelSize: theme.dp(14)
+                elide: Text.ElideRight; color: theme.playerLabel; font.pixelSize: theme.dp(14)
             }
-            QueueButton { objectName: "queueSortButton"; iconName: "sort"; text: qsTr("Sort queue"); enabled: root.itemCount > 1 && root.sortChoices.length > 0; onClicked: sortMenu.toggleFrom(this) }
-            QueueButton { objectName: "queueRepeatButton"; iconName: "repeat"; text: qsTr("Repeat"); selected: root.repeating; onClicked: root.repeatRequested() }
-            QueueButton { objectName: "queueShuffleButton"; iconName: "shuffle"; text: qsTr("Shuffle"); selected: root.random; onClicked: root.shuffleRequested() }
-            QueueButton { objectName: "queueRemoveButton"; iconName: "remove"; text: qsTr("Remove from queue"); enabled: root.actionIndex >= 0 && root.actionIndex < root.itemCount; onClicked: root.removeSelection() }
-            QueueButton { objectName: "queueAddButton"; iconName: "add"; text: qsTr("Add files to queue"); onClicked: root.addRequested() }
+            QueueToolButton { objectName: "queueSortButton"; Layout.rightMargin: theme.dp(4); iconName: "sort"; text: qsTr("Sort queue"); enabled: root.itemCount > 1 && root.sortChoices.length > 0; onClicked: sortMenu.toggleFrom(this) }
+            QueueToolButton { objectName: "queueRepeatButton"; Layout.rightMargin: theme.dp(4); iconName: "queue-repeat"; selectedIconName: "queue-repeat-active"; text: qsTr("Repeat"); selected: root.repeating; onClicked: root.repeatRequested() }
+            QueueToolButton { objectName: "queueShuffleButton"; Layout.rightMargin: theme.dp(4); iconName: "queue-shuffle"; selectedIconName: "queue-shuffle-active"; text: qsTr("Shuffle"); selected: root.random; onClicked: root.shuffleRequested() }
+            QueueToolButton { objectName: "queueRemoveButton"; iconName: "remove"; text: qsTr("Remove from queue"); enabled: root.actionIndex >= 0 && root.actionIndex < root.itemCount; onClicked: root.removeSelection() }
+            QueueToolButton { objectName: "queueAddButton"; iconName: "add"; text: qsTr("Add files to queue"); onClicked: root.addRequested() }
         }
         ListView {
             id: list
             objectName: "queueList"
+            Keys.forwardTo: [root]
+            Layout.leftMargin: -theme.dp(4)
             Layout.fillWidth: true; Layout.fillHeight: true
             model: root.hierarchyModel || root.queueModel
             clip: true
@@ -149,7 +159,7 @@ FocusScope {
                 readonly property string groupKey: root.hierarchyModel ? String(model.treeKey) : ""
                 readonly property bool containsCurrent: root.hierarchyModel ? Boolean(model.containsCurrent) : false
                 width: list.width; height: theme.dp(44)
-                spacing: theme.dp(8)
+                spacing: theme.dp(14)
                 Item { visible: row.depth > 0; Layout.preferredWidth: theme.dp(Math.min(row.depth * 12, 96)) }
                 QueueButton {
                     objectName: "queueGroupToggle_" + row.index
@@ -201,7 +211,7 @@ FocusScope {
                         spacing: theme.dp(12)
                         RedesignIcon { visible: row.group; Layout.preferredWidth: theme.dp(18); Layout.preferredHeight: theme.dp(18); name: row.model.treePlaylist ? "playlist" : "folder"; color: row.containsCurrent ? theme.accent : theme.foreground }
                         Text { Layout.fillWidth: true; text: row.title; elide: Text.ElideRight; font.pixelSize: theme.dp(14); color: row.isCurrent ? theme.accent : theme.foreground }
-                        Text { objectName: "queueDuration_" + row.queueIndex; text: root.durationText(row.model.duration); font.pixelSize: theme.dp(14); color: theme.foreground }
+                        Text { objectName: "queueDuration_" + row.queueIndex; text: root.durationText(row.model.duration); font.pixelSize: theme.dp(14); color: theme.playerLabel }
                     }
                     onClicked: {
                         if (row.queueIndex < 0) {
@@ -283,10 +293,13 @@ FocusScope {
     }
     DropArea {
         anchors.fill: parent
-        keys: ["vlc-redesign-library"]
+        keys: ["vlc-redesign-library", "text/uri-list"]
         onDropped: drop => {
             if (drop.source && drop.source["libraryView"]) {
                 root.libraryDropRequested(drop.source)
+                drop.acceptProposedAction()
+            } else if (drop.hasUrls && drop.urls.length > 0) {
+                root.filesDropped(drop.urls)
                 drop.acceptProposedAction()
             }
         }
