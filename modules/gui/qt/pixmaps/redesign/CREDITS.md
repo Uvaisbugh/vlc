@@ -12,3 +12,7 @@ It was exported through Figma on 2026-10-20 at its original 24 × 24 size.
 
 The surrounding native QML implementation adapts the design to VLC's existing
 controls. This attribution does not imply endorsement by Juxtopposed or VideoLAN.
+
+`pause.svg` is an unmodified SVG export of the Icon layer in the `type=pause`
+variant, node `848:1714`, from the same design and author under the same license.
+It was exported on 2026-10-20 with original dimensions 24 × 24.

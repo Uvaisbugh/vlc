@@ -6,6 +6,7 @@ on:
     paths:
       - '.github/workflows/windows-build.yml'
       - 'modules/gui/qt/**'
+      - 'extras/package/win32/test-runtime.ps1'
   workflow_dispatch:
 
 permissions:
@@ -59,8 +60,10 @@ jobs:
           fi
           extras/package/win32/build.sh "${args[@]}" 2>&1 | tee build-evidence/build.log
           test -f artifacts/vlc-win64/vlc.exe
+          # Keep the downloadable app small; upstream moves debug info aside.
+          make -C win64 package-win-strip 2>&1 | tee build-evidence/package.log
           cp COPYING COPYING.LIB artifacts/vlc-win64/
-          tar -C artifacts -czf artifacts/vlc-windows-x64.tar.gz vlc-win64
+          tar -C artifacts --exclude='vlc-win64/sdk' -czf artifacts/vlc-windows-x64.tar.gz vlc-win64
           sha256sum artifacts/vlc-windows-x64.tar.gz > artifacts/SHA256SUMS
 
       - name: Upload Windows runtime
@@ -81,5 +84,43 @@ jobs:
           path: |
             build-evidence/
             win64/config.log
+          if-no-files-found: warn
+          retention-days: 14
+  windows-smoke:
+    needs: windows-x64
+    runs-on: windows-2022
+    timeout-minutes: 10
+    steps:
+      - name: Check out runtime test
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - name: Download the matching Windows package
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: vlc-windows-x64-${{ github.sha }}
+          path: runtime
+
+      - name: Verify and extract package
+        shell: pwsh
+        run: |
+          $expected = ((Get-Content runtime/SHA256SUMS -Raw).Trim() -split '\s+')[0]
+          $actual = (Get-FileHash runtime/vlc-windows-x64.tar.gz -Algorithm SHA256).Hash
+          if ($expected -ne $actual) { throw 'Runtime checksum mismatch.' }
+          tar -xzf runtime/vlc-windows-x64.tar.gz -C runtime
+          if ($LASTEXITCODE -ne 0) { throw 'Runtime extraction failed.' }
+
+      - name: Launch native interfaces and play generated audio
+        shell: pwsh
+        run: |
+          ./extras/package/win32/test-runtime.ps1 -RuntimeDirectory runtime/vlc-win64 -EvidenceDirectory smoke-evidence
+
+      - name: Preserve Windows runtime evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: windows-smoke-${{ github.sha }}
+          path: smoke-evidence/
           if-no-files-found: warn
           retention-days: 14

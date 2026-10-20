@@ -123,6 +123,9 @@ QtObject {
     readonly property int playerPlayButtonHeight: MainCtx.dp(28, scale)
     readonly property int playerPlayButtonRadius: MainCtx.dp(6, scale)
     readonly property int playerPlayIconSize: MainCtx.dp(24, scale)
+    readonly property int playerPlayIconLeftMargin: MainCtx.dp(17, scale)
+    readonly property int playerPauseIconLeftMargin: MainCtx.dp(15, scale)
+    readonly property color playerPauseBackground: "#6B6B6B"
     readonly property int icon_addressBar: icon_normal
     readonly property int icon_actionButton: icon_normal
     readonly property int icon_PIP: icon_normal

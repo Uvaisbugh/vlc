@@ -47,6 +47,10 @@ T.Control {
 
     property bool _keyOkPressed: false
 
+    readonly property bool _showPause: !paintOnly
+                                      && Player.playingState !== Player.PLAYING_STATE_PAUSED
+                                      && Player.playingState !== Player.PLAYING_STATE_STOPPED
+
     // Aliases
 
     property alias cursorInside: mouseArea.cursorInside
@@ -170,39 +174,20 @@ T.Control {
         }
     }
 
-    contentItem: T.Label {
-        text: {
-            const state = Player.playingState
-
-            if (!paintOnly
-                    && state !== Player.PLAYING_STATE_PAUSED
-                    && state !== Player.PLAYING_STATE_STOPPED)
-                return VLCIcons.pause_filled
-            else
-                return ""
-        }
-
-        color: "black"
-
-        font.pixelSize: VLCStyle.playerPlayIconSize
-
-        font.family: VLCIcons.fontFamily
-
-        verticalAlignment: Text.AlignVCenter
-        horizontalAlignment: Text.AlignHCenter
-
+    contentItem: Item {
         Accessible.ignored: true
 
         Image {
-            anchors.centerIn: parent
+            anchors.left: parent.left
+            anchors.leftMargin: root._showPause ? VLCStyle.playerPauseIconLeftMargin
+                                                : VLCStyle.playerPlayIconLeftMargin
+            anchors.verticalCenter: parent.verticalCenter
             width: VLCStyle.playerPlayIconSize
             height: VLCStyle.playerPlayIconSize
-            source: "qrc:/redesign/play.svg"
-            visible: parent.text.length === 0
+            source: root._showPause ? "qrc:/redesign/pause.svg" : "qrc:/redesign/play.svg"
             sourceSize: Qt.size(width, height)
             Accessible.ignored: true
         }
-
     }
 
     background: Item {
@@ -225,7 +210,10 @@ T.Control {
             anchors.fill: parent
 
             radius: VLCStyle.playerPlayButtonRadius
-            color: root.cursorInside ? Qt.lighter(theme.accent, 1.08) : theme.accent
+
+            readonly property color baseColor: root._showPause && theme.palette.isDark
+                                               ? VLCStyle.playerPauseBackground : theme.accent
+            color: root.cursorInside ? Qt.lighter(baseColor, 1.08) : baseColor
 
             Rectangle {
                 id: innerRectangle

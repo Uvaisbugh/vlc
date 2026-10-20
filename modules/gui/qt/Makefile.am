@@ -954,6 +954,7 @@ libqt_plugin_la_RES = \
 	pixmaps/placeholder/noart_artist_small.svg \
 	pixmaps/placeholder/noart_videoCover.svg \
 	pixmaps/redesign/play.svg \
+	pixmaps/redesign/pause.svg \
 	pixmaps/redesign/CREDITS.md \
 	pixmaps/prefs/advprefs_audio.svg \
 	pixmaps/prefs/advprefs_codec.svg \
