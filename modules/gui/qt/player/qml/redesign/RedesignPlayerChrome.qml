@@ -20,14 +20,20 @@ Item {
     property bool applying: false
     readonly property string controlIds: JSON.stringify(Object.keys(allControls))
     readonly property bool compactDividerGap: renderedLayout.zones.footerLeft.some(id => id.startsWith("divider:"))
+    readonly property bool audioRight: JSON.stringify(renderedLayout.zones.footerRight.filter(id => id !== "fullscreen"))
+        === JSON.stringify(["mute", "volume", "audio", "queue"])
     readonly property bool standardRight: {
         const ids = renderedLayout.zones.footerRight
         const standard = model.defaults().zones.footerRight
-        return JSON.stringify(ids) === JSON.stringify(standard)
+        return audioRight || JSON.stringify(ids) === JSON.stringify(standard)
             || JSON.stringify(ids) === JSON.stringify(standard.concat(["fullscreen"]))
     }
     function gap(zone) {
-        if (zone === "footerLeft" && compactDividerGap) return 5
+        const ids = renderedLayout.zones[zone]
+        if (zone === "footerLeft" && (compactDividerGap || (ids.length === 5
+            && ids[0] === "previous" && ids[2] === "play" && ids[4] === "next"
+            && ["backward10", "backward15"].includes(ids[1])
+            && ["forward10", "forward15"].includes(ids[3])))) return 5
         if (zone === "footerRight" && standardRight) return 6
         return JSON.stringify(renderedLayout.zones[zone]) === JSON.stringify(["previous", "play", "next"]) ? 8 : 10
     }
@@ -50,7 +56,7 @@ Item {
                 target: control ? control.Layout : null
                 property: "rightMargin"
                 value: root.theme.dp(modelData === "mute" ? 4 : modelData === "volume" ? 9
-                    : modelData === "settings" || (modelData === "queue" && root.renderedLayout.zones.footerRight.includes("fullscreen")) ? 8 : 0)
+                    : modelData === "settings" || (modelData === "audio" && root.audioRight) || (modelData === "queue" && root.renderedLayout.zones.footerRight.includes("fullscreen")) ? 8 : 0)
                 when: root.custom && !root.applying && root.standardRight && !!control && control.parent === footerRight
                 restoreMode: Binding.RestoreBindingOrValue
             }

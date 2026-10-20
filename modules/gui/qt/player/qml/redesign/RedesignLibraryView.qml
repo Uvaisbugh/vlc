@@ -442,7 +442,7 @@ Item {
         GridView {
             id: mediaView
             objectName: "libraryMediaView"
-            Layout.topMargin: root.expanded ? theme.dp(4) : root.showAddRow ? -theme.dp(10) : theme.dp(5)
+            Layout.topMargin: root.expanded ? theme.dp(root.grid ? 4 : 9) : root.showAddRow ? -theme.dp(10) : theme.dp(5)
             Layout.rightMargin: root.expanded ? -theme.dp(20) : 0
             Layout.fillWidth: true; Layout.fillHeight: true
             clip: true

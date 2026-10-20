@@ -1185,7 +1185,10 @@ TestCase {
         verify(!findChild(player, "playbackStatisticsOverlay").visible)
         compare(player.settingsPage, "")
         const viewport = findChild(player, "redesignViewport")
+        compare(Qt.rect(viewport.x, viewport.y, viewport.width, viewport.height), Qt.rect(10, 10, player.width - 20, player.height - 20))
+        player.fullscreen = true
         compare(Qt.rect(viewport.x, viewport.y, viewport.width, viewport.height), Qt.rect(0, 0, player.width, player.height))
+        player.fullscreen = false
         player.revealControls()
         verify(!player.topVisible)
         verify(!player.bottomVisible)

@@ -266,10 +266,10 @@ FocusScope {
             bottom: parent.bottom
             left: parent.left
             right: parent.right
-            topMargin: root.minimalView || root.libraryExpanded || root.fullscreen ? 0 : theme.dp(40)
-            bottomMargin: root.minimalView || root.libraryExpanded || root.fullscreen ? 0 : root.controlsHeight
-            leftMargin: root.minimalView || root.libraryExpanded || root.fullscreen ? 0 : theme.dp(10)
-            rightMargin: root.minimalView || root.libraryExpanded || root.fullscreen ? 0 : theme.dp(10)
+            topMargin: root.libraryExpanded || root.fullscreen ? 0 : root.minimalView ? theme.dp(10) : theme.dp(40)
+            bottomMargin: root.libraryExpanded || root.fullscreen ? 0 : root.minimalView ? theme.dp(10) : root.controlsHeight
+            leftMargin: root.libraryExpanded || root.fullscreen ? 0 : theme.dp(10)
+            rightMargin: root.libraryExpanded || root.fullscreen ? 0 : theme.dp(10)
         }
         Rectangle { anchors.fill: parent; color: audioArtwork.ready && audioArtwork.visible ? "transparent" : "black"; radius: theme.dp(10) }
         Loader { id: videoLoader; anchors.fill: parent; sourceComponent: root.videoContent }
@@ -278,10 +278,10 @@ FocusScope {
             anchors.fill: parent
             anchors.margins: -theme.dp(root.libraryExpanded ? 5 : 10)
             color: "transparent"
-            radius: theme.dp(root.libraryExpanded ? 10 : 20)
+            radius: theme.dp(root.libraryExpanded ? 10 : 19)
             border.width: theme.dp(root.libraryExpanded ? 5 : 10)
             border.color: theme.background
-            visible: (root.libraryExpanded || (!root.fullscreen && !root.minimalView)) && !(audioArtwork.ready && audioArtwork.visible)
+            visible: (root.libraryExpanded || !root.fullscreen) && !(audioArtwork.ready && audioArtwork.visible)
         }
 
 

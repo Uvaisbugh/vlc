@@ -90,7 +90,15 @@ Rectangle {
         x: theme.dp(10); y: theme.dp(10)
         width: parent.width - theme.dp(20); height: width * 9 / 16
         MoveHandler {}
-        Rectangle { anchors.fill: parent; z: 3; color: "transparent"; border.color: root.theme.field; border.width: root.theme.dp(2); radius: root.theme.dp(5) }
+        Rectangle {
+            objectName: "miniPlayerVideoBorder"
+            // Paint the reference border outside the top and sides of the video.
+            x: -root.theme.dp(2); y: -root.theme.dp(2)
+            width: parent.width + root.theme.dp(4)
+            height: Math.ceil(parent.height + root.theme.dp(2))
+            z: 3; color: "transparent"; radius: root.theme.dp(6)
+            border.color: root.theme.field; border.width: root.theme.dp(2)
+        }
         Item {
             anchors.fill: parent; z: 4
             HoverHandler { id: videoHover; blocking: false }
