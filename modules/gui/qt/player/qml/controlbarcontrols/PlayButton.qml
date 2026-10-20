@@ -74,30 +74,6 @@ T.Control {
     T.ToolTip.delay: VLCStyle.delayToolTipAppear
     T.ToolTip.text: root.Accessible.name
 
-    // States
-
-    states: [
-        State {
-            name: "hovered"
-            when: cursorInside
-
-            PropertyChanges {
-                target: hoverShadow
-                opacity: 1.0
-            }
-        }
-    ]
-
-    transitions: Transition {
-        from: ""; to: "*"
-        reversible: true
-        NumberAnimation {
-            properties: "opacity"
-            easing.type: Easing.InOutSine
-            duration: VLCStyle.duration_veryShort
-        }
-    }
-
     // Keys
 
     Keys.onPressed: (event) => {
@@ -152,19 +128,8 @@ T.Control {
 
         hoverEnabled: true
 
-        readonly property bool cursorInside: {
-            if (!containsMouse)
-                return false
-
-            const center = (width / 2)
-            if (Helpers.pointInRadius( center - mouseX,
-                                       center - mouseY,
-                                       center )) {
-                return true
-            } else {
-                return false
-            }
-        }
+        // The redesigned button uses a rectangular hit target.
+        readonly property bool cursorInside: containsMouse
 
         onCursorInsideChanged: {
             if (pressed && !cursorInside) {
@@ -214,13 +179,12 @@ T.Control {
                     && state !== Player.PLAYING_STATE_STOPPED)
                 return VLCIcons.pause_filled
             else
-                return VLCIcons.play_filled
+                return ""
         }
 
-        color: cursorInside ? theme.accent
-                            : "black"  //foreground is always black
+        color: "black"
 
-        font.pixelSize: Math.round(parent.height / 1.7)
+        font.pixelSize: VLCStyle.playerPlayIconSize
 
         font.family: VLCIcons.fontFamily
 
@@ -229,25 +193,27 @@ T.Control {
 
         Accessible.ignored: true
 
-        DelayedBehavior on color {
-            delayedEnabled: theme.initialized
-
-            ColorAnimation {
-                duration: VLCStyle.duration_veryShort
-                easing.type: Easing.InOutSine
-            }
+        Image {
+            anchors.centerIn: parent
+            width: VLCStyle.playerPlayIconSize
+            height: VLCStyle.playerPlayIconSize
+            source: "qrc:/redesign/play.svg"
+            visible: parent.text.length === 0
+            sourceSize: Qt.size(width, height)
+            Accessible.ignored: true
         }
+
     }
 
     background: Item {
-        implicitWidth: height
-        implicitHeight: VLCStyle.icon_medium
+        implicitWidth: VLCStyle.playerPlayButtonWidth
+        implicitHeight: VLCStyle.playerPlayButtonHeight
 
         Widgets.AnimatedBackground {
             anchors.fill: parent
             anchors.margins: -border.width * 4
 
-            radius: width / 2
+            radius: VLCStyle.playerPlayButtonRadius + Math.abs(anchors.margins)
             border.pixelAligned: false
 
             enabled: theme.initialized
@@ -258,66 +224,22 @@ T.Control {
         Rectangle {
             anchors.fill: parent
 
-            radius: width / 2
-
-            gradient: Gradient {
-                GradientStop { position: 0.0; color: "#e25b01" }
-                GradientStop { position: 1.0; color: "#f89a06" }
-            }
-
-            Widgets.RoundedRectangleShadow {
-                id: hoverShadow
-
-                visible: opacity > 0
-                opacity: 0
-
-                blurRadius: VLCStyle.dp(9, VLCStyle.scale)
-                yOffset: VLCStyle.dp(4, VLCStyle.scale)
-
-                color: theme.accent.alpha(0.29)
-            }
+            radius: VLCStyle.playerPlayButtonRadius
+            color: root.cursorInside ? Qt.lighter(theme.accent, 1.08) : theme.accent
 
             Rectangle {
                 id: innerRectangle
 
-                color: "white"
-
+                color: "black"
                 anchors.fill: parent
-                anchors.margins: _diminished ? (parent.width / 2)
-                                             : VLCStyle.dp(2, VLCStyle.scale)
+                radius: parent.radius
+                opacity: state === "diminished" ? 0.2 : 0
 
-                radius: width / 2
-
-                property bool _diminished: false
-
-                onStateChanged: {
-                    if (state === "diminished") {
-                        marginBehavior.enabled = true
-                        bindingTimer.start()
-                    } else {
-                        bindingTimer.stop()
-                        marginBehavior.enabled = false
-                        _diminished = false
-                    }
-                }
-
-                Timer {
-                    // Do not immediately start the animation.
-                    // Give some time if the intention is not
-                    // to hold the button.
-                    id: bindingTimer
-                    interval: mouseArea.pressAndHoldInterval / 3
-                    onTriggered: innerRectangle._diminished = true
-                }
-
-                Behavior on anchors.margins {
-                    id: marginBehavior
+                // Show hold-to-stop progress without a circular shrinking inset.
+                Behavior on opacity {
                     NumberAnimation {
-                        // Press and hold action must be triggered
-                        // as soon as the inner rectangle diminishes.
-                        // Subtract the interval here so that we satisfy
-                        // that condition.
-                        duration: mouseArea.pressAndHoldInterval - bindingTimer.interval
+                        duration: innerRectangle.state === "diminished"
+                                  ? mouseArea.pressAndHoldInterval : VLCStyle.duration_veryShort
                     }
                 }
             }

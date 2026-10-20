@@ -729,7 +729,8 @@ void SystemPalette::makeDarkPalette()
     //window banner & miniplayer
     {
         C::ColorSet CS = C::Window;
-        setColor(CS, C::Bg, C::Primary, C::Normal, Qt::black); //FIXME
+        // Player frame and Controls background in the redesign (Figma 247:445).
+        setColor(CS, C::Bg, C::Primary, C::Normal, QColor("#1B1B1B"));
         setColor(CS, C::Bg, C::Secondary, C::Normal, Qt::black);
         setColor(CS, C::Decoration, C::Border, C::Normal, darkGrey800); //FIXME not a predef
     }

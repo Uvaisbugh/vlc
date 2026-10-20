@@ -1,6 +1,6 @@
 # VLC redesign implementation plan
 
-Status: preparation in progress; no redesigned UI or release build has been delivered.
+Status: baseline compiled; first player component patch in progress; no release delivered.
 Updated: 2026-10-20.
 
 ## Outcome
@@ -20,23 +20,25 @@ the exact inventory must be captured before claiming scope coverage.
 
 ## Current constraints
 
-1. The Figma plugin reports installed and enabled, but this chat does not expose
-   its design-reading tools. Layer inventory, design measurements, screenshots,
-   component states, and asset exports are therefore pending. Do not invent
-   node IDs, tokens, or a claim of pixel fidelity.
+1. This chat does not expose Figma's design-reading tools. Signed-in browser
+   inspection now exposes Properties and SVG exports, and the first player
+   measurements and asset have been captured. The complete frame/state inventory
+   remains pending. Do not invent node IDs or claim unverified visual fidelity.
 2. This checkout is on Windows. No usable native Qt/MinGW build toolchain or
    Docker command was found on PATH, and the WSL distribution listing returned
-   no distributions. A working build environment must be established and tested.
+   no distributions. GitHub cross-compilation now produces a Windows runtime;
+   local runtime testing and the redesigned build remain pending.
 3. VLC's macOS package uses a separate native interface. Qt/QML work does not
    automatically implement the macOS design. Scope that port explicitly after
    the Figma inventory and Windows baseline are verified.
 4. The local checkout is shallow. Fetch sufficient history before workflows
    that calculate dependency hashes or compare historical changes.
 
-The supplied Figma file can now be viewed as a guest in the browser. The main
-player (`247:445`, 1920 × 1080) and miniplayer component (`970:3091`) have been
-identified, but detailed layer properties and exports remain pending.
-The first Windows baseline build has been started through
+The supplied Figma file can now be inspected in the signed-in browser. The main
+player (`247:445`, 1920 × 1080), Controls (`491:1928`), and play button have been
+inspected; see `doc/redesign/PLAYER_SPEC.md`. The miniplayer component
+(`970:3091`) has been identified but not fully inspected. Baseline run
+`39383363475` compiled and uploaded a Windows runtime through
 `.github/workflows/windows-build.yml`; its checkout requests complete history.
 
 ## Implementation sequence

@@ -11,6 +11,7 @@ See `REDESIGN_PLAN.md` for sequencing and the source map.
 - [x] Inspect native Qt/QML source, styles, tests, and Windows build entrypoint.
 - [x] Save an implementation plan, source map, and release checklist.
 - [x] Open the supplied Figma file in the browser and identify the main player frame.
+- [x] Inspect the signed-in player/control/play layers and export the original play SVG.
 - [ ] Make Figma design-reading tools available in the implementation chat.
 - [ ] Retrieve root design context and initial screenshot.
 - [ ] Enumerate all pages, frames, variants, overlays, and interactions.
@@ -19,11 +20,11 @@ See `REDESIGN_PLAN.md` for sequencing and the source map.
 
 ## Build baseline
 
-- [ ] Establish the upstream-compatible compiler/Qt/dependency environment.
-- [ ] Fetch enough Git history for dependency hashes and upstream comparisons.
-- [ ] Build unchanged VLC with the Qt interface enabled.
+- [x] Establish the upstream-compatible compiler/Qt/dependency environment in GitHub CI.
+- [x] Fetch enough Git history for dependency hashes and upstream comparisons in CI.
+- [x] Build unchanged VLC with the Qt interface enabled; run `39383363475`, build step passed.
 - [ ] Launch and smoke-test the unchanged application.
-- [ ] Record build commands, environment, logs, and artifact revision.
+- [x] Record build commands, environment, logs, and artifact revision in CI artifacts.
 - [ ] Add and validate fork CI for compilation and relevant tests.
 
 ## Native implementation
@@ -93,8 +94,8 @@ their rows have passed.
 
 | Blocker | Evidence | Resolution |
 | --- | --- | --- |
-| Figma tools unavailable to this chat | Plugin reports installed/enabled; callable tool inventory contains no Figma tools | Restore tool access, then read the supplied design |
-| Native build environment not established | Qt/MinGW/Docker not found in inspected locations/PATH; no WSL distributions listed | Set up the upstream-compatible environment or validated CI runner |
+| Figma tools unavailable to this chat | Callable tool inventory contains no Figma tools; signed-in browser inspection now exposes Properties and SVG exports | Continue inspecting layers through the browser; full inventory remains pending |
+| Local native compiler environment unavailable | Qt/MinGW/Docker not found in inspected locations/PATH; no WSL distributions listed | GitHub cross-compilation now works; use the produced runtime for Windows smoke testing |
 
 ## Build attempts
 
@@ -109,4 +110,15 @@ their rows have passed.
   [39382578278](https://github.com/Uvaisbugh/vlc/actions/runs/39382578278).
   Observed in progress on 2026-10-20.
 
-No UI implementation or binary release is currently claimed complete.
+## First UI patch
+
+Native play-button geometry, the exported play SVG, default accent, and dark
+Window background are implemented. Syntax/resource checks pass; native build,
+interaction checks, and visual comparison for this patch remain pending.
+See `doc/redesign/PLAYER_SPEC.md` for exact inspected values and current gaps.
+
+Baseline build [39383363475](https://github.com/Uvaisbugh/vlc/actions/runs/39383363475)
+successfully compiled and uploaded the Windows runtime for commit
+`84d6aa25f6fb5970c7bc8c2ad9380f02fdaba2e1`. Runtime smoke testing is pending.
+
+No redesigned screen or public release is currently claimed complete.

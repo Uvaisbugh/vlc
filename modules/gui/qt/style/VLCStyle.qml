@@ -117,6 +117,12 @@ QtObject {
     readonly property int icon_playlistHeader: icon_normal
     readonly property int icon_banner: MainCtx.dp(28, scale)
     readonly property int icon_play: MainCtx.dp(28, scale)
+
+    // Juxtopposed player: Controls / Frame 25 / play (Figma 491:1928).
+    readonly property int playerPlayButtonWidth: MainCtx.dp(54, scale)
+    readonly property int playerPlayButtonHeight: MainCtx.dp(28, scale)
+    readonly property int playerPlayButtonRadius: MainCtx.dp(6, scale)
+    readonly property int playerPlayIconSize: MainCtx.dp(24, scale)
     readonly property int icon_addressBar: icon_normal
     readonly property int icon_actionButton: icon_normal
     readonly property int icon_PIP: icon_normal
