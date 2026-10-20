@@ -12,7 +12,7 @@ ColumnLayout {
     property string label
     property var presentation: ({})
     property real scaleFactor: 1
-    property real compactEditorWidth: 138
+    property real compactEditorWidth: 140
     property color accentColor: "#d37918"
     property bool lightTheme: false
     signal actionRequested(string action)
@@ -38,7 +38,7 @@ ColumnLayout {
     readonly property bool fullWidth: !!presentation.fullWidth
     readonly property bool compact: !!presentation.compact
     readonly property real preferredEditorWidth: compact ? editor === "language"
-        ? Math.min(theme.dp(184), Math.max(theme.dp(138), languageMetrics.advanceWidth + theme.dp(56)))
+        ? Math.min(theme.dp(184), Math.max(theme.dp(root.compactEditorWidth), languageMetrics.advanceWidth + theme.dp(56)))
         : theme.dp(compactEditorWidth) : theme.dp(320)
     readonly property string helpText: presentation.help || description.help || ""
     readonly property RedesignTheme theme: RedesignTheme { scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor }
@@ -163,7 +163,7 @@ ColumnLayout {
     Component {
         id: segmentedEditor
         Rectangle {
-            implicitHeight: theme.dp(34)
+            implicitHeight: theme.dp(root.compact ? 36 : 34)
             radius: theme.dp(4); color: theme.field
             RowLayout {
                 anchors.fill: parent; spacing: theme.dp(2)
@@ -192,7 +192,7 @@ ColumnLayout {
         id: numberChoiceEditor
         Item {
             id: numberControl
-            implicitHeight: theme.dp(34)
+            implicitHeight: theme.dp(root.compact ? 36 : 34)
             property bool custom: false
             readonly property string nativeOption: root.description.name || ""
             onNativeOptionChanged: if (custom) cancel()
@@ -246,7 +246,7 @@ ColumnLayout {
                     inputMethodHints: Qt.ImhDigitsOnly
                     font.pixelSize: theme.dp(14); color: invalid ? theme.danger : theme.foreground
                     Accessible.name: root.label || root.description.title
-                    background: Rectangle { radius: theme.dp(4); color: theme.field; border.color: numberField.invalid ? theme.danger : numberField.activeFocus ? theme.accent : theme.border }
+                    background: Rectangle { radius: theme.dp(root.compact ? 6 : 4); border.width: root.compact ? theme.dp(2) : 1; color: theme.field; border.color: numberField.invalid ? theme.danger : numberField.activeFocus ? theme.accent : theme.border }
                     onAccepted: numberControl.save()
                     Keys.onEscapePressed: numberControl.cancel()
                 }
@@ -270,7 +270,7 @@ ColumnLayout {
     Component {
         id: actionEditor
         Item {
-            implicitHeight: theme.dp(34)
+            implicitHeight: theme.dp(root.compact ? 36 : 34)
             RedesignButton {
                 objectName: "preferenceActionButton"
                 anchors.right: parent.right
@@ -294,7 +294,7 @@ ColumnLayout {
         id: toggleEditor
         Item {
             implicitWidth: preferenceToggle.implicitWidth
-            implicitHeight: theme.dp(34)
+            implicitHeight: theme.dp(root.compact ? 36 : 34)
             RedesignButton {
                 id: preferenceToggle
                 anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter
@@ -335,7 +335,7 @@ ColumnLayout {
         id: languageEditor
         Item {
             id: languageControl
-            implicitHeight: theme.dp(34)
+            implicitHeight: theme.dp(root.compact ? 36 : 34)
             property bool custom: false
             function cancelCustom() {
                 if (languageOrder.invalid) root.backend.cancelLanguageEdit(root.optionName)
@@ -355,6 +355,13 @@ ColumnLayout {
             RedesignComboBox {
                 id: languageCombo
                 objectName: "preferenceChoiceEditor"
+                leftPadding: theme.dp(root.compact ? 14 : 16)
+                background: Rectangle {
+                    radius: theme.dp(6)
+                    color: root.compact ? theme.field : root.lightTheme ? theme.background : "#191919"
+                    border.width: theme.dp(2)
+                    border.color: languageCombo.visualFocus ? theme.accent : root.compact ? root.lightTheme ? theme.border : "#191919" : theme.field
+                }
                 anchors.fill: parent; visible: !languageControl.custom
                 scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
                 model: root.choices; textRole: "label"; valueRole: "value"
@@ -480,8 +487,9 @@ ColumnLayout {
             hoverEnabled: true
             scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
             objectName: "preferenceChoiceEditor"
+            leftPadding: theme.dp(root.compact ? 14 : 16)
             Accessible.name: root.label || root.description.title
-            implicitHeight: theme.dp(34)
+            implicitHeight: theme.dp(root.compact ? 36 : 34)
             model: root.choices; textRole: "label"; valueRole: "value"
             showCurvePreviews: root.choices.some(row => row.curve !== undefined)
             currentIndex: {
@@ -582,12 +590,12 @@ ColumnLayout {
     Component {
         id: colorEditor
         RedesignButton {
-            implicitHeight: theme.dp(34)
+            implicitHeight: theme.dp(root.compact ? 36 : 34)
             leftPadding: theme.dp(14); rightPadding: theme.dp(6)
             scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
             readonly property string chosenColor: "#" + Number(root.currentValue).toString(16).padStart(6, "0")
             caption: chosenColor.toUpperCase(); text: qsTr("Choose %1").arg(root.label)
-            background: Rectangle { radius: theme.dp(4); color: theme.field; border.color: theme.border }
+            background: Rectangle { radius: theme.dp(root.compact ? 6 : 4); border.width: root.compact ? theme.dp(2) : 1; color: theme.field; border.color: root.compact && !root.lightTheme ? "#191919" : theme.border }
             contentItem: RowLayout {
                 Text { Layout.fillWidth: true; text: parent.parent.caption; color: theme.foreground; font.pixelSize: theme.dp(14) }
                 Rectangle { width: theme.dp(20); height: width; color: parent.parent.chosenColor; border.color: theme.border; radius: theme.dp(2) }
@@ -600,7 +608,7 @@ ColumnLayout {
         T.SpinBox {
             id: trackField
             objectName: "preferenceTrackEditor"
-            implicitHeight: theme.dp(34)
+            implicitHeight: theme.dp(root.compact ? 36 : 34)
             from: 0; to: root.description.maximum
             value: Number(root.currentValue)
             editable: true
@@ -620,8 +628,9 @@ ColumnLayout {
                 onActiveFocusChanged: if (activeFocus) selectAll()
             }
             background: Rectangle {
-                radius: theme.dp(4); color: theme.field
-                border.color: trackField.activeFocus ? theme.accent : theme.background
+                radius: theme.dp(root.compact ? 6 : 4); color: theme.field
+                border.width: root.compact ? theme.dp(2) : 1
+                border.color: trackField.activeFocus ? theme.accent : root.compact && !root.lightTheme ? "#191919" : theme.background
             }
             Accessible.name: root.label
             onValueModified: root.commit(value)
@@ -630,7 +639,7 @@ ColumnLayout {
     Component {
         id: textEditor
         RowLayout {
-            implicitHeight: theme.dp(34)
+            implicitHeight: theme.dp(root.compact ? 36 : 34)
             spacing: theme.dp(10)
             C.TextField {
                 id: field
@@ -647,7 +656,7 @@ ColumnLayout {
                     value: field.formattedValue
                 }
                 leftPadding: theme.dp(14); rightPadding: theme.dp(10)
-                Layout.minimumHeight: theme.dp(34)
+                Layout.minimumHeight: theme.dp(root.compact ? 36 : 34)
                 color: invalid ? "#e56b6b" : theme.foreground; font.pixelSize: theme.dp(14)
                 selectByMouse: true
                 placeholderText: root.description.placeholder || root.presentation.placeholder || ""
@@ -656,7 +665,7 @@ ColumnLayout {
                 echoMode: root.description.kind === "password" ? TextInput.Password : TextInput.Normal
                 inputMethodHints: root.description.kind === "integer" || root.description.kind === "float" ? Qt.ImhFormattedNumbersOnly : Qt.ImhNone
                 Accessible.name: root.label || root.description.title
-                background: Rectangle { radius: theme.dp(4); color: theme.field; border.color: field.invalid ? "#e56b6b" : field.activeFocus ? theme.accent : theme.border }
+                background: Rectangle { radius: theme.dp(root.compact ? 6 : 4); border.width: root.compact ? theme.dp(2) : 1; color: theme.field; border.color: field.invalid ? "#e56b6b" : field.activeFocus ? theme.accent : theme.border }
                 onEditingFinished: {
                     if (!root.editorEnabled) return
                     const number = Number(text)

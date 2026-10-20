@@ -55,20 +55,26 @@ C.Pane {
             Rectangle { anchors.bottom: parent.bottom; width: parent.width; height: theme.dp(10); color: parent.color }
             RowLayout {
                 anchors.fill: parent; anchors.leftMargin: theme.dp(14); anchors.rightMargin: theme.dp(14)
-                spacing: theme.dp(14)
+                spacing: theme.dp(root.width > theme.dp(360) ? 49 / 3 : 14)
                 Repeater {
                     model: [{key: "playback", icon: "playback-selected-two-tone", label: qsTr("Playback")}, {key: "video", icon: "video-two-tone", label: qsTr("Video")}, {key: "audio", icon: "audio-two-tone", label: qsTr("Audio")}, {key: "subtitles", icon: "subtitles-two-tone", label: qsTr("Subtitles")}]
                     RedesignButton {
                         required property var modelData
+                        objectName: "settingsTab_" + modelData.key
                         Layout.fillWidth: true
+                        Layout.preferredWidth: root.width > theme.dp(360) ? theme.dp(modelData.key === "playback" || modelData.key === "subtitles" ? 91.5 : 70) : 1
                         scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
                         Layout.fillHeight: true
-                        captionFontSize: 12; iconSize: theme.dp(16)
+                        captionFontSize: 12; iconSize: theme.dp(20); captionSpacing: 8
+                        topPadding: 0; bottomPadding: theme.dp(2)
                         selectedForeground: theme.foreground
-                        selectedIconForeground: modelData.key === "video" ? theme.accent : theme.foreground
-                        iconDetailColor: modelData.key === "video" ? theme.foreground : theme.menuAccent
+                        selectedIconForeground: modelData.key === "video" ? theme.accent : modelData.key === "playback" ? theme.foreground : theme.playerLabel
+                        iconForeground: root.lightTheme ? Qt.lighter(theme.foreground, 1.5) : "#404040"
+                        foreground: root.lightTheme ? Qt.lighter(theme.foreground, 1.5) : theme.playerLabel
+                        iconDetailColor: selected ? modelData.key === "video" ? theme.playerLabel : theme.menuAccent : iconForeground
                         background: Rectangle { color: parent.hovered ? theme.hover : "transparent"; border.width: parent.visualFocus ? 1 : 0; border.color: theme.accent }
-                        iconName: selected ? modelData.icon : "nav-" + modelData.key; text: modelData.label
+                        iconName: modelData.key === "playback" ? modelData.icon : "nav-" + modelData.key
+                        selectedIconName: modelData.icon; text: modelData.label
                         caption: root.width > theme.dp(360) ? modelData.label : ""
                         selected: root.page === modelData.key
                         onClicked: root.pageRequested(modelData.key)
@@ -157,7 +163,7 @@ C.Pane {
                 }
                 RedesignVideoSettings {
                     videoBackdropContent: root.videoBackdropContent
-                    Layout.fillWidth: true; Layout.leftMargin: theme.dp(20); Layout.rightMargin: theme.dp(20)
+                    Layout.fillWidth: true; Layout.leftMargin: theme.dp(24); Layout.rightMargin: theme.dp(20)
                     visible: root.page === "video"
                     backend: root.preferenceStore
                     rendererModel: Player.rendererManager

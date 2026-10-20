@@ -80,7 +80,7 @@ ColumnLayout {
         }
         RedesignComboBox {
             objectName: "sleepTimerChoice"
-            Layout.preferredWidth: theme.dp(217)
+            Layout.preferredWidth: theme.dp(220)
             Layout.minimumWidth: 0
             implicitHeight: theme.dp(48)
             videoBackdropContent: root.videoBackdropContent
@@ -132,7 +132,7 @@ ColumnLayout {
         }
         RedesignComboBox {
             objectName: "modelChoiceField"
-            Layout.preferredWidth: theme.dp(217); Layout.minimumWidth: 0
+            Layout.preferredWidth: theme.dp(220); Layout.minimumWidth: 0
             implicitHeight: theme.dp(48); popupGap: 20
             videoBackdropContent: root.videoBackdropContent
             scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
@@ -168,7 +168,8 @@ ColumnLayout {
         from: 0.25; to: 2; stepSize: 0.05
         inputFrom: 0.03125; inputTo: 31.25
         ticks: [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2]
-        sliderTopMargin: 10
+        valueFieldHeight: 32; valueFieldOutline: false
+        sliderTopMargin: 12
         sliderLeftMargin: -4
         currentValue: Math.abs(root.playbackRate); enabled: root.rateAvailable
         onMoved: value => root.rateRequested(value)

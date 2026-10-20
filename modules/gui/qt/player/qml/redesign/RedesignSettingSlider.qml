@@ -11,6 +11,7 @@ ColumnLayout {
     property bool lightTheme: false
     property string label
     property color labelColor: theme.foreground
+    property real labelLeftPadding: 0
     property color valueColor: theme.foreground
     property string suffix
     property int decimals: 0
@@ -35,6 +36,8 @@ ColumnLayout {
     property bool scaleLabelsVisible: true
     property bool displayValueAsText: false
     property bool valueFieldVisible: true
+    property real valueFieldHeight: 34
+    property bool valueFieldOutline: true
     property bool sliderVisible: true
     property string valueLabel
     property var valueToPosition: null
@@ -45,15 +48,15 @@ ColumnLayout {
     spacing: theme.dp(8)
     RowLayout {
         Layout.fillWidth: true
-        Text { Layout.fillWidth: true; text: root.label; color: root.labelColor; font.pixelSize: theme.dp(14); wrapMode: Text.WordWrap }
+        Text { Layout.fillWidth: true; leftPadding: theme.dp(root.labelLeftPadding); text: root.label; color: root.labelColor; font.pixelSize: theme.dp(14); wrapMode: Text.WordWrap }
         T.SpinBox {
             id: valueField
             objectName: "settingValueField"
             property real factor: Math.pow(10, root.decimals)
-            Layout.preferredWidth: theme.dp(138)
+            Layout.preferredWidth: theme.dp(140)
             visible: root.valueFieldVisible && !root.displayValueAsText
-            implicitHeight: theme.dp(34)
-            leftPadding: theme.dp(14); rightPadding: theme.dp(10)
+            implicitHeight: theme.dp(root.valueFieldHeight)
+            leftPadding: theme.dp(16); rightPadding: theme.dp(10)
             font.pixelSize: theme.dp(14)
             editable: true
             from: Math.round(root.inputFrom * factor); to: Math.round(root.inputTo * factor)
@@ -89,8 +92,11 @@ ColumnLayout {
                 onActiveFocusChanged: if (activeFocus) selectAll()
             }
             background: Rectangle {
-                radius: theme.dp(4); color: theme.field
-                border.color: valueField.activeFocus ? theme.accent : theme.background
+                y: root.valueFieldOutline ? -theme.dp(1) : 0
+                height: valueField.height + (root.valueFieldOutline ? theme.dp(2) : 0)
+                radius: theme.dp(6); color: theme.field
+                border.width: valueField.activeFocus || root.valueFieldOutline ? theme.dp(2) : 0
+                border.color: valueField.activeFocus ? theme.accent : root.lightTheme ? theme.border : "#191919"
             }
             Accessible.name: root.label
             onValueModified: root.moved(value / factor)

@@ -25,7 +25,7 @@ RowLayout {
         return -1
     }
     signal selectionRequested(int index)
-    Layout.minimumHeight: theme.dp(fullWidth ? 46 : 68)
+    Layout.minimumHeight: theme.dp(fullWidth ? 48 : 68)
     spacing: theme.dp(12)
     Text {
         visible: !root.fullWidth
@@ -43,9 +43,9 @@ RowLayout {
     RedesignComboBox {
         objectName: "modelChoiceField"
         Layout.fillWidth: root.fullWidth
-        Layout.preferredWidth: root.fullWidth ? 1 : theme.dp(217)
+        Layout.preferredWidth: root.fullWidth ? 1 : theme.dp(220)
         Layout.minimumWidth: 0
-        implicitHeight: theme.dp(46)
+        implicitHeight: theme.dp(root.fullWidth ? 48 : 46)
         scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
         model: root.choiceModel; textRole: "display"
         currentIndex: root.selectedIndex

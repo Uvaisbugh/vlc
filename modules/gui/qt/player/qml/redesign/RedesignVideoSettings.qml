@@ -117,7 +117,7 @@ ColumnLayout {
         RedesignComboBox {
             objectName: parent.optionName + "Choice"
             videoBackdropContent: root.videoBackdropContent
-            Layout.fillWidth: true; Layout.preferredWidth: theme.dp(217); Layout.maximumWidth: theme.dp(217); Layout.minimumWidth: 0
+            Layout.fillWidth: true; Layout.preferredWidth: theme.dp(220); Layout.maximumWidth: theme.dp(220); Layout.minimumWidth: 0
             implicitHeight: theme.dp(48)
             scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
             model: parent.choices; textRole: "label"; valueRole: "value"
@@ -179,7 +179,7 @@ ColumnLayout {
     }
     component Option: RedesignPreferenceRow {
         Layout.fillWidth: true
-        compactEditorWidth: 217
+        compactEditorWidth: 220
         backend: videoStore
         scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
         presentation: ({compact: true})
@@ -219,7 +219,7 @@ ColumnLayout {
     Text { Layout.topMargin: theme.dp(12); Layout.bottomMargin: theme.dp(26); text: qsTr("Defaults"); color: theme.playerHeading; font.pixelSize: theme.dp(16) }
     Text { Layout.bottomMargin: theme.dp(18); text: qsTr("Flip"); color: theme.playerLabel; font.pixelSize: theme.dp(14) }
     RowLayout {
-        Layout.fillWidth: true; Layout.preferredHeight: theme.dp(44); spacing: theme.dp(2)
+        Layout.fillWidth: true; Layout.leftMargin: -theme.dp(4); Layout.preferredHeight: theme.dp(44); spacing: theme.dp(2)
         Repeater {
             model: [qsTr("None"), qsTr("Horizontal"), qsTr("Vertical")]
             RedesignButton {
@@ -288,7 +288,7 @@ ColumnLayout {
         }
         RedesignComboBox {
             objectName: "videoRendererChoice"
-            Layout.preferredWidth: Math.min(theme.dp(217), root.width * .61); Layout.minimumWidth: 0; implicitHeight: theme.dp(46)
+            Layout.preferredWidth: Math.min(theme.dp(220), root.width * .62); Layout.minimumWidth: 0; implicitHeight: theme.dp(48)
             scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
             model: {
                 const rows = [qsTr("Local")]
@@ -309,7 +309,7 @@ ColumnLayout {
             }
         }
     }
-    Rectangle { Layout.fillWidth: true; Layout.leftMargin: -theme.dp(20); Layout.rightMargin: -theme.dp(20); Layout.topMargin: theme.dp(12); height: theme.dp(1); color: theme.border }
+    Rectangle { Layout.fillWidth: true; Layout.leftMargin: -theme.dp(24); Layout.rightMargin: -theme.dp(20); Layout.topMargin: theme.dp(10); height: theme.dp(1); color: theme.border }
     Text { Layout.topMargin: theme.dp(20); text: qsTr("Filters"); color: theme.playerHeading; font.pixelSize: theme.dp(16) }
     RedesignFilterSection {
         objectName: "videoEssentialSection"
