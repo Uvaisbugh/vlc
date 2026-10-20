@@ -10,6 +10,14 @@ It compiles with extra checks and stages the native Windows runtime using
 identifiers, and SHA-256 checksums. A successful cross-compilation will still
 require a separate Windows launch/playback test. The first run is
 https://github.com/Uvaisbugh/vlc/actions/runs/39382291096.
+That run verified the image pull but exposed a container UID mismatch during
+checkout. After adding `options: --user 0`, the restarted run is
+https://github.com/Uvaisbugh/vlc/actions/runs/39382578278.
+The first runner reported the image digest:
+
+```text
+sha256:8e83e800036f8f4a6da1031a6b80c2b5bad8337259c072ffa22398baaeaad880
+```
 
 ## Baseline
 

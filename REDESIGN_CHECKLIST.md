@@ -105,5 +105,8 @@ their rows have passed.
   the container UID could not write GitHub runner state files. The workflow
   now overrides the container user to fix that mismatch. Compilation, packaging,
   and runtime verification are not yet marked complete.
+- Restarted run after the checkout fix:
+  [39382578278](https://github.com/Uvaisbugh/vlc/actions/runs/39382578278).
+  Observed in progress on 2026-10-20.
 
 No UI implementation or binary release is currently claimed complete.
