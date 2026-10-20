@@ -13,12 +13,13 @@ Item {
     property real progress: 0
     property bool showPlaceholderBackground: true
     property color surroundColor: theme.panel
+    property color placeholderColor: lightTheme ? theme.field : iconName === "folder" ? "#222222" : "#171717"
     readonly property RedesignTheme theme: RedesignTheme { scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor }
     clip: true
     Rectangle {
         anchors.fill: parent
         visible: root.showPlaceholderBackground || artworkImage.status === Image.Ready
-        color: root.lightTheme ? root.theme.field : root.iconName === "folder" ? "#222222" : "#171717"
+        color: root.placeholderColor
     }
     RedesignIcon { anchors.centerIn: parent; width: root.theme.dp(root.iconSize); height: width; name: root.iconName; color: root.theme.foreground; visible: artworkImage.status !== Image.Ready }
     Image { id: artworkImage; objectName: "libraryArtworkImage"; anchors.fill: parent; source: root.source; fillMode: Image.PreserveAspectCrop; asynchronous: true; visible: status === Image.Ready }
