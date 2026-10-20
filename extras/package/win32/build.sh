@@ -1,7 +1,9 @@
 #!/bin/sh
 
 set -e
-set -x
+if [ "${VLC_BUILD_TRACE:-1}" != 0 ]; then
+    set -x
+fi
 
 info()
 {

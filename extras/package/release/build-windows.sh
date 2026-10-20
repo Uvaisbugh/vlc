@@ -12,6 +12,7 @@ cd "$work"
 # Build patched contribs from source; upstream prebuilt contribs lack fork patches.
 # Target executables need a Windows host; Wine may not work under ARM emulation.
 export VLC_NO_EXE_WRAPPER=1
+export VLC_BUILD_TRACE=0
 export MCONFIGFLAGS="${MCONFIGFLAGS:-} -Dmedialibrary=enabled -Dtests=disabled -Dnsis=disabled -Dwix=disabled"
 "$root/extras/package/win32/build.sh" -a x86_64 -r -i '' -m -l -o "$work/install"
 # Unlike Windows API DLLs, the Vulkan loader is a redistributable dependency.

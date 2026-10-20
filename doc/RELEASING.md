@@ -36,6 +36,18 @@ Its portable ZIP includes imported MinGW runtime DLLs and the Vulkan loader,
 with their license notices. Windows build metadata lists the external imports.
 No signing credentials or OpenSubtitles app key are required.
 
+The optional repository Actions secret `OPENSUBTITLES_API_KEY` is passed only to
+the build steps for both macOS targets, Linux and Windows. Containers inherit it
+by environment-variable name; the value is not included in command arguments.
+The consumer-key generator writes a private build header without printing the
+key, and Windows release builds disable shell tracing. GitHub masks registered
+secret values in logs. The generated header is not uploaded as a separate
+artifact or included in the source archive; the consumer key is embedded in the
+distributed application and can be extracted from it.
+Local builds do not receive GitHub repository secrets: supply the environment
+variable or `OPENSUBTITLES_API_KEY_FILE` locally to include a key. Without a key,
+the build still succeeds and users can configure their own key in settings.
+
 ## Review before pushing
 
 Review [the 4.0.0-beta.4 notes](releases/4.0.0-beta.4.md), the packaging scripts in

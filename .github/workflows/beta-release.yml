@@ -74,6 +74,8 @@ jobs:
           build-release-tools/bin/aqt install-qt mac desktop 6.8.3 clang_64 -O build-release-qt -m qtshadertools
           echo "QT_ROOT_DIR=$GITHUB_WORKSPACE/build-release-qt/6.8.3/macos" >> "$GITHUB_ENV"
       - name: Build and bundle
+        env:
+          OPENSUBTITLES_API_KEY: ${{ secrets.OPENSUBTITLES_API_KEY }}
         run: bash extras/package/release/build-native.sh
       - name: Verify relocated app
         run: |
@@ -102,8 +104,11 @@ jobs:
       - name: Build environment
         run: docker build -t vlc-release-linux -f extras/package/release/Dockerfile.linux .
       - name: Build and bundle
+        env:
+          OPENSUBTITLES_API_KEY: ${{ secrets.OPENSUBTITLES_API_KEY }}
         run: >-
           docker run --rm -v "$PWD:/src" -e JOBS -e RELEASE_TAG
+          -e OPENSUBTITLES_API_KEY
           -e GIT_CONFIG_COUNT=1 -e GIT_CONFIG_KEY_0=safe.directory -e GIT_CONFIG_VALUE_0=/src
           vlc-release-linux bash extras/package/release/build-native.sh
       - name: Install playback test dependencies
@@ -156,8 +161,11 @@ jobs:
           sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc
           df -h .
       - name: Build and package portable archive
+        env:
+          OPENSUBTITLES_API_KEY: ${{ secrets.OPENSUBTITLES_API_KEY }}
         run: >-
           docker run --rm --user root -v "$PWD:/src" -w /src -e JOBS -e RELEASE_TAG
+          -e OPENSUBTITLES_API_KEY
           -e GIT_CONFIG_COUNT=1 -e GIT_CONFIG_KEY_0=safe.directory -e GIT_CONFIG_VALUE_0=/src
           registry.videolan.org/vlc-debian-win64-posix@sha256:8e83e800036f8f4a6da1031a6b80c2b5bad8337259c072ffa22398baaeaad880
           bash extras/package/release/build-windows.sh
