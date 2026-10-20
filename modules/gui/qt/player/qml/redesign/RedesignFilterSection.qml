@@ -7,6 +7,7 @@ ColumnLayout {
     property string label
     property bool expanded: false
     property real contentTopMargin: 10
+    property real contentBottomMargin: 16
     property Component settings
     readonly property alias contentItem: contentLoader.item
     property real scaleFactor: 1
@@ -22,7 +23,7 @@ ColumnLayout {
     Rectangle {
         Layout.fillWidth: true
         implicitHeight: column.implicitHeight
-        radius: theme.dp(4); color: root.expanded ? theme.background : theme.field
+        radius: theme.dp(6); color: root.expanded ? theme.background : theme.field
         ColumnLayout {
             id: column
             width: parent.width; spacing: 0
@@ -32,7 +33,7 @@ ColumnLayout {
                 scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
                 text: root.expanded ? qsTr("Collapse Settings") : qsTr("Expand Settings")
                 Accessible.name: root.label + ": " + text
-                background: Rectangle { radius: theme.dp(4); color: parent.hovered ? theme.hover : "transparent"; border.width: parent.visualFocus ? 1 : 0; border.color: theme.accent }
+                background: Rectangle { radius: theme.dp(6); color: parent.hovered ? theme.hover : "transparent"; border.width: parent.visualFocus ? 1 : 0; border.color: theme.accent }
                 contentItem: RowLayout {
                     spacing: theme.dp(8)
                     Text { Layout.fillWidth: true; Layout.leftMargin: theme.dp(16); text: parent.parent.text; color: theme.playerLabel; font.pixelSize: theme.dp(14) }
@@ -44,7 +45,7 @@ ColumnLayout {
                 id: contentLoader
                 objectName: "filterContent"
                 Layout.fillWidth: true; Layout.leftMargin: theme.dp(16); Layout.rightMargin: theme.dp(16)
-                Layout.topMargin: visible ? theme.dp(root.contentTopMargin) : 0; Layout.bottomMargin: visible ? theme.dp(16) : 0
+                Layout.topMargin: visible ? theme.dp(root.contentTopMargin) : 0; Layout.bottomMargin: visible ? theme.dp(root.contentBottomMargin) : 0
                 visible: root.expanded
                 sourceComponent: root.settings
             }

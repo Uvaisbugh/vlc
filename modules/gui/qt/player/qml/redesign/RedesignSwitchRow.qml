@@ -41,7 +41,7 @@ RowLayout {
         TextMetrics { id: onMetrics; font: stateText.font; text: qsTr("ON") }
         TextMetrics { id: offMetrics; font: stateText.font; text: qsTr("OFF") }
         background: Rectangle {
-            radius: root.theme.dp(4); color: toggle.checked ? root.theme.progress : root.theme.field
+            radius: root.theme.dp(6); color: toggle.checked ? root.theme.progress : root.theme.field
             border.color: toggle.visualFocus ? root.theme.accent : root.theme.background
         }
         contentItem: Item {

@@ -145,7 +145,11 @@ ColumnLayout {
     }
     component FilterSlider: RedesignSettingSlider {
         required property string optionName
+        property bool effectEnabled: true
         Layout.fillWidth: true
+        fillOrigin: from
+        fillColor: effectEnabled ? theme.progress : root.lightTheme ? theme.border : "#232323"
+        handleColor: effectEnabled ? theme.menuAccent : root.lightTheme ? theme.playerLabel : "#707070"
         labelColor: theme.playerLabel
         scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
         visible: root.backend.describe(optionName).kind !== undefined
@@ -313,6 +317,7 @@ ColumnLayout {
     Text { Layout.topMargin: theme.dp(20); text: qsTr("Filters"); color: theme.playerHeading; font.pixelSize: theme.dp(16) }
     RedesignFilterSection {
         objectName: "videoEssentialSection"
+        contentTopMargin: 9; contentBottomMargin: 20
         Layout.fillWidth: true; label: qsTr("Essential")
         scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
         settings: ColumnLayout {
@@ -396,7 +401,7 @@ ColumnLayout {
     }
     RedesignFilterSection {
         objectName: "videoColorsSection"
-        Layout.fillWidth: true; label: qsTr("Colors"); contentTopMargin: -3
+        Layout.fillWidth: true; label: qsTr("Colors"); contentTopMargin: -4; contentBottomMargin: 20
         scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
         settings: ColumnLayout {
             spacing: 0
@@ -438,10 +443,10 @@ ColumnLayout {
                                     onClicked: { const color = root.backend.chooseColor(colorField.text); if (color) root.backend.stage(modelData.option, parseInt(color.replace(/^#/, ""), 16)) }
                                 }
                             }
-                            FilterSwitch { Layout.fillWidth: false; Layout.preferredWidth: theme.dp(68); label: ""; accessibleName: modelData.label; filterName: modelData.name }
+                            FilterSwitch { objectName: "videoColorSwitch_" + modelData.name; Layout.fillWidth: false; Layout.preferredWidth: theme.dp(68); label: ""; accessibleName: modelData.label; filterName: modelData.name }
                         }
-                        FilterSlider { Layout.topMargin: -theme.dp(3); Layout.bottomMargin: theme.dp(7); visible: modelData.name === "colorthres"; label: qsTr("Saturation"); optionName: "colorthres-saturationthres"; from: 0; to: 100; stepSize: 1 }
-                        FilterSlider { Layout.bottomMargin: theme.dp(16); visible: modelData.name === "colorthres"; label: qsTr("Similarity"); optionName: "colorthres-similaritythres"; from: 0; to: 100; stepSize: 1 }
+                        FilterSlider { objectName: modelData.name === "colorthres" ? "videoThresholdSaturation" : ""; Layout.topMargin: -theme.dp(7); Layout.bottomMargin: theme.dp(7); effectEnabled: root.enabledFilter("colorthres"); visible: modelData.name === "colorthres"; label: qsTr("Saturation"); optionName: "colorthres-saturationthres"; from: 0; to: 100; stepSize: 1 }
+                        FilterSlider { objectName: modelData.name === "colorthres" ? "videoThresholdSimilarity" : ""; Layout.bottomMargin: theme.dp(18); effectEnabled: root.enabledFilter("colorthres"); visible: modelData.name === "colorthres"; label: qsTr("Similarity"); optionName: "colorthres-similaritythres"; from: 0; to: 100; stepSize: 1 }
                     }
                     Rectangle {
                         x: -theme.dp(16); y: parent.height + (modelData.name === "extract" ? theme.dp(9) : 0)
@@ -454,10 +459,10 @@ ColumnLayout {
             Rectangle { Layout.fillWidth: true; Layout.leftMargin: -theme.dp(16); Layout.rightMargin: -theme.dp(16); Layout.topMargin: -theme.dp(1); height: theme.dp(1); color: root.lightTheme ? theme.border : "#222222" }
             FilterSwitch { label: qsTr("Posterize"); filterName: "posterize" }
             Rectangle { Layout.fillWidth: true; Layout.leftMargin: -theme.dp(16); Layout.rightMargin: -theme.dp(16); Layout.topMargin: -theme.dp(1); height: theme.dp(1); color: root.lightTheme ? theme.border : "#222222" }
-            FilterSwitch { label: qsTr("Gradient"); filterName: "gradient" }
+            FilterSwitch { Layout.topMargin: theme.dp(5); label: qsTr("Gradient"); filterName: "gradient" }
             RedesignComboBox {
                 objectName: "videoGradientMode"
-                Layout.fillWidth: true; Layout.topMargin: theme.dp(11); implicitHeight: theme.dp(46)
+                Layout.fillWidth: true; Layout.topMargin: theme.dp(5); implicitHeight: theme.dp(48)
                 scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
                 model: root.backend.describe("gradient-mode").choices || []; textRole: "label"; valueRole: "value"
                 currentIndex: model.findIndex(row => row.value === root.current("gradient-mode"))
@@ -468,7 +473,9 @@ ColumnLayout {
                 model: [{label: qsTr("Color"), option: "gradient-color"}, {label: qsTr("Cartoon"), option: "gradient-cartoon"}]
                 RedesignSwitchRow {
                     required property var modelData
-                    Layout.fillWidth: true
+                    required property int index
+                    Layout.fillWidth: true; Layout.minimumHeight: theme.dp(47)
+                    Layout.topMargin: index === 0 ? theme.dp(8) : 0
                     labelColor: theme.playerLabel
                     scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
                     objectName: "videoGradientFlag_" + modelData.option

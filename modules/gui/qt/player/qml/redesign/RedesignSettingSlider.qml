@@ -13,6 +13,8 @@ ColumnLayout {
     property color labelColor: theme.foreground
     property real labelLeftPadding: 0
     property color valueColor: theme.foreground
+    property color fillColor: theme.progress
+    property color handleColor: theme.menuAccent
     property string suffix
     property int decimals: 0
     property real currentValue: 0
@@ -149,7 +151,7 @@ ColumnLayout {
                 y: inset
                 width: Math.abs(slider.visualPosition - origin) * span
                 height: Math.max(0, parent.height - 2 * inset)
-                radius: Math.max(0, parent.radius - inset); color: theme.progress
+                radius: Math.max(0, parent.radius - inset); color: root.fillColor
             }
             Repeater {
                 model: root.ticks
@@ -166,7 +168,7 @@ ColumnLayout {
             id: sliderHandle
             x: slider.leftPadding + slider.visualPosition * (slider.availableWidth - width)
             y: slider.topPadding + slider.availableHeight / 2 - height / 2
-            width: theme.dp(8); height: theme.dp(24); radius: theme.dp(4); color: theme.menuAccent
+            width: theme.dp(8); height: theme.dp(24); radius: theme.dp(4); color: root.handleColor
             border.width: slider.visualFocus ? 1 : 0; border.color: theme.bright
         }
     }
