@@ -1,0 +1,82 @@
+name: Windows x64 VLC build
+
+on:
+  push:
+    branches: [codex/vlc-redesign]
+    paths:
+      - '.github/workflows/windows-build.yml'
+      - 'modules/gui/qt/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-vlc-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  windows-x64:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    container:
+      # Same versioned image as extras/ci/gitlab-ci.yml at our baseline.
+      image: registry.videolan.org/vlc-debian-win64-posix:20260611225331
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Check out source and history for contrib selection
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Record source and toolchain
+        run: |
+          mkdir -p build-evidence artifacts
+          {
+            git rev-parse HEAD
+            printf 'Build image: %s\n' 'registry.videolan.org/vlc-debian-win64-posix:20260611225331'
+            x86_64-w64-mingw32-gcc --version
+            uname -a
+          } > build-evidence/environment.txt
+
+      - name: Build native VLC and stage Windows runtime
+        run: |
+          set -euo pipefail
+          export JOBS=2
+          args=(-a x86_64 -x -o "$PWD/artifacts/vlc-win64")
+          contrib_sha=$(extras/ci/get-contrib-sha.sh win64)
+          contrib_url="https://artifacts.videolan.org/vlc/win64/vlc-contrib-x86_64-w64-mingw32-${contrib_sha}.tar.zst"
+          printf '%s\n' "$contrib_sha" > build-evidence/contrib-revision.txt
+          if extras/ci/check-url.sh "$contrib_url"; then
+            export VLC_PREBUILT_CONTRIBS_URL="$contrib_url"
+            args+=(-p)
+          fi
+          extras/package/win32/build.sh "${args[@]}" 2>&1 | tee build-evidence/build.log
+          test -f artifacts/vlc-win64/vlc.exe
+          cp COPYING COPYING.LIB artifacts/vlc-win64/
+          tar -C artifacts -czf artifacts/vlc-windows-x64.tar.gz vlc-win64
+          sha256sum artifacts/vlc-windows-x64.tar.gz > artifacts/SHA256SUMS
+
+      - name: Upload Windows runtime
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: vlc-windows-x64-${{ github.sha }}
+          path: |
+            artifacts/vlc-windows-x64.tar.gz
+            artifacts/SHA256SUMS
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Preserve build evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: build-evidence-${{ github.sha }}
+          path: |
+            build-evidence/
+            win64/config.log
+          if-no-files-found: warn
+          retention-days: 14
