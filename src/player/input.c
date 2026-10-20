@@ -292,6 +292,7 @@ vlc_player_input_HandleState(struct vlc_player_input *input,
                 reason = VLC_PLAYER_MEDIA_STOPPING_USER;
             else
                 reason = VLC_PLAYER_MEDIA_STOPPING_EOS;
+            input->ml.completed = reason == VLC_PLAYER_MEDIA_STOPPING_EOS;
             input->started = false;
 
             /* Note: no need to hold the media here, as it is already protected
@@ -1301,6 +1302,7 @@ vlc_player_input_New(vlc_player_t *player, input_item_t *item)
     input->ml.restore = VLC_RESTOREPOINT_NONE;
     input->ml.restore_states = false;
     input->ml.delay_restore = false;
+    input->ml.completed = false;
     input->ml.pos = -1.f;
     input->ml.has_audio_tracks = input->ml.has_video_tracks = false;
 

@@ -231,8 +231,10 @@ static void ResumeOpen(vlc_player_t *player, struct resume_test *test,
 {
     test->queries = 0;
     test->position = -1.;
-    /* Keep the video track for media classification, without a decoder. */
+    /* Keep the video track for media classification, without a decoder or
+     * read-ahead that would advance the reported position after a seek. */
     input_item_AddOption(item, ":no-video", VLC_INPUT_OPTION_TRUSTED);
+    input_item_AddOption(item, ":mock-pts_delay=0", VLC_INPUT_OPTION_TRUSTED);
     assert(vlc_player_SetCurrentMedia(player, item) == VLC_SUCCESS);
     assert(vlc_player_Start(player) == VLC_SUCCESS);
     while (vlc_player_GetState(player) != VLC_PLAYER_STATE_PAUSED)
@@ -350,27 +352,66 @@ static void TestResumeProgress(vlc_object_t *root, vlc_medialibrary_t *ml)
 
     /* Repeat through new player inputs, as the playlist does, rather than
      * repeating inside a single input (which never restores library state). */
-    mrl = "mock://video_track_count=1;video_width=16;video_height=16;"
-          "video_frame_rate=100;length=33000000";
-    item = input_item_New(mrl, "Repeat resume progress");
-    assert(item);
-    test.queries = 0;
-    test.repeats = 2;
-    test.finish = true;
-    vlc_player_SetStartPaused(player, false);
-    assert(vlc_player_SetCurrentMedia(player, item) == VLC_SUCCESS);
-    assert(vlc_player_Start(player) == VLC_SUCCESS);
-    while (test.completed < 3 ||
-           vlc_player_GetState(player) != VLC_PLAYER_STATE_STOPPED)
-        vlc_player_CondWait(player, &test.changed);
-    assert(test.completed == 3 && test.repeats == 0);
-    assert(test.queries == 0);
-    ResumeCheckProgress(ml, mrl, -1.f);
-    test.finish = false;
-    vlc_player_SetStartPaused(player, true);
-    ResumeOpen(player, &test, item, 0);
-    ResumeStop(player, &test);
-    input_item_Release(item);
+    const struct {
+        const char *mrl;
+        unsigned loops;
+        bool finish;
+        bool unknown_length;
+    } repeats[] = {
+        {"mock://video_track_count=1;video_width=16;video_height=16;"
+         "video_frame_rate=100;length=33000000", 3, true, false},
+        /* Play the entire short clip: the last periodic position update can
+         * fall outside the end margin, even though playback reaches EOF. */
+        {"mock://video_track_count=1;video_width=16;video_height=16;"
+         "video_frame_rate=100;length=1000000", 2, false, false},
+        /* Completion also clears progress when neither the library nor the
+         * player knows the duration. */
+        {"mock://video_track_count=1;video_width=16;video_height=16;"
+         "video_frame_rate=100;length=250000;report_length=false", 2, false, true},
+    };
+    for (size_t i = 0; i < ARRAY_SIZE(repeats); ++i)
+    {
+        /* Each scenario has its own output clock; repeats within it still
+         * open successive inputs on the same player. */
+        vlc_player_RemoveListener(player, listener);
+        vlc_player_Unlock(player);
+        vlc_player_Delete(player);
+        player = vlc_player_New(VLC_OBJECT(vlc_object_instance(root)),
+                                VLC_PLAYER_LOCK_NORMAL);
+        assert(player);
+        vlc_player_Lock(player);
+        listener = vlc_player_AddListener(player, &callbacks, &test);
+        assert(listener);
+        mrl = repeats[i].mrl;
+        item = input_item_New(mrl, "Repeat resume progress");
+        assert(item);
+        test.queries = test.completed = 0;
+        test.repeats = repeats[i].loops - 1;
+        test.finish = repeats[i].finish;
+        vlc_player_SetStartPaused(player, false);
+        assert(vlc_player_SetCurrentMedia(player, item) == VLC_SUCCESS);
+        assert(vlc_player_Start(player) == VLC_SUCCESS);
+        while (test.completed < repeats[i].loops ||
+               vlc_player_GetState(player) != VLC_PLAYER_STATE_STOPPED)
+            vlc_player_CondWait(player, &test.changed);
+        assert(test.completed == repeats[i].loops && test.repeats == 0);
+        assert(test.queries == 0);
+        ResumeCheckProgress(ml, mrl, -1.f);
+        test.finish = false;
+        vlc_player_SetStartPaused(player, true);
+        ResumeOpen(player, &test, item, 0);
+        /* A new input interrupted mid-file must still save a resume point,
+         * even when the preceding input of this media completed normally. */
+        vlc_player_SetPosition(player, .4);
+        ResumeWaitPosition(player, &test, .4);
+        if (repeats[i].unknown_length)
+            assert(vlc_player_GetLength(player) == VLC_TICK_INVALID);
+        ResumeStop(player, &test);
+        ResumeCheckProgress(ml, mrl, .4f);
+        ResumeOpen(player, &test, item, 1);
+        ResumeStop(player, &test);
+        input_item_Release(item);
+    }
 
     vlc_player_RemoveListener(player, listener);
     vlc_player_Unlock(player);

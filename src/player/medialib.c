@@ -302,15 +302,16 @@ vlc_player_UpdateMLStates(vlc_player_t *player, struct vlc_player_input* input)
         /* Match the float precision used by Media::computePositionType(),
          * including positions exactly at a margin. */
         float position = input->position;
-        /* Directly opened files are added as external media, which the media
-         * library never parses, so it has no duration for them and stores any
-         * position as resumable. A file played to the end would then offer to
-         * resume on its next start, including on every repeat loop. Clear the
-         * progress near either end ourselves, using the length we know.
-         * There is no play count bump for such media, which the media library
-         * only does when it knows the duration. */
-        if (media->i_duration <= 0 && input->length > 0)
+        /* A short clip can finish before its last position update reaches
+         * the end margin. Use the stop reason instead: let the library handle
+         * completion when it knows the duration, or clear progress directly. */
+        if (input->ml.completed)
+            position = media->i_duration > 0 ? 1.f : -1.f;
+        else if (media->i_duration <= 0 && input->length > 0)
         {
+            /* External media have no library duration. Apply the library's
+             * start/end margins using the length the player knows. There is
+             * still no play count bump without a library duration. */
             const float margin = vlc_player_GetMlProgressMargin(input->length);
             if (position < margin || position > 1.f - margin)
                 position = -1.f;
