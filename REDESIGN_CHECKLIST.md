@@ -1,6 +1,6 @@
 # VLC redesign checklist
 
-Updated: 2026-10-19. Checked items require evidence; unchecked items are pending.
+Updated: 2026-10-20. Checked items require evidence; unchecked items are pending.
 See `REDESIGN_PLAN.md` for sequencing and the source map.
 
 ## Repository and preparation
@@ -10,6 +10,7 @@ See `REDESIGN_PLAN.md` for sequencing and the source map.
 - [x] Record baseline revision: `429df92c508f98038ac992772fea1fec1322c9f9`.
 - [x] Inspect native Qt/QML source, styles, tests, and Windows build entrypoint.
 - [x] Save an implementation plan, source map, and release checklist.
+- [x] Open the supplied Figma file in the browser and identify the main player frame.
 - [ ] Make Figma design-reading tools available in the implementation chat.
 - [ ] Retrieve root design context and initial screenshot.
 - [ ] Enumerate all pages, frames, variants, overlays, and interactions.
@@ -57,6 +58,8 @@ their rows have passed.
 | Figma node ID / frame | Theme / size / state | Native files | Assets | Functional result | Visual evidence | Status |
 | --- | --- | --- | --- | --- | --- | --- |
 | Pending Figma tool access | Unknown | Unassigned | Unexported | Not run | None | Blocked |
+| `247:445` / Player | 1920 × 1080, dark, video playback | `player/qml/Player.qml`, `ControlBar.qml`, `TopBar.qml` (under `modules/gui/qt/`) | Not exported | Not run | Browser canvas inspected on 2026-10-20; detailed context still pending | Identified |
+| `970:3091` / Miniplayer | Component; variants not yet inspected | `modules/gui/qt/player/qml/MiniPlayer.qml` | Not exported | Not run | Browser search selection on 2026-10-20 | Identified |
 
 ## Verification
 
@@ -92,5 +95,15 @@ their rows have passed.
 | --- | --- | --- |
 | Figma tools unavailable to this chat | Plugin reports installed/enabled; callable tool inventory contains no Figma tools | Restore tool access, then read the supplied design |
 | Native build environment not established | Qt/MinGW/Docker not found in inspected locations/PATH; no WSL distributions listed | Set up the upstream-compatible environment or validated CI runner |
+
+## Build attempts
+
+- 2026-10-20: Added `.github/workflows/windows-build.yml` and started the first
+  Windows x64 baseline build using the versioned VideoLAN cross-compilation
+  container. [Run 39382291096](https://github.com/Uvaisbugh/vlc/actions/runs/39382291096).
+  The initial run pulled the image successfully but checkout failed because
+  the container UID could not write GitHub runner state files. The workflow
+  now overrides the container user to fix that mismatch. Compilation, packaging,
+  and runtime verification are not yet marked complete.
 
 No UI implementation or binary release is currently claimed complete.

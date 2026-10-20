@@ -22,6 +22,8 @@ jobs:
     container:
       # Same versioned image as extras/ci/gitlab-ci.yml at our baseline.
       image: registry.videolan.org/vlc-debian-win64-posix:20260611225331
+      # The image's default UID differs from the hosted runner's workspace UID.
+      options: --user 0
     defaults:
       run:
         shell: bash

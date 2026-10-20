@@ -1,7 +1,7 @@
 # VLC redesign implementation plan
 
 Status: preparation in progress; no redesigned UI or release build has been delivered.
-Updated: 2026-10-19.
+Updated: 2026-10-20.
 
 ## Outcome
 
@@ -32,6 +32,12 @@ the exact inventory must be captured before claiming scope coverage.
    the Figma inventory and Windows baseline are verified.
 4. The local checkout is shallow. Fetch sufficient history before workflows
    that calculate dependency hashes or compare historical changes.
+
+The supplied Figma file can now be viewed as a guest in the browser. The main
+player (`247:445`, 1920 × 1080) and miniplayer component (`970:3091`) have been
+identified, but detailed layer properties and exports remain pending.
+The first Windows baseline build has been started through
+`.github/workflows/windows-build.yml`; its checkout requests complete history.
 
 ## Implementation sequence
 

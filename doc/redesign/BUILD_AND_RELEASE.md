@@ -3,6 +3,14 @@
 This document records a proposed route, not a successful build. Use the
 checked-out upstream scripts as the authoritative source when commands change.
 
+As of 2026-10-20, `.github/workflows/windows-build.yml` implements a first
+Windows baseline build on GitHub-hosted Linux using the upstream container.
+It compiles with extra checks and stages the native Windows runtime using
+`-a x86_64 -x -o <artifact-directory>`. It preserves build logs, source/toolchain
+identifiers, and SHA-256 checksums. A successful cross-compilation will still
+require a separate Windows launch/playback test. The first run is
+https://github.com/Uvaisbugh/vlc/actions/runs/39382291096.
+
 ## Baseline
 
 - Upstream revision: `429df92c508f98038ac992772fea1fec1322c9f9`.
