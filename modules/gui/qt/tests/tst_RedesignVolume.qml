@@ -67,6 +67,22 @@ TestCase {
         verify(moved.count > 0)
         verify(player.volume > 0.75 && player.volume <= player.maxVolume)
     }
+    function test_unavailableVolumeDoesNotShowOrSendANegativeLevel() {
+        player.volume = -1
+        const control = slider()
+        verify(!control.enabled)
+        compare(findChild(control, "redesignToolTip").text, "Volume")
+        compare(findChild(player, "muteButton").iconName, "volume")
+        mouseWheel(control, 40, 14, 0, 120)
+        mouseClick(control, 50, 14)
+        compare(wheelEvents.length, 0)
+        compare(moved.count, 0)
+        player.volume = 0.5
+        verify(control.enabled)
+        compare(findChild(control, "redesignToolTip").text, "50%")
+        mouseWheel(control, 40, 14, 0, 120)
+        compare(wheelEvents.length, 1)
+    }
     function test_fillIsVisibleInsideTheCone() {
         const control = slider()
         tryCompare(findChild(control, "volumeConeFill"), "status", Image.Ready)

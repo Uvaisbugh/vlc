@@ -11,6 +11,8 @@ T.Slider {
     property bool muted: false
     // The audio level can exceed the slider's configured visual range.
     property real currentVolume: value
+    readonly property bool volumeAvailable: Number.isFinite(currentVolume) && currentVolume >= 0
+    enabled: volumeAvailable
     signal wheelRequested(var event)
     readonly property RedesignTheme theme: RedesignTheme { scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor }
     implicitWidth: theme.dp(90)
@@ -49,7 +51,7 @@ T.Slider {
         }
         Item {
             anchors.fill: parent
-            opacity: root.muted ? 0.3 : 1
+            opacity: !root.enabled ? 0.35 : root.muted ? 0.3 : 1
             RedesignSvg {
                 objectName: "volumeConeBackground"
                 anchors.fill: parent
@@ -78,5 +80,5 @@ T.Slider {
             border.color: theme.accent
         }
     }
-    RedesignToolTip { theme: root.theme; text: qsTr("%1%").arg(Math.round((root.pressed ? root.value : root.currentVolume) * 100)); visible: root.hovered || root.visualFocus || root.pressed; delay: 0 }
+    RedesignToolTip { theme: root.theme; text: root.volumeAvailable ? qsTr("%1%").arg(Math.round((root.pressed ? root.value : root.currentVolume) * 100)) : root.Accessible.name; visible: root.hovered || root.visualFocus || root.pressed; delay: 0 }
 }
