@@ -159,6 +159,8 @@ typedef struct vlc_ml_file_t
     bool b_external;
     bool b_removable;
     bool b_present;
+    /** This associated file was excluded by an explicit saved track choice. */
+    bool b_unselected;
 } vlc_ml_file_t;
 
 typedef struct vlc_ml_file_list_t
@@ -244,6 +246,8 @@ typedef struct vlc_ml_media_t
             int i_disc_nb;
         } album_track;
     };
+    bool b_subtitle_track_selection;
+    bool b_soundtrack_track_selection;
 } vlc_ml_media_t;
 
 typedef struct vlc_ml_group_t
@@ -662,6 +666,28 @@ enum vlc_ml_control
     VLC_ML_ALBUM_SET_FAVORITE, /**< arg1: album id; arg2: bool; can fail */
     VLC_ML_GENRE_SET_FAVORITE, /**< arg1: genre id; arg2: bool; can fail */
     VLC_ML_PLAYLIST_SET_FAVORITE, /**< arg1: playlist id; arg2: bool; can fail */
+
+    /** Save subtitle or soundtrack file choices for one media.
+     * arg1: media id; arg2: vlc_ml_file_type_t; arg3: const char* const*;
+     * arg4: size_t count. An empty list unselects all files of this type.
+     * Discovered records, other files and disk contents are preserved.
+     * External associations and the selected list change atomically.
+     */
+    VLC_ML_MEDIA_SET_EXTERNAL_MRLS,
+
+    /** Saved matching templates for newly opened files in one folder.
+     * GET: folder MRL, file type, char** definition (NULL if not set).
+     * SET: folder MRL, file type, const char* definition (NULL removes it).
+     * Definitions are opaque, versioned UTF-8 records.
+     */
+    VLC_ML_FOLDER_GET_TRACK_RULE,
+    VLC_ML_FOLDER_SET_TRACK_RULE,
+    /** Resolve a saved folder rule without changing per-media choices.
+     * media MRL, file type, bool* applies, vlc_ml_file_list_t** files.
+     * Runs filesystem checks; callers must use a worker or input thread.
+     * An explicit per-media choice, including an empty one, takes priority.
+     */
+    VLC_ML_MEDIA_GET_FOLDER_TRACKS,
 };
 
 /**
@@ -1186,6 +1212,32 @@ static inline int vlc_ml_media_add_external_mrl( vlc_medialibrary_t* p_ml, int64
                                                  const char* psz_mrl, int i_type )
 {
     return vlc_ml_control( p_ml, VLC_ML_MEDIA_ADD_EXTERNAL_MRL, i_media_id, psz_mrl, i_type );
+}
+
+static inline int vlc_ml_media_set_external_mrls( vlc_medialibrary_t* ml,
+        int64_t media_id, vlc_ml_file_type_t type, const char* const* mrls,
+        size_t count )
+{
+    return vlc_ml_control( ml, VLC_ML_MEDIA_SET_EXTERNAL_MRLS, media_id,
+                           (int)type, mrls, count );
+}
+
+static inline int vlc_ml_folder_get_track_rule(vlc_medialibrary_t* ml,
+    const char* folder, vlc_ml_file_type_t type, char** definition)
+{
+    return vlc_ml_control(ml, VLC_ML_FOLDER_GET_TRACK_RULE, folder, (int)type, definition);
+}
+
+static inline int vlc_ml_folder_set_track_rule(vlc_medialibrary_t* ml,
+    const char* folder, vlc_ml_file_type_t type, const char* definition)
+{
+    return vlc_ml_control(ml, VLC_ML_FOLDER_SET_TRACK_RULE, folder, (int)type, definition);
+}
+
+static inline int vlc_ml_media_get_folder_tracks(vlc_medialibrary_t* ml,
+    const char* media, vlc_ml_file_type_t type, bool* applies, vlc_ml_file_list_t** files)
+{
+    return vlc_ml_control(ml, VLC_ML_MEDIA_GET_FOLDER_TRACKS, media, (int)type, applies, files);
 }
 
 static inline int vlc_ml_media_set_type( vlc_medialibrary_t* p_ml, int64_t i_media_id,

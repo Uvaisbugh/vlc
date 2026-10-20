@@ -49,6 +49,9 @@
 #endif
 
 #include "compositor_dcomp_acrylicsurface.hpp"
+#include "compositor_dcomp_backdrop.hpp"
+#include "compositor_dcomp_background.hpp"
+#include "videosurface.hpp"
 #include "maininterface/interface_window_handler.hpp"
 
 #include <memory>
@@ -66,6 +69,8 @@ int CompositorDirectComposition::windowEnable(const vlc_window_cfg_t *)
     commonWindowEnable();
 
     const auto ret = m_rootVisual->AddVisual(m_videoVisual.Get(), FALSE, m_uiVisual);
+    if (ret == S_OK && m_videoBackdrop)
+        m_videoBackdrop->setEnabled(true);
     m_dcompDevice->Commit();
 
     if (ret == S_OK)
@@ -80,6 +85,8 @@ void CompositorDirectComposition::windowDisable()
     assert(m_rootVisual);
     assert(m_videoVisual);
 
+    if (m_videoBackdrop)
+        m_videoBackdrop->setEnabled(false);
     commonWindowDisable();
 
     const auto ret = m_rootVisual->RemoveVisual(m_videoVisual.Get());
@@ -89,6 +96,7 @@ void CompositorDirectComposition::windowDisable()
 
 void CompositorDirectComposition::windowDestroy()
 {
+    m_videoProxy.Reset();
     m_videoVisual.Reset();
     CompositorVideo::windowDestroy();
 }
@@ -100,6 +108,7 @@ CompositorDirectComposition::CompositorDirectComposition( qt_intf_t* p_intf,  QO
 
 CompositorDirectComposition::~CompositorDirectComposition()
 {
+    qApp->removeNativeEventFilter(this);
     cleanup();
 
     //m_acrylicSurface should be released before the RHI context is destroyed
@@ -244,6 +253,32 @@ bool CompositorDirectComposition::setup()
     res = m_rootVisual->AddVisual(m_uiVisual, FALSE, NULL);
     assert(res == S_OK);
 
+    auto background = std::make_unique<DCompOpaqueBackground>();
+    res = background->initialize(m_dcompDevice, nullptr);
+    if (FAILED(res))
+    {
+        msg_Err(m_intf, "Cannot create opaque composition background: 0x%lX", res);
+        m_setupState = SetupState::Fail;
+        m_setupStateCond.notify_all();
+        return false;
+    }
+    res = background->attachBelow(m_rootVisual.Get(), m_uiVisual);
+    if (FAILED(res))
+    {
+        msg_Err(m_intf, "Cannot attach opaque composition background: 0x%lX", res);
+        m_setupState = SetupState::Fail;
+        m_setupStateCond.notify_all();
+        return false;
+    }
+    m_opaqueBackground = std::move(background);
+    updateOpaqueBackground();
+
+    m_videoBackdrop = std::make_shared<DCompVideoBackdrop>(m_dcompDevice, m_rootVisual.Get(), m_uiVisual);
+    m_backdropConnection = connect(m_videoSurfaceProvider.get(), &VideoSurfaceProvider::backdropRegionsChanged,
+        this, [backdrop = m_videoBackdrop](const VideoBackdropState &state) { backdrop->setRegions(state); },
+        Qt::DirectConnection);
+    m_videoBackdrop->setRegions(m_videoSurfaceProvider->backdropRegions());
+
     m_setupState = SetupState::Success;
     m_setupStateCond.notify_all();
     lock.unlock();
@@ -276,6 +311,12 @@ bool CompositorDirectComposition::setup()
 
 void CompositorDirectComposition::cleanup()
 {
+    disconnect(m_backdropConnection);
+    if (m_videoBackdrop)
+        m_videoBackdrop->close();
+    m_videoBackdrop.reset();
+    // The vout keeps this raw handle until windowDestroy(). A closed backdrop
+    // retains the real COM objects but cannot add new effects during teardown.
     m_videoVisual.Reset();
     m_acrylicSurface.reset();
 
@@ -287,6 +328,9 @@ void CompositorDirectComposition::cleanup()
         m_rootVisual->RemoveVisual(m_uiVisual);
     }
 
+    if (m_opaqueBackground && m_rootVisual)
+        m_rootVisual->RemoveVisual(m_opaqueBackground->visual());
+    m_opaqueBackground.reset();
     m_rootVisual.Reset();
 
     // When the window receives the event `SurfaceAboutToBeDestroyed`,
@@ -311,6 +355,7 @@ bool CompositorDirectComposition::makeMainInterface(MainCtx* mainCtx, std::funct
     m_quickView->setColor(Qt::transparent);
 
     m_quickView->installEventFilter(this);
+    qApp->installNativeEventFilter(this);
 
     connect(quickViewPtr,
             &QQuickWindow::frameSwapped, // At this stage, we can be sure that QRhi and QRhiSwapChain are valid.
@@ -370,6 +415,8 @@ void CompositorDirectComposition::onSurfacePositionChanged(const QPointF& positi
 
     m_videoVisual->SetOffsetX(position.x());
     m_videoVisual->SetOffsetY(position.y());
+    if (m_videoBackdrop)
+        m_videoBackdrop->setPosition(position);
 
     // WARNING: Commit is requested explicitly through `::commitSurface()` after size
     //          and position changes are applied.
@@ -400,19 +447,24 @@ void CompositorDirectComposition::destroyMainInterface()
     assert(!m_uiVisual);
 }
 
+void CompositorDirectComposition::cancelVoutWindowSetup()
+{
+    QMutexLocker lock(&m_setupStateLock);
+    m_setupState = SetupState::Fail;
+    m_setupStateCond.notify_all();
+}
+
 void CompositorDirectComposition::unloadGUI()
 {
+    cancelVoutWindowSetup();
     m_acrylicSurface.reset();
     m_interfaceWindowHandler.reset();
 
     {
-        QMutexLocker lock(&m_setupStateLock);
         if (m_quickView) {
             disconnect(m_quickView.get(), &QQuickWindow::frameSwapped,
                        this, nullptr);
         }
-        m_setupState = SetupState::Fail;
-        m_setupStateCond.notify_all();
     }
 
     //at this point we need to unload the QML content but the window still need to
@@ -458,7 +510,8 @@ bool CompositorDirectComposition::setupVoutWindow(vlc_window_t *p_wnd, VoutDestr
     p_wnd->type = VLC_WINDOW_TYPE_DCOMP;
 
     p_wnd->display.dcomp_device = m_dcompDevice;
-    p_wnd->handle.dcomp_visual = m_videoVisual.Get();
+    m_videoProxy.Attach(makeVideoBackdropProxy(m_videoVisual.Get(), m_videoBackdrop));
+    p_wnd->handle.dcomp_visual = m_videoProxy.Get();
 
     return true;
 }
@@ -508,6 +561,11 @@ bool CompositorDirectComposition::eventFilter(QObject *watched, QEvent *event)
 {
     switch (event->type())
     {
+    case QEvent::Resize:
+    case QEvent::DevicePixelRatioChange:
+        if (watched == m_quickView.get())
+            updateOpaqueBackground();
+        break;
     case QEvent::PlatformSurface:
         if (watched == m_quickView.get() &&
             static_cast<QPlatformSurfaceEvent *>(event)->surfaceEventType() == QPlatformSurfaceEvent::SurfaceAboutToBeDestroyed)
@@ -520,6 +578,27 @@ bool CompositorDirectComposition::eventFilter(QObject *watched, QEvent *event)
     }
 
     return QObject::eventFilter(watched, event);
+}
+
+bool CompositorDirectComposition::nativeEventFilter(const QByteArray &, void *message, qintptr *)
+{
+    const auto *event = static_cast<MSG *>(message);
+    if (event->message == WM_SIZE && m_quickView && m_quickView->handle() &&
+        event->hwnd == reinterpret_cast<HWND>(m_quickView->winId()))
+        updateOpaqueBackground();
+    return false;
+}
+
+void CompositorDirectComposition::updateOpaqueBackground()
+{
+    if (!m_opaqueBackground || !m_quickView)
+        return;
+    RECT client{};
+    // Native pixels include the last row/column even when Qt rounds a logical
+    // window size at fractional DPI. Cover new pixels before the next UI frame.
+    if (GetClientRect(reinterpret_cast<HWND>(m_quickView->winId()), &client) &&
+        m_opaqueBackground->setSize({client.right - client.left, client.bottom - client.top}) == S_OK)
+        m_dcompDevice->Commit();
 }
 
 void CompositorDirectComposition::commitSurface()

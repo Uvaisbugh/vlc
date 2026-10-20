@@ -156,6 +156,7 @@ typedef struct vout_thread_sys_t
     struct {
         vlc_mutex_t     lock;
         bool            changed;
+        bool            failed;
         bool            new_interlaced;
         char            *configuration;
         video_format_t    src_fmt;
@@ -780,7 +781,12 @@ static int FilterRestartCallback(vlc_object_t *p_this, char const *psz_var,
                                  void *p_data)
 {
     (void) p_this; (void) psz_var; (void) oldval; (void) newval;
-    vout_ControlChangeFilters((vout_thread_t *)p_data, NULL);
+    vout_thread_sys_t *sys = VOUT_THREAD_TO_SYS((vout_thread_t *)p_data);
+    /* A non-command option needs a rebuild of the current chain. Passing
+     * NULL to vout_ControlChangeFilters removes every enabled filter. */
+    vlc_mutex_lock(&sys->filter.lock);
+    sys->filter.changed = true;
+    vlc_mutex_unlock(&sys->filter.lock);
     return 0;
 }
 
@@ -864,6 +870,7 @@ static void ChangeFilters(vout_thread_sys_t *vout)
     vout_thread_sys_t *sys = vout;
     FilterFlush(vout, true);
     DelAllFilterCallbacks(vout);
+    sys->filter.failed = false;
 
     vlc_array_t array_static;
     vlc_array_t array_interactive;
@@ -954,19 +961,24 @@ static void ChangeFilters(vout_thread_sys_t *vout)
         vlc_array_clear(array);
     }
 
-    if (!es_format_IsSimilar(p_fmt_current, &fmt_target)) {
+    /* A previous filter can have changed the display's accepted chroma.
+     * Removing it must restore the decoder format, or convert to the format
+     * the display still accepts. User crop and aspect overrides are separate. */
+    es_format_t fmt_display;
+    es_format_InitFromVideo(&fmt_display, vout_GetDisplayInputFormat(sys->display));
+    if (!es_format_IsSimilar(p_fmt_current, &fmt_display)) {
         es_format_LogDifferences(vlc_object_logger(&vout->obj),
-                "current", p_fmt_current, "new", &fmt_target);
+                "current", &fmt_display, "new", p_fmt_current);
 
         /* Shallow local copy */
         es_format_t tmp = *p_fmt_current;
         /* Assign the same chroma to compare everything except the chroma */
-        tmp.i_codec = fmt_target.i_codec;
-        tmp.video.i_chroma = fmt_target.video.i_chroma;
+        tmp.i_codec = fmt_display.i_codec;
+        tmp.video.i_chroma = fmt_display.video.i_chroma;
 
         int ret = VLC_EGENERIC;
 
-        bool only_chroma_changed = es_format_IsSimilar(&tmp, &fmt_target);
+        bool only_chroma_changed = es_format_IsSimilar(&tmp, &fmt_display);
         if (only_chroma_changed)
         {
             picture_pool_t *new_private_pool =
@@ -999,16 +1011,24 @@ static void ChangeFilters(vout_thread_sys_t *vout)
             msg_Dbg(&vout->obj, "Adding a filter to compensate for format changes in interactive chain (%p)",
                     (void*)sys->filter.chain_interactive);
             if (filter_chain_AppendConverter(sys->filter.chain_interactive,
-                                             &fmt_target) != VLC_SUCCESS) {
+                                             &fmt_display) != VLC_SUCCESS) {
                 msg_Err(&vout->obj, "Failed to compensate for the format changes, removing all filters");
                 DelAllFilterCallbacks(vout);
                 filter_chain_Reset(sys->filter.chain_static,      &fmt_target, vctx_target, &fmt_target);
                 filter_chain_Reset(sys->filter.chain_interactive, &fmt_target, vctx_target, &fmt_target);
+                if (!es_format_IsSimilar(&fmt_target, &fmt_display)
+                    && filter_chain_AppendConverter(sys->filter.chain_interactive,
+                                                    &fmt_display) != VLC_SUCCESS)
+                {
+                    msg_Err(&vout->obj, "Failed to convert the decoder format for the display");
+                    sys->filter.failed = true;
+                }
             }
         }
     }
 
     es_format_Clean(&fmt_target);
+    es_format_Clean(&fmt_display);
 
     sys->filter.changed = false;
 }
@@ -1215,11 +1235,14 @@ static picture_t *ConvertRGBAAndBlend(vout_thread_sys_t *vout, picture_t *pic,
 
 static picture_t *FilterPictureInteractive(vout_thread_sys_t *sys)
 {
-    // hold it as the filter chain will release it or return it and we release it
-    picture_Hold(sys->displayed.current);
-
     vlc_mutex_lock(&sys->filter.lock);
-    picture_t *filtered = filter_chain_VideoFilter(sys->filter.chain_interactive, sys->displayed.current);
+    picture_t *filtered = NULL;
+    if (!sys->filter.failed)
+    {
+        // hold it as the filter chain will release it or return it and we release it
+        picture_Hold(sys->displayed.current);
+        filtered = filter_chain_VideoFilter(sys->filter.chain_interactive, sys->displayed.current);
+    }
     vlc_mutex_unlock(&sys->filter.lock);
 
     if (filtered && filtered->date != sys->displayed.current->date)
@@ -1864,7 +1887,10 @@ static int vout_Start(vout_thread_sys_t *vout, vlc_video_context *vctx, const vo
 
     sys->private_pool = NULL;
 
+    vlc_mutex_lock(&sys->filter.lock);
+    free(sys->filter.configuration);
     sys->filter.configuration = NULL;
+    vlc_mutex_unlock(&sys->filter.lock);
     video_format_Copy(&sys->filter.src_fmt, &sys->original);
     sys->filter.src_vctx = vctx ? vlc_video_context_Hold(vctx) : NULL;
 
@@ -1887,6 +1913,7 @@ static int vout_Start(vout_thread_sys_t *vout, vlc_video_context *vctx, const vo
     vlc_mutex_lock(&sys->filter.lock);
     sys->filter.chain_static = cs;
     sys->filter.chain_interactive = ci;
+    sys->filter.failed = false;
     vlc_mutex_unlock(&sys->filter.lock);
 
     vout_display_cfg_t dcfg;
@@ -1963,6 +1990,8 @@ error:
     cs = sys->filter.chain_static;
     sys->filter.chain_interactive = NULL;
     sys->filter.chain_static = NULL;
+    free(sys->filter.configuration);
+    sys->filter.configuration = NULL;
     vlc_mutex_unlock(&sys->filter.lock);
     if (ci != NULL)
         filter_chain_Delete(ci);
@@ -2063,8 +2092,8 @@ static void vout_ReleaseDisplay(vout_thread_sys_t *vout)
         vlc_video_context_Release(sys->filter.src_vctx);
         sys->filter.src_vctx = NULL;
     }
-    free(sys->filter.configuration);
-
+    /* The stopped output is still available to settings callbacks. Its filter
+     * configuration stays valid until the next start or final release. */
     assert(sys->private_pool == NULL);
 
     vlc_mutex_lock(&sys->window_lock);
@@ -2105,11 +2134,15 @@ void vout_StopDisplay(vout_thread_t *vout)
 static void vout_DisableWindow(vout_thread_sys_t *sys)
 {
     vlc_mutex_lock(&sys->window_lock);
-    if (sys->window_enabled) {
-        vlc_window_Disable(sys->display_cfg.window);
-        sys->window_enabled = false;
-    }
+    const bool enabled = sys->window_enabled;
+    sys->window_enabled = false;
     vlc_mutex_unlock(&sys->window_lock);
+
+    /* Stop and Request are serialized by the input resource. The window
+     * provider can wait for its UI thread, which can change display settings
+     * or remove variable callbacks. Do not hold their window lock here. */
+    if (enabled)
+        vlc_window_Disable(sys->display_cfg.window);
 }
 
 void vout_Stop(vout_thread_t *vout)
@@ -2158,6 +2191,7 @@ void vout_Release(vout_thread_t *vout)
 
     free(sys->splitter_name);
     free(sys->display_cfg.icc_profile);
+    free(sys->filter.configuration);
 
     if (sys->dec_device)
         vlc_decoder_device_Release(sys->dec_device);
@@ -2314,6 +2348,69 @@ vout_thread_t *vout_Hold( vout_thread_t *vout)
     return vout;
 }
 
+int vout_ChangeVisualizationFormat(vout_thread_t *vout, const video_format_t *fmt)
+{
+    vout_thread_sys_t *sys = VOUT_THREAD_TO_SYS(vout);
+    if (sys->display == NULL || sys->filter.src_vctx != NULL || !VoutCheckFormat(fmt)
+        || fmt->p_palette != NULL || fmt->i_chroma != sys->original.i_chroma
+        || fmt->orientation != sys->original.orientation
+        || fmt->projection_mode != sys->original.projection_mode)
+        return VLC_EGENERIC;
+
+    video_format_t original;
+    VoutFixFormat(&original, fmt);
+    if (video_format_IsSimilar(&original, &sys->original))
+    {
+        video_format_Clean(&original);
+        return VLC_SUCCESS;
+    }
+    picture_pool_t *pool = picture_pool_NewFromFormat(&original, FILTER_POOL_SIZE);
+    if (pool == NULL)
+    {
+        video_format_Clean(&original);
+        return VLC_ENOMEM;
+    }
+
+    VoutRenderWakeUpUrgent(sys);
+    vout_control_Hold(&sys->control);
+    vlc_mutex_lock(&sys->window_lock);
+    vlc_queuedmutex_lock(&sys->display_lock);
+    int ret = vout_ResizeDisplay(sys->display, &original);
+    if (ret == VLC_SUCCESS)
+    {
+        video_format_Clean(&sys->original);
+        sys->original = original;
+        picture_pool_t *previous = sys->private_pool;
+        sys->private_pool = pool;
+        pool = previous;
+    }
+    vlc_queuedmutex_unlock(&sys->display_lock);
+    vlc_mutex_unlock(&sys->window_lock);
+
+    if (ret == VLC_SUCCESS)
+    {
+        /* Drop old-size work without resetting the audio clock or clearing the
+         * presented image. The next picture rebuilds the filter source format. */
+        FilterFlush(sys, false);
+        if (sys->displayed.decoded)
+        {
+            picture_Release(sys->displayed.decoded);
+            sys->displayed.decoded = NULL;
+        }
+        picture_fifo_Lock(sys->decoder_fifo);
+        picture_fifo_Flush(sys->decoder_fifo, VLC_TICK_INVALID, true);
+        picture_fifo_Unlock(sys->decoder_fifo);
+        msg_Dbg(vout, "visualization display resized in place to %ux%u",
+                fmt->i_visible_width, fmt->i_visible_height);
+    }
+    else
+        video_format_Clean(&original);
+
+    picture_pool_Release(pool);
+    vout_control_ReleaseAndWake(&sys->control);
+    return ret;
+}
+
 int vout_ChangeSource( vout_thread_t *vout, const video_format_t *original,
                        const vlc_video_context *vctx )
 {
@@ -2338,22 +2435,28 @@ int vout_ChangeSource( vout_thread_t *vout, const video_format_t *original,
     return 0;
 }
 
-static int EnableWindowLocked(vout_thread_sys_t *vout, const video_format_t *original)
+static int EnableWindow(vout_thread_sys_t *vout, const video_format_t *original)
 {
     assert(vout != NULL);
     vout_thread_sys_t *sys = vout;
 
     assert(!sys->dummy);
-    vlc_mutex_assert(&sys->window_lock);
+    vlc_mutex_lock(&sys->window_lock);
     VoutGetDisplayCfg(vout, original, &sys->display_cfg);
     vout_UpdateWindowSizeLocked(vout);
+    const bool enabled = sys->window_enabled;
+    vlc_mutex_unlock(&sys->window_lock);
 
-    if (!sys->window_enabled) {
+    /* Request and Stop are serialized by the input resource. As for disable,
+     * the provider can wait for a UI thread that changes display settings. */
+    if (!enabled) {
         if (vlc_window_Enable(sys->display_cfg.window)) {
             msg_Err(&vout->obj, "failed to enable window");
             return -1;
         }
+        vlc_mutex_lock(&sys->window_lock);
         sys->window_enabled = true;
+        vlc_mutex_unlock(&sys->window_lock);
     }
     else
     {
@@ -2427,17 +2530,15 @@ int vout_Request(const vout_configuration_t *cfg, vlc_video_context *vctx, input
     sys->original = original;
     sys->displayed.projection = original.projection_mode;
     vout_InitSource(vout);
+    vlc_mutex_unlock(&sys->window_lock);
 
-    if (EnableWindowLocked(vout, &original) != 0)
+    if (EnableWindow(vout, &original) != 0)
     {
         /* the window was not enabled, nor the display started */
         msg_Err(cfg->vout, "failed to enable window");
-        vlc_mutex_unlock(&sys->window_lock);
         assert(sys->display == NULL);
         return -1;
     }
-    vlc_mutex_unlock(&sys->window_lock);
-
     if (sys->display != NULL)
         vout_StopDisplay(cfg->vout);
 

@@ -33,6 +33,7 @@
 #include <QQuickWindow>
 #include <QQuickItem>
 #include <QQmlProperty>
+#include <QVariantMap>
 #include "player/input_models.hpp"
 #include "util/audio_device_model.hpp"
 #include "util/varchoicemodel.hpp"
@@ -138,12 +139,23 @@ public:
     Q_PROPERTY(QString name READ getName NOTIFY nameChanged FINAL)
     Q_PROPERTY(float buffering READ getBuffering  NOTIFY bufferingChanged FINAL)
     Q_PROPERTY(float rate READ getRate WRITE setRate NOTIFY rateChanged FINAL)
+    Q_PROPERTY(QVariantMap playbackStatistics READ getPlaybackStatistics NOTIFY playbackStatisticsChanged FINAL)
     Q_PROPERTY(QUrl url READ getUrl NOTIFY inputChanged FINAL)
+    Q_PROPERTY(bool seekPreviewEnabled READ getSeekPreviewEnabled WRITE setSeekPreviewEnabled NOTIFY seekPreviewEnabledChanged FINAL)
+    Q_PROPERTY(QUrl seekPreview READ getSeekPreview NOTIFY seekPreviewChanged FINAL)
+    Q_PROPERTY(double seekPreviewPosition READ getSeekPreviewPosition NOTIFY seekPreviewChanged FINAL)
+    Q_PROPERTY(bool audioWaveformEnabled READ getAudioWaveformEnabled WRITE setAudioWaveformEnabled NOTIFY audioWaveformEnabledChanged FINAL)
+    Q_PROPERTY(QVariantList audioWaveformPeaks READ getAudioWaveformPeaks NOTIFY audioWaveformChanged FINAL)
+    Q_PROPERTY(QString audioWaveformState READ getAudioWaveformState NOTIFY audioWaveformChanged FINAL)
+    Q_PROPERTY(bool subtitleTimelineEnabled READ getSubtitleTimelineEnabled WRITE setSubtitleTimelineEnabled NOTIFY subtitleTimelineEnabledChanged FINAL)
+    Q_PROPERTY(QVariantList subtitleTimelineCues READ getSubtitleTimelineCues NOTIFY subtitleTimelineChanged FINAL)
+    Q_PROPERTY(QString subtitleTimelineState READ getSubtitleTimelineState NOTIFY subtitleTimelineChanged FINAL)
 
     Q_PROPERTY(VLCTime time READ getTime WRITE setTime NOTIFY timeChanged FINAL)
     Q_PROPERTY(VLCTime remainingTime READ getRemainingTime NOTIFY remainingTimeChanged FINAL)
     Q_PROPERTY(double position READ getPosition WRITE setPosition NOTIFY positionChanged FINAL)
     Q_PROPERTY(VLCDuration length READ getLength NOTIFY lengthChanged FINAL)
+    Q_PROPERTY(double lengthSeconds READ getLengthSeconds NOTIFY lengthChanged FINAL)
 
     Q_PROPERTY(bool seekable READ isSeekable NOTIFY seekableChanged FINAL)
     Q_PROPERTY(bool rewindable READ isRewindable NOTIFY rewindableChanged FINAL)
@@ -170,6 +182,9 @@ public:
     Q_PROPERTY(int subtitleDelayMS READ getSubtitleDelayMS WRITE setSubtitleDelayMS NOTIFY subtitleDelayChanged FINAL)
     Q_PROPERTY(int secondarySubtitleDelayMS READ getSecondarySubtitleDelayMS WRITE setSecondarySubtitleDelayMS NOTIFY secondarySubtitleDelayChanged FINAL)
     Q_PROPERTY(float subtitleFPS READ getSubtitleFPS WRITE setSubtitleFPS NOTIFY subtitleFPSChanged FINAL)
+    Q_PROPERTY(int subtitleTextScale READ getSubtitleTextScale NOTIFY subtitleTextScaleChanged FINAL)
+    Q_PROPERTY(int subtitleTextSizeMode READ getSubtitleTextSizeMode NOTIFY subtitleTextSizeModeChanged FINAL)
+    Q_PROPERTY(int subtitleTextPixelSize READ getSubtitleTextPixelSize NOTIFY subtitleTextPixelSizeChanged FINAL)
     Q_PROPERTY(TimedText currentLyric READ getCurrentLyric NOTIFY currentLyricChanged FINAL)
     Q_PROPERTY(bool hasLyrics READ hasLyrics NOTIFY hasLyricsChanged FINAL)
     Q_PROPERTY(QList<TimedText> syltLyrics READ getSyltLyrics NOTIFY syltLyricsChanged FINAL)
@@ -231,6 +246,9 @@ public:
 
     /* exposed actions */
 public slots:
+    void setSubtitleTimelineEnabled(bool enabled);
+    void requestSeekPreview(double position);
+    void cancelSeekPreview();
     void reverse();
     void slower();
     void faster();
@@ -240,8 +258,12 @@ public slots:
 
     void jumpFwd();
     void jumpBwd();
+    void jumpSeconds(int seconds);
+    void replay();
     void jumpTime( VLCTime i_time );
     void jumpToPos( double );
+    void beginSeekDrag();
+    void finishSeekDrag(double position, bool commit);
     void frameNext();
     void framePrev();
 
@@ -335,6 +357,18 @@ public slots:
     void openVLsub();
     void acknowledgeRestoreCallback();
     QUrl getUrl() const;
+    bool getSeekPreviewEnabled() const;
+    void setSeekPreviewEnabled(bool enabled);
+    QUrl getSeekPreview() const;
+    double getSeekPreviewPosition() const;
+    double getLengthSeconds() const;
+    bool getAudioWaveformEnabled() const;
+    void setAudioWaveformEnabled(bool enabled);
+    QVariantList getAudioWaveformPeaks() const;
+    QString getAudioWaveformState() const;
+    bool getSubtitleTimelineEnabled() const;
+    QVariantList getSubtitleTimelineCues() const;
+    QString getSubtitleTimelineState() const;
 
     //tracks
     TrackListModel* getVideoTracks();
@@ -357,7 +391,11 @@ public slots:
     int getSecondarySubtitleDelayMS() const;
     void setSecondarySubtitleDelayMS( int );
     float getSubtitleFPS( ) const;
+    int getSubtitleTextScale() const;
+    int getSubtitleTextSizeMode() const;
+    int getSubtitleTextPixelSize() const;
     void setSubtitleFPS( float );
+    QVariantMap getPlaybackStatistics() const;
 
     //title/chapters/menu
     TitleListModel* getTitles();
@@ -439,6 +477,12 @@ public slots:
     RendererManager* getRendererManager();
 
 signals:
+    void seekPreviewChanged();
+    void seekPreviewEnabledChanged();
+    void audioWaveformEnabledChanged();
+    void audioWaveformChanged();
+    void subtitleTimelineEnabledChanged();
+    void subtitleTimelineChanged();
     //playback
     void playingStateChanged( PlayingState state );
     void inputChanged( bool hasInput );
@@ -466,6 +510,9 @@ signals:
     void subtitleDelayChanged(VLCDuration);
     void secondarySubtitleDelayChanged(VLCDuration);
     void subtitleFPSChanged(float);
+    void subtitleTextScaleChanged(int);
+    void subtitleTextSizeModeChanged(int);
+    void subtitleTextPixelSizeChanged(int);
 
     //title/chapters/menu
     void hasTitlesChanged( bool );
@@ -511,6 +558,7 @@ signals:
     void resumePlayback( VLCTime );
     // Statistics are updated
     void statisticsUpdated( const input_stats_t& stats );
+    void playbackStatisticsChanged();
     void infoChanged( input_item_t* );
     void currentMetaChanged( input_item_t* );
     void currentLyricChanged();

@@ -1,0 +1,480 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+import QtQuick
+import QtQuick.Window
+import QtQuick.Layouts
+import QtQuick.Controls.Basic as C
+import VLC.MainInterface
+import VLC.Style
+import VLC.Dialogs
+import VLC.Player
+import VLC.Network
+
+RedesignSettingsDialog {
+    id: root
+    scaleFactor: VLCStyle.scale
+    accentColor: MainCtx.redesignAccent
+    lightTheme: !VLCStyle.palette.isDark
+    property string category: "general"
+    readonly property string categoryTitle: specification.pageTitles[category] || ""
+    property bool advanced: false
+    property bool expert: false
+    property string search: ""
+    onSearchChanged: scroll.contentItem.contentY = 0
+    property string actionMessage: ""
+    property bool actionMessageIsError: true
+    property bool resetFailed: false
+    RedesignPreferences { id: preferenceStore; ctx: MainCtx; autoSave: true }
+    RedesignPreferencesCatalog { id: specification }
+    property bool addonsVisited: false
+    onCategoryChanged: if (category === "extensions") addonsVisited = true
+    Binding {
+        target: MainCtx; property: "useGlobalShortcuts"; value: false
+        when: root.visible
+        restoreMode: Binding.RestoreBindingOrValue
+    }
+    RedesignConfirmationDialog {
+        id: resetDialog
+        parent: content
+        scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
+        title: qsTr("Reset all settings")
+        message: qsTr("This action replaces all VLC settings with the default settings. Restart VLC after this action.")
+        confirmText: qsTr("Reset"); destructive: true
+        onAccepted: root.resetSettings()
+    }
+    Connections {
+        target: preferenceStore
+        function onChanged() { if (!preferenceStore.errorMessage.length) root.resetFailed = false }
+        function onHistoryCleared(success) {
+            root.actionMessageIsError = !success
+            root.actionMessage = success ? qsTr("VLC cleared the playback history.") : qsTr("VLC cannot clear the playback history. Try again.")
+        }
+        function onPluginScanChanged() {
+            root.actionMessage = preferenceStore.pluginScanMessage
+            root.actionMessageIsError = preferenceStore.pluginScanFailed
+        }
+    }
+    RedesignShortcuts {
+        id: shortcuts
+        parent: content
+        videoBackdropContent: Component {
+            RedesignSurfaceBackdrop {
+                sourceItem: content
+                scaleFactor: root.scaleFactor
+            }
+        }
+        scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
+        onSaved: preferenceStore.discard()
+    }
+    function begin() {
+        preferenceStore.discard()
+        actionMessage = preferenceStore.pluginScanMessage
+        actionMessageIsError = preferenceStore.pluginScanFailed
+        resetFailed = false
+        searchField.clear()
+        if (MainCtx.intfMainWindow.visibility === Window.Minimized) MainCtx.intfMainWindow.showNormal()
+        else MainCtx.intfMainWindow.visible = true
+        MainCtx.intfMainWindow.raise()
+        MainCtx.intfMainWindow.requestActivate()
+        open()
+        content.forceActiveFocus()
+    }
+    function closeSettings() {
+        content.forceActiveFocus()
+        if (!preferenceStore.dirty || preferenceStore.save()) close()
+    }
+    function runAction(action) {
+        if (action === "redesign-clear-history") {
+            if (!preferenceStore.clearHistory()) {
+                actionMessageIsError = true
+                actionMessage = qsTr("VLC cannot clear the playback history. Try again.")
+            }
+            return
+        }
+        if (action === "redesign-rescan-plugins") { preferenceStore.scanPlugins(); return }
+        if (action === "redesign-reset-all") { resetDialog.open(); return }
+        if (action === "redesign-reset-picture") {
+            for (const name of ["hue", "brightness", "contrast", "saturation", "gamma"])
+                preferenceStore.reset(name)
+            return
+        }
+        if (action !== "redesign-config-folder") return
+        actionMessageIsError = true
+        const folder = preferenceStore.configurationFolder()
+        actionMessage = folder.toString().length && Qt.openUrlExternally(folder) ? "" : qsTr("VLC cannot open the settings folder.")
+    }
+    function resetSettings() {
+        resetFailed = !preferenceStore.resetAll()
+        if (!resetFailed) {
+            actionMessageIsError = false
+            actionMessage = qsTr("VLC saved the default settings. Restart VLC to use all settings.")
+        }
+    }
+    onDismissRequested: root.closeSettings()
+    Connections {
+        target: DialogsProvider
+        function onShowRedesignPreferences() { if (!root.visible) root.begin(); else content.forceActiveFocus() }
+        function onShowRedesignPreferencesPage(page) {
+            if (!specification.pageTitles[page]) return
+            root.begin()
+            root.category = page
+            root.advanced = false
+            root.expert = false
+            scroll.contentItem.contentY = 0
+        }
+    }
+    contentItem: Item {
+        id: content
+        focus: true
+        Rectangle {
+            anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top
+            height: theme.dp(50); radius: theme.dp(14); color: theme.field
+            Rectangle { anchors.bottom: parent.bottom; width: parent.width; height: parent.height / 2; color: parent.color }
+        }
+        Keys.onEscapePressed: root.closeSettings()
+        Rectangle {
+            id: navigation
+            width: theme.dp(208); anchors.top: parent.top; anchors.bottom: parent.bottom
+            color: "transparent"
+            Rectangle {
+                x: theme.dp(8); y: theme.dp(58); width: parent.width - theme.dp(8)
+                height: parent.height - y - theme.dp(8); radius: theme.dp(6)
+                color: theme.background
+            }
+            C.TextField {
+                id: searchField
+                objectName: "settingsSearch"
+                anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top
+                anchors.margins: theme.dp(8); height: theme.dp(34)
+                leftPadding: theme.dp(42)
+                placeholderText: qsTr("Search")
+                color: theme.foreground; placeholderTextColor: theme.foreground
+                font.pixelSize: theme.dp(14); selectByMouse: true
+                background: Rectangle { color: theme.background; radius: theme.dp(4); border.color: searchField.activeFocus ? theme.accent : theme.border }
+                RedesignIcon { x: theme.dp(10); anchors.verticalCenter: parent.verticalCenter; width: theme.dp(20); height: width; name: "search"; color: theme.foreground }
+                onTextEdited: searchDelay.restart()
+                onTextChanged: if (!text.length) { searchDelay.stop(); root.search = "" }
+                onAccepted: { searchDelay.stop(); root.search = text }
+                Timer {
+                    id: searchDelay
+                    interval: 200
+                    onTriggered: root.search = searchField.text
+                }
+            }
+            C.ScrollView {
+                anchors.top: searchField.bottom; anchors.bottom: parent.bottom; anchors.left: parent.left; anchors.right: parent.right
+                anchors.topMargin: theme.dp(16); anchors.bottomMargin: theme.dp(8)
+                clip: true
+                Column {
+                    width: navigation.width
+                    Repeater {
+                        model: [
+                            {group: qsTr("App"), key: "general", title: qsTr("General"), icon: "nav-preferences"},
+                            {key: "interface", title: qsTr("Interface"), icon: "nav-interface"},
+                            {key: "privacy", title: qsTr("Privacy"), icon: "nav-privacy"},
+                            {key: "controls", title: qsTr("Controls"), icon: "nav-hotkeys"},
+                            {group: qsTr("Media"), key: "playback", title: qsTr("Playback"), icon: "nav-playback"},
+                            {key: "video", title: qsTr("Video"), icon: "nav-video"},
+                            {key: "audio", title: qsTr("Audio"), icon: "nav-audio"},
+                            {key: "subtitles", title: qsTr("Subtitles"), icon: "nav-subtitles"},
+                            {key: "library", title: qsTr("Library"), icon: "nav-folder"},
+                            {group: qsTr("System"), key: "network", title: qsTr("Network"), icon: "nav-streaming"},
+                            {key: "performance", title: qsTr("Performance"), icon: "nav-preferences"},
+                            {key: "recording", title: qsTranslate("Settings", "Recording"), icon: "nav-record"},
+                            {key: "extensions", title: qsTr("Extensions"), icon: "nav-plugins"} ]
+                        delegate: Column {
+                            required property var modelData
+                            width: navigation.width
+                            Text {
+                                visible: !!modelData.group
+                                height: visible ? theme.dp(modelData.key === "general" ? 47 : 41) : 0
+                                leftPadding: theme.dp(24); topPadding: theme.dp(modelData.key === "general" ? 16 : 10)
+                                text: modelData.group || ""; color: theme.foreground; font.pixelSize: theme.dp(14)
+                            }
+                            Item {
+                                width: parent.width; height: theme.dp(48)
+                                RedesignButton {
+                                    objectName: "settingsCategory_" + modelData.key
+                                    width: parent.width - theme.dp(20); x: theme.dp(14); height: theme.dp(40)
+                                    scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
+                                    caption: modelData.title; text: caption; iconName: modelData.icon + (selected ? "-active" : "")
+                                    leftAligned: true
+                                    selectedForeground: theme.bright
+                                    background: Rectangle { radius: theme.dp(3); color: parent.selected ? root.lightTheme ? theme.selected : "#222222" : parent.hovered ? theme.hover : "transparent"; border.width: parent.visualFocus ? 1 : 0; border.color: theme.accent }
+                                    selected: root.category === modelData.key && !root.search.length
+                                    onClicked: {
+                                        root.category = modelData.key
+                                        root.search = ""; searchField.clear(); root.advanced = false; root.expert = false
+                                        scroll.contentItem.contentY = 0
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        Text {
+            id: heading
+            anchors.left: navigation.right; anchors.leftMargin: theme.dp(32)
+            y: theme.dp(16)
+            text: root.search.length ? qsTr("Search results") : root.categoryTitle
+            color: theme.foreground; font.pixelSize: theme.dp(16)
+        }
+        RedesignButton {
+            id: closeButton
+            anchors.right: parent.right; anchors.top: parent.top; anchors.margins: theme.dp(7)
+            scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
+            iconName: "close"; text: qsTr("Close settings")
+            onClicked: root.closeSettings()
+        }
+        C.ScrollView {
+            id: scroll
+            anchors.top: parent.top; anchors.topMargin: theme.dp(72)
+            anchors.left: navigation.right; anchors.right: parent.right; anchors.bottom: footer.top
+            anchors.leftMargin: theme.dp(32); anchors.rightMargin: theme.dp(24)
+            clip: true
+            contentWidth: availableWidth
+            Column {
+                width: scroll.availableWidth
+                spacing: theme.dp(6)
+                Loader {
+                    width: parent.width
+                    active: root.addonsVisited
+                    visible: root.category === "extensions" && !root.search.length
+                    sourceComponent: RedesignAddons {
+                        backend: ServicesDiscoveryModel { ctx: MainCtx }
+                        scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
+                        onWebsiteRequested: url => Qt.openUrlExternally(url)
+                    }
+                }
+                ColumnLayout {
+                    visible: root.category === "general" && !root.search.length
+                    width: parent.width
+                    spacing: theme.dp(16)
+                    Text { text: qsTr("Appearance"); color: theme.settingsHeading; font.pixelSize: theme.dp(16); Layout.topMargin: theme.dp(8) }
+                    RedesignPreferenceRow { Layout.fillWidth: true; backend: preferenceStore; optionName: "language"; label: qsTr("Interface language"); scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor }
+                    RowLayout {
+                        Layout.fillWidth: true
+                        Text { Layout.fillWidth: true; text: qsTr("Theme"); color: theme.foreground; font.pixelSize: theme.dp(14) }
+                        Row {
+                            spacing: theme.dp(2)
+                            Repeater {
+                                model: [{label: qsTr("Dark"), value: 2}, {label: qsTr("Light"), value: 1}, {label: qsTr("System"), value: 0}]
+                                RedesignButton {
+                                    required property var modelData
+                                    width: theme.dp(105); height: theme.dp(34)
+                                    scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
+                                    caption: modelData.label; text: caption
+                                    selected: MainCtx.colorScheme.scheme === modelData.value
+                                    background: Rectangle { color: parent.selected ? theme.progress : theme.background; radius: theme.dp(4); border.color: theme.field }
+                                    onClicked: { MainCtx.colorScheme.setData(MainCtx.colorScheme.index(modelData.value, 0), true, Qt.CheckStateRole); preferenceStore.save() }
+                                }
+                            }
+                        }
+                    }
+                    RowLayout {
+                        Layout.fillWidth: true; Layout.preferredHeight: theme.dp(34)
+                        Text { Layout.fillWidth: true; text: qsTr("Accent color"); color: theme.foreground; font.pixelSize: theme.dp(14) }
+                        Item {
+                            Layout.preferredWidth: theme.dp(320); Layout.preferredHeight: theme.dp(34)
+                            Rectangle { anchors.fill: parent; color: theme.background; radius: theme.dp(4) }
+                            Row {
+                                anchors.fill: parent
+                                Repeater {
+                                    model: ["#d37918", "#e15032", "#c49e23", "#19a234", "#18aad3", "#185dd3", "#8e42ff", "#f052b3", "#afafaf"]
+                                    RedesignButton {
+                                        required property string modelData
+                                        readonly property bool active: { preferenceStore.revision; return root.accentColor.toString() === modelData }
+                                        width: theme.dp(320 / 9); height: theme.dp(34)
+                                        scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
+                                        text: modelData
+                                        background: Rectangle { color: parent.active ? theme.progress : "transparent"; radius: theme.dp(4) }
+                                        contentItem: Item { Rectangle { anchors.centerIn: parent; width: theme.dp(20); height: width; radius: theme.dp(1); color: parent.parent.modelData; opacity: parent.parent.active ? 1 : 0.7 } }
+                                        onClicked: preferenceStore.stage("qt-accent-color", modelData)
+                                    }
+                                }
+                            }
+                            TapHandler { acceptedButtons: Qt.RightButton; onTapped: accentMenu.popup() }
+                            RedesignActionMenu {
+                                id: accentMenu
+                                scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
+                                entries: [{label: qsTr("Custom accent color"), action: "custom"}]
+                                onActionRequested: {
+                                    const color = preferenceStore.chooseColor(root.accentColor.toString())
+                                    if (color.length) preferenceStore.stage("qt-accent-color", color)
+                                }
+                            }
+                        }
+                    }
+                    Repeater {
+                        model: specification.sections.general.find(section => section.appearance).rows
+                        delegate: RedesignPreferenceRow {
+                            required property var modelData
+                            Layout.fillWidth: true
+                            backend: preferenceStore; optionName: modelData[0]; label: modelData[1]
+                            presentation: modelData[2] || {}
+                            scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
+                        }
+                    }
+                }
+                Repeater {
+                    model: root.search.length ? [] : (specification.sections[root.category] || []).filter(section => !section.appearance)
+                    delegate: Column {
+                        required property var modelData
+                        required property int index
+                        width: parent.width
+                        topPadding: root.category === "extensions" ? theme.dp(6) : 0
+                        bottomPadding: root.category === "extensions" ? theme.dp(12) : 0
+                        visible: modelData.rows.some(row => preferenceStore.describe(row[0]).kind !== undefined) || root.category === "controls" && modelData.title === qsTr("Keyboard Shortcuts")
+                        Text {
+                            topPadding: theme.dp(index === 0 && root.category !== "general" ? 8 : 24); bottomPadding: theme.dp(10)
+                            text: modelData.title; color: theme.settingsHeading; font.pixelSize: theme.dp(16)
+                            visible: text.length > 0
+                        }
+                        ColumnLayout {
+                            width: parent.width
+                            visible: root.category === "controls" && modelData.title === qsTr("Keyboard Shortcuts")
+                            spacing: theme.dp(10)
+                            RowLayout {
+                                Layout.fillWidth: true
+                                Text { Layout.fillWidth: true; text: qsTr("Defaults"); color: theme.foreground; font.pixelSize: theme.dp(14) }
+                                RedesignButton {
+                                    Layout.preferredWidth: theme.dp(320); height: theme.dp(34)
+                                    scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
+                                    caption: qsTr("Edit Keyboard Shortcuts"); text: caption
+                                    background: Rectangle { radius: theme.dp(4); color: parent.hovered ? theme.hover : theme.background }
+                                    onClicked: { content.forceActiveFocus(); if (!preferenceStore.dirty || preferenceStore.save()) shortcuts.open() }
+                                }
+                            }
+                            RowLayout {
+                                Layout.fillWidth: true
+                                Text { Layout.fillWidth: true; text: qsTr("Reset all shortcuts"); color: theme.foreground; font.pixelSize: theme.dp(14) }
+                                RedesignButton {
+                                    Layout.preferredWidth: theme.dp(320); height: theme.dp(34)
+                                    scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
+                                    caption: qsTr("Reset"); text: caption
+                                    background: Rectangle { radius: theme.dp(4); color: parent.hovered ? theme.hover : theme.background }
+                                    onClicked: {
+                                        for (const entry of preferenceStore.catalog("controls", ""))
+                                            if (entry.name.startsWith("key-") || entry.name.startsWith("global-key-")) preferenceStore.reset(entry.name)
+                                    }
+                                }
+                            }
+                        }
+                        Repeater {
+                            model: modelData.rows
+                            delegate: RedesignPreferenceRow {
+                                required property var modelData
+                                width: parent.width
+                                backend: preferenceStore; optionName: modelData[0]; label: modelData[1]
+                                presentation: modelData[2] || {}
+                                onActionRequested: action => root.runAction(action)
+                                scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
+                            }
+                        }
+                    }
+                }
+                RedesignSubtitleSourcePreferences {
+                    width: parent.width
+                    visible: root.search.length ? [qsTr("Online Subtitles"), "OpenSubtitles", qsTr("API key")].some(text => text.toLowerCase().includes(root.search.toLowerCase())) : root.category === "subtitles"
+                    sourceService: SubtitleSources
+                    scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
+                }
+                Item {
+                    visible: !root.search.length
+                    width: parent.width; height: theme.dp(root.category === "extensions" ? 38 : 50)
+                    RedesignButton {
+                        anchors.left: parent.left; anchors.right: parent.right; anchors.bottom: parent.bottom
+                        height: theme.dp(38)
+                        scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
+                        caption: root.advanced ? qsTr("Hide Advanced Options") : qsTr("Advanced Options")
+                        text: caption
+                        contentItem: Item {
+                            Row {
+                                anchors.centerIn: parent; spacing: theme.dp(10)
+                                Text { text: qsTr("Advanced Options"); color: theme.foreground; font.pixelSize: theme.dp(14); anchors.verticalCenter: parent.verticalCenter }
+                                RedesignIcon { name: root.advanced ? "chevron-down" : "chevron-right"; color: theme.foreground; width: theme.dp(20); height: width }
+                            }
+                        }
+                        background: Rectangle { color: parent.hovered ? theme.hover : theme.background; radius: theme.dp(2) }
+                        onClicked: root.advanced = !root.advanced
+                    }
+                }
+                Repeater {
+                    model: root.advanced && !root.search.length ? specification.advancedSections[root.category] || [] : []
+                    delegate: Column {
+                        required property var modelData
+                        width: parent.width
+                        Text {
+                            visible: text.length > 0; topPadding: theme.dp(20); bottomPadding: theme.dp(10)
+                            text: modelData.title; color: theme.settingsHeading; font.pixelSize: theme.dp(16)
+                        }
+                        Repeater {
+                            model: modelData.rows
+                            delegate: RedesignPreferenceRow {
+                                required property var modelData
+                                width: parent.width; backend: preferenceStore; optionName: modelData[0]; label: modelData[1]
+                                presentation: modelData[2] || {}
+                                onActionRequested: action => root.runAction(action)
+                                scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
+                            }
+                        }
+                    }
+                }
+                Loader {
+                    width: parent.width
+                    active: root.category === "extensions" && root.advanced && !root.search.length
+                    visible: active
+                    sourceComponent: RedesignPlugins {
+                        plugins: preferenceStore.pluginCatalog()
+                        scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
+                    }
+                }
+                RedesignButton {
+                    visible: root.advanced && !root.search.length
+                    width: parent.width
+                    scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
+                    caption: root.expert ? qsTr("Hide all VLC options") : qsTr("All VLC options")
+                    text: caption; selected: root.expert
+                    onClicked: root.expert = !root.expert
+                }
+                Repeater {
+                    model: {
+                        if (root.search.length) {
+                            return specification.searchResults(root.search, preferenceStore.catalog("", root.search))
+                        }
+                        return root.expert ? preferenceStore.catalog(root.category, "") : []
+                    }
+                    delegate: RedesignPreferenceRow {
+                        required property var modelData
+                        width: parent.width
+                        backend: preferenceStore; optionName: modelData.name; label: modelData.title || ""; presentation: modelData.presentation || {}
+                        scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
+                        onActionRequested: action => root.runAction(action)
+                    }
+                }
+                Item { width: 1; height: theme.dp(24) }
+            }
+        }
+        Rectangle {
+            id: footer
+            anchors.left: navigation.right; anchors.right: parent.right; anchors.bottom: parent.bottom
+            height: preferenceStore.errorMessage.length || root.actionMessage.length ? theme.dp(64) : 0
+            visible: height > 0
+            color: theme.background
+            RowLayout {
+                anchors.fill: parent; anchors.margins: theme.dp(16)
+                Text {
+                    Layout.fillWidth: true
+                    text: preferenceStore.errorMessage || root.actionMessage
+                    color: preferenceStore.errorMessage.length || root.actionMessageIsError ? "#e56b6b" : theme.foreground; font.pixelSize: theme.dp(13); wrapMode: Text.WordWrap
+                }
+                RedesignButton {
+                    scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
+                    caption: qsTr("Retry"); text: caption; onClicked: root.resetFailed ? root.resetSettings() : preferenceStore.save()
+                    visible: preferenceStore.errorMessage.length > 0
+                }
+            }
+        }
+    }
+}

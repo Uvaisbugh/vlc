@@ -1,5 +1,29 @@
 # VLC media player
 
+This is [Uvaisbugh/vlc](https://github.com/Uvaisbugh/vlc), an unofficial community
+fork of VideoLAN VLC. The complete native redesign implementation is integrated
+from [David Sojevic's juxtopposed-vlc fork](https://github.com/dsojevic/juxtopposed-vlc),
+preserving its authorship and history. The original design is by Juxtopposed.
+Fork-specific planning and validation are tracked in [REDESIGN_PLAN.md](REDESIGN_PLAN.md)
+and [REDESIGN_CHECKLIST.md](REDESIGN_CHECKLIST.md). Builds from this fork remain
+previews until their own runtime and visual checks have passed.
+
+This fork adapts [Juxtopposed’s VLC redesign](https://www.figma.com/community/file/1691465999134370980/vlc-redesign)
+for VLC’s native interface. The interface and settings workflow are in active development.
+Existing community reference builds are on
+[dsojevic/juxtopposed-vlc Releases](https://github.com/dsojevic/juxtopposed-vlc/releases).
+This fork's preview builds and validation are tracked in
+[Uvaisbugh/vlc Actions](https://github.com/Uvaisbugh/vlc/actions).
+Release tooling and the `4.0.0-beta.N` version scheme are documented in [doc/RELEASING.md](doc/RELEASING.md).
+For building on Linux from source, see [doc/BUILD-linux.md](doc/BUILD-linux.md).
+For building on macOS from source, see [doc/BUILD-macos.md](doc/BUILD-macos.md).
+
+![Simple player with the pixel-cat video](doc/images/redesign/player.png)
+
+| Library sidebar | Video settings |
+| --- | --- |
+| ![Library sidebar over the video](doc/images/redesign/sidebar.png) | ![Video settings over the video](doc/images/redesign/video-settings.png) |
+
 **VLC** is a libre and open source **media player** and **multimedia engine**,
 focused on **playing everything**, and **running everywhere**.
 
@@ -24,6 +48,24 @@ been downloaded **billions** of times.
 
 **libVLC**, the engine is released under the LGPLv2 *(or later)* license. \
 This allows embedding the engine in 3rd party applications, while letting them to be licensed under other licenses.
+
+## Redesign attribution
+
+The redesigned interface on `master` is adapted from **VLC Redesign**
+by [Juxtopposed](https://www.juxtopposed.com/), licensed under
+[Creative Commons Attribution 4.0 International (CC BY 4.0)](https://creativecommons.org/licenses/by/4.0/).
+The original design is available on
+[Figma Community](https://www.figma.com/community/file/1691465999134370980/vlc-redesign),
+with a [video walkthrough](https://www.youtube.com/watch?v=ERFeOgqk324).
+
+This implementation modifies the design for VLC's native interface, including
+responsive layouts, interactive controls, settings organization, and integration
+with VLC's playback and media library features. The design credit and CC BY 4.0
+notice apply to the original design; VLC's software licenses remain as described
+above.
+
+The interface uses [Inter](https://rsms.me/inter/) by Rasmus Andersson and contributors.
+The bundled fonts use the [SIL Open Font License 1.1](modules/gui/qt/fonts/LICENSE.txt).
 
 # Platforms
 

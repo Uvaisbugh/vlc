@@ -39,6 +39,12 @@ RCC_EXTRA_PARAMS =
 
 all-local: $(VLC_QT_CHECK_DEP) $(QML_MODULE_STAMPS)
 
+BUILT_SOURCES += subtitle_consumer_key.hpp
+CLEANFILES += subtitle_consumer_key.hpp
+.PHONY: subtitle-consumer-key-force
+subtitle_consumer_key.hpp: subtitle-consumer-key-force $(srcdir)/scripts/subtitle-consumer-key.py
+	$(AM_V_GEN)$(PYTHON3) $(srcdir)/scripts/subtitle-consumer-key.py --output $@
+
 if !HAVE_QT_ZSTD
 RCC_EXTRA_PARAMS += --no-zstd
 endif
@@ -89,7 +95,7 @@ if HAVE_WIN32
 libqt_plugin_la_CXXFLAGS += $(LIBCOMCXXFLAGS)
 libqt_plugin_la_LIBADD += $(LIBCOM) -lcomctl32 -luuid -ldwmapi
 endif
-if UPDATE_CHECK
+if QT_UPDATE_CHECK
 libqt_plugin_la_CPPFLAGS += -DUPDATE_CHECK
 endif
 if QT_QML_DEBUG
@@ -145,6 +151,11 @@ libqt_plugin_la_SOURCES = \
 	dialogs/preferences/expert_model.hpp \
 	dialogs/preferences/expert_view.cpp \
 	dialogs/preferences/expert_view.hpp \
+	dialogs/preferences/redesign_preferences.cpp \
+	dialogs/preferences/redesign_preferences.hpp \
+	player/stereo_test_player.cpp \
+	player/stereo_test_player.hpp \
+	player/stereo_test_signal.hpp \
 	dialogs/preferences/preferences.cpp \
 	dialogs/preferences/preferences.hpp \
 	dialogs/preferences/preferences_widgets.cpp \
@@ -159,6 +170,7 @@ libqt_plugin_la_SOURCES = \
 	dialogs/sout/sout_widgets.cpp \
 	dialogs/sout/sout_widgets.hpp \
 	dialogs/systray/systray.cpp \
+	dialogs/systray/notification_policy.hpp \
 	dialogs/systray/systray.hpp \
 	dialogs/toolbar/controlbar_profile.hpp \
 	dialogs/toolbar/controlbar_profile.cpp \
@@ -180,10 +192,13 @@ libqt_plugin_la_SOURCES = \
 	maininterface/interface_window_handler.hpp \
 	maininterface/mainctx.cpp \
 	maininterface/mainctx.hpp \
+	maininterface/window_fullscreen.hpp \
+	maininterface/window_csd_geometry.hpp \
 	maininterface/mainctx_submodels.cpp maininterface/mainctx_submodels.hpp \
 	maininterface/mainui.cpp \
 	maininterface/mainui.hpp \
 	maininterface/navigationmodel.cpp maininterface/navigationmodel.hpp \
+	maininterface/videobackdrop.cpp maininterface/videobackdrop.hpp \
 	maininterface/videosurface.cpp \
 	maininterface/videosurface.hpp \
 	maininterface/video_window_handler.cpp \
@@ -193,6 +208,7 @@ libqt_plugin_la_SOURCES = \
 	medialibrary/medialib.hpp \
 	medialibrary/mlmediastore.cpp \
 	medialibrary/mlmediastore.hpp \
+	medialibrary/mlfileartwork.cpp medialibrary/mlfileartwork.hpp \
 	medialibrary/mlalbum.cpp \
 	medialibrary/mlalbum.hpp \
 	medialibrary/mlalbummodel.cpp \
@@ -230,6 +246,10 @@ libqt_plugin_la_SOURCES = \
 	medialibrary/mlqueryparams.hpp \
 	medialibrary/mlrecentmediamodel.cpp \
 	medialibrary/mlrecentmediamodel.hpp \
+	medialibrary/mlrecentaudiomodel.cpp \
+	medialibrary/mlrecentaudiomodel.hpp \
+	medialibrary/mlplayedartistmodel.cpp \
+	medialibrary/mlplayedartistmodel.hpp \
 	medialibrary/mlrecentvideomodel.cpp \
 	medialibrary/mlrecentvideomodel.hpp \
 	medialibrary/mlurlmodel.cpp \
@@ -261,6 +281,7 @@ libqt_plugin_la_SOURCES = \
 	menus/qml_menu_wrapper.cpp \
 	menus/qml_menu_wrapper.hpp \
 	menus/menus.cpp menus/menus.hpp \
+	menus/redesign_menu_style.cpp menus/redesign_menu_style.hpp \
 	network/addonsmodel.cpp \
 	network/addonsmodel.hpp \
 	network/mediatreelistener.cpp \
@@ -290,6 +311,12 @@ libqt_plugin_la_SOURCES = \
 	player/delay_estimator.cpp \
 	player/delay_estimator.hpp \
 	player/player_controller.cpp player/player_controller.hpp player/player_controller_p.hpp \
+	util/seek_preview_cache.hpp util/seek_preview_image_provider.hpp \
+	util/subtitle_source_service.hpp util/subtitle_source_service.cpp \
+	util/github_release_service.hpp util/github_release_service.cpp \
+	util/release_info.hpp util/release_info.cpp \
+	player/subtitle_timeline_scanner.cpp player/subtitle_timeline_scanner.hpp \
+	player/audio_waveform_scanner.cpp player/audio_waveform_scanner.hpp \
 	player/player_controlbar_model.cpp player/player_controlbar_model.hpp \
 	player/control_list_model.cpp player/control_list_model.hpp \
 	player/control_list_filter.cpp \
@@ -303,14 +330,23 @@ libqt_plugin_la_SOURCES = \
 	playlist/playlist_item.hpp \
 	playlist/playlist_model.cpp \
 	playlist/playlist_model.hpp \
+	playlist/playlist_tree_model.cpp \
+	playlist/playlist_tree_model.hpp \
 	playlist/playlist_model_p.hpp \
 	util/asynctask.hpp \
 	util/accessible_compat_attached.cpp util/accessible_compat_attached.hpp \
 	util/audio_device_model.cpp  \
 	util/audio_device_model.hpp \
+	util/redesign_folder_model.cpp util/redesign_folder_model.hpp \
 	util/workerthreadset.hpp util/workerthreadset.cpp \
 	util/base_model.hpp util/base_model_p.hpp util/base_model.cpp \
 	util/color_scheme_model.cpp util/color_scheme_model.hpp \
+	util/redesign_widget_theme.cpp util/redesign_widget_theme.hpp \
+	util/playlist_cover_store.hpp \
+	util/track_matching.hpp \
+	util/local_file_url.hpp \
+	util/gettext_translator.cpp util/gettext_translator.hpp \
+	util/interface_translator.cpp util/interface_translator.hpp \
 	util/ui_notifier.cpp util/ui_notifier.hpp \
 	util/color_svg_image_provider.cpp util/color_svg_image_provider.hpp \
 	util/vlcaccess_image_provider.cpp util/vlcaccess_image_provider.hpp \
@@ -341,6 +377,11 @@ libqt_plugin_la_SOURCES = \
 	util/varchoicemodel.cpp  util/varchoicemodel.hpp \
 	util/variables.cpp util/variables.hpp \
 	util/vlchotkeyconverter.cpp util/vlchotkeyconverter.hpp \
+	util/postprocessing_preferences.hpp \
+	util/file_log_preferences.hpp \
+	util/message_log.hpp \
+	util/message_log_buffer.hpp \
+	util/video_window_geometry.hpp \
 	util/vlctick.cpp \
 	util/vlctick.hpp \
 	util/shared_input_item.hpp \
@@ -367,9 +408,12 @@ libqt_plugin_la_SOURCES = \
 	util/sgmanipulator.cpp \
 	util/sgmanipulator.hpp \
 	util/pointingtooltipattached.hpp \
+	util/video_backdrop_region.hpp \
+	util/video_backdrop_reporter.hpp \
 	widgets/native/animators.cpp \
 	widgets/native/animators.hpp \
 	widgets/native/customwidgets.cpp widgets/native/customwidgets.hpp \
+	widgets/native/embedded_file_browser.cpp widgets/native/embedded_file_browser.hpp \
 	widgets/native/csdthemeimage.cpp \
 	widgets/native/csdthemeimage.hpp \
 	widgets/native/interface_widgets.cpp \
@@ -432,6 +476,7 @@ nodist_libqt_plugin_la_SOURCES = \
 	dialogs/preferences/complete_preferences.moc.cpp \
 	dialogs/preferences/expert_model.moc.cpp \
 	dialogs/preferences/expert_view.moc.cpp \
+	dialogs/preferences/redesign_preferences.moc.cpp \
 	dialogs/preferences/preferences.moc.cpp \
 	dialogs/preferences/preferences_widgets.moc.cpp \
 	dialogs/preferences/simple_preferences.moc.cpp \
@@ -452,10 +497,12 @@ nodist_libqt_plugin_la_SOURCES = \
 	maininterface/mainctx_submodels.moc.cpp \
 	maininterface/mainui.moc.cpp \
 	maininterface/navigationmodel.moc.cpp \
+	maininterface/videobackdrop.moc.cpp \
 	maininterface/videosurface.moc.cpp \
 	maininterface/video_window_handler.moc.cpp \
 	medialibrary/medialib.moc.cpp \
 	medialibrary/mlmediastore.moc.cpp \
+	medialibrary/mlfileartwork.moc.cpp \
 	medialibrary/mlalbummodel.moc.cpp \
 	medialibrary/mlaudiomodel.moc.cpp \
 	medialibrary/mlartistmodel.moc.cpp \
@@ -466,6 +513,8 @@ nodist_libqt_plugin_la_SOURCES = \
 	medialibrary/mlthreadpool.moc.cpp \
 	medialibrary/mlqmltypes.moc.cpp \
 	medialibrary/mlrecentmediamodel.moc.cpp \
+	medialibrary/mlrecentaudiomodel.moc.cpp \
+	medialibrary/mlplayedartistmodel.moc.cpp \
 	medialibrary/mlrecentvideomodel.moc.cpp \
 	medialibrary/mlurlmodel.moc.cpp \
 	medialibrary/mlvideo.moc.cpp \
@@ -491,6 +540,8 @@ nodist_libqt_plugin_la_SOURCES = \
 	style/vlcicons.moc.cpp \
 	player/delay_estimator.moc.cpp \
 	player/input_models.moc.cpp \
+	util/subtitle_source_service.moc.cpp \
+	util/github_release_service.moc.cpp \
 	player/player_controller.moc.cpp \
 	player/player_controlbar_model.moc.cpp \
 	player/control_list_model.moc.cpp \
@@ -498,9 +549,11 @@ nodist_libqt_plugin_la_SOURCES = \
 	playlist/playlist_controller.moc.cpp \
 	playlist/playlist_item.moc.cpp \
 	playlist/playlist_model.moc.cpp \
+	playlist/playlist_tree_model.moc.cpp \
 	util/asynctask.moc.cpp \
 	util/accessible_compat_attached.moc.cpp \
 	util/audio_device_model.moc.cpp \
+	util/redesign_folder_model.moc.cpp \
 	util/workerthreadset.moc.cpp \
 	util/base_model.moc.cpp \
 	util/color_scheme_model.moc.cpp \
@@ -534,6 +587,8 @@ nodist_libqt_plugin_la_SOURCES = \
 	widgets/native/animators.moc.cpp \
 	widgets/native/csdthemeimage.moc.cpp \
 	widgets/native/customwidgets.moc.cpp \
+	widgets/native/embedded_file_browser.moc.cpp \
+	util/interface_translator.moc.cpp \
 	widgets/native/interface_widgets.moc.cpp \
 	widgets/native/navigation_attached.moc.cpp \
 	widgets/native/mlfolderseditor.moc.cpp \
@@ -544,7 +599,6 @@ nodist_libqt_plugin_la_SOURCES += \
 	dialogs/extended/ui_equalizer.h \
 	dialogs/extended/ui_video_effects.h \
 	dialogs/fingerprint/ui_fingerprintdialog.h \
-	dialogs/firstrun/ui_firstrunwizard.h \
 	dialogs/help/ui_about.h \
 	dialogs/help/ui_update.h \
 	dialogs/messages/ui_messages_panel.h \
@@ -578,7 +632,8 @@ libqt_plugin_la_SOURCES += \
 	maininterface/win32windoweffects_module.cpp \
 	maininterface/win32windoweffects_module.hpp \
 	util/csdmenu_win32.c \
-	util/csdmenu_win32.h
+	util/csdmenu_win32.h \
+	util/win32_emutls.cpp
 
 nodist_libqt_plugin_la_SOURCES += maininterface/mainctx_win32.moc.cpp \
 	maininterface/compositor_win7.moc.cpp
@@ -586,6 +641,8 @@ nodist_libqt_plugin_la_SOURCES += maininterface/mainctx_win32.moc.cpp \
 libqt_plugin_la_SOURCES += \
 	maininterface/compositor_dcomp.cpp \
 	maininterface/compositor_dcomp.hpp \
+	maininterface/compositor_dcomp_background.hpp \
+	maininterface/compositor_dcomp_backdrop.cpp maininterface/compositor_dcomp_backdrop.hpp \
 	maininterface/compositor_dcomp_error.hpp \
 	maininterface/compositor_dcomp_acrylicsurface.hpp \
 	maininterface/compositor_dcomp_acrylicsurface.cpp
@@ -758,7 +815,6 @@ libqt_plugin_la_UI = \
 	dialogs/extended/equalizer.ui \
 	dialogs/extended/video_effects.ui \
 	dialogs/fingerprint/fingerprintdialog.ui \
-	dialogs/firstrun/firstrunwizard.ui \
 	dialogs/help/about.ui \
 	dialogs/help/update.ui \
 	dialogs/messages/messages_panel.ui \
@@ -789,7 +845,12 @@ ui_%.h: %.ui
 
 # Resources
 
+EXTRA_DIST += fonts/README.md
+
 libqt_plugin_la_RES = \
+	fonts/InterVariable.ttf \
+	fonts/InterVariable-Italic.ttf \
+	fonts/LICENSE.txt \
 	pixmaps/VLCIcons.ttf \
 	pixmaps/addons/addon_default.svg \
 	pixmaps/addons/addon_broken.svg \
@@ -894,6 +955,22 @@ libqt_plugin_la_RES = \
 	pixmaps/icons/ic_fluent_arrow_sync_24_regular.svg \
 	pixmaps/icons/regex.svg \
 	pixmaps/icons/ic_fluent_text_change_case_24_regular.svg \
+	pixmaps/menu/redesign/play.svg \
+	pixmaps/menu/redesign/stop.svg \
+	pixmaps/menu/redesign/previous.svg \
+	pixmaps/menu/redesign/next.svg \
+	pixmaps/menu/redesign/record.svg \
+	pixmaps/menu/redesign/hide-ui.svg \
+	pixmaps/menu/redesign/playback.svg \
+	pixmaps/menu/redesign/video.svg \
+	pixmaps/menu/redesign/audio.svg \
+	pixmaps/menu/redesign/subtitle.svg \
+	pixmaps/menu/redesign/settings.svg \
+	pixmaps/menu/redesign/playlist.svg \
+	pixmaps/menu/redesign/open.svg \
+	pixmaps/menu/redesign/quit.svg \
+	pixmaps/menu/redesign/remove.svg \
+	pixmaps/menu/redesign/refresh.svg \
 	pixmaps/menu/add.svg \
 	pixmaps/menu/capture-card.svg \
 	pixmaps/menu/clear.svg \
@@ -1069,7 +1146,7 @@ libqml_module_maininterface_a_QML = \
 	maininterface/qml/NoMedialibHome.qml \
 	maininterface/qml/OpenFileSplitButton.qml
 
-if UPDATE_CHECK
+if QT_UPDATE_CHECK
 libqml_module_maininterface_a_QML += maininterface/qml/UpdatePane.qml
 endif
 
@@ -1171,6 +1248,91 @@ libqml_module_player_a_CXXFLAGS = $(libqt_plugin_la_CXXFLAGS)
 libqml_module_player_a_CPPFLAGS = $(libqt_plugin_la_CPPFLAGS)
 libqml_module_player_a_QML = \
 	player/qml/ControlBar.qml \
+	player/qml/redesign/RedesignBookmarks.qml \
+	player/qml/redesign/RedesignBookmarksView.qml \
+	player/qml/redesign/RedesignChaptersView.qml \
+	player/qml/redesign/RedesignQueuePanel.qml \
+	player/qml/redesign/RedesignLibrary.qml \
+	player/qml/redesign/RedesignPlayer.qml \
+	player/qml/redesign/RedesignPlayerLayout.qml \
+	player/qml/redesign/RedesignPlayerChrome.qml \
+	player/qml/redesign/RedesignCustomizationCatalog.qml \
+	player/qml/redesign/RedesignCustomizationEditor.qml \
+	player/qml/redesign/RedesignExtraControl.qml \
+	player/qml/redesign/RedesignMediaFavorite.qml \
+	player/qml/redesign/RedesignPlayerFavorite.qml \
+	player/qml/redesign/RedesignPreferencesCatalog.qml \
+	player/qml/redesign/RedesignPreferenceRow.qml \
+	player/qml/redesign/RedesignComboBox.qml \
+	player/qml/redesign/RedesignEqualizer.qml \
+	player/qml/redesign/RedesignSpatializer.qml \
+	player/qml/redesign/RedesignStartupVolume.qml \
+	player/qml/redesign/RedesignConfirmationDialog.qml \
+	player/qml/redesign/RedesignNetworkDialog.qml \
+	player/qml/redesign/RedesignPlaylistDialog.qml \
+	player/qml/redesign/RedesignPlaylistProperties.qml \
+	player/qml/redesign/RedesignPlaylistTrackTarget.qml \
+	player/qml/redesign/RedesignTrackAssignmentDialog.qml \
+	player/qml/redesign/RedesignSubtitleProviderSetup.qml \
+	player/qml/redesign/RedesignSubtitleSourcePreferences.qml \
+	player/qml/redesign/RedesignAddons.qml \
+	player/qml/redesign/RedesignPlugins.qml \
+	player/qml/redesign/RedesignTrackAssignments.qml \
+	player/qml/redesign/RedesignFolderInfo.qml \
+	player/qml/redesign/RedesignAddToPlaylistDialog.qml \
+	player/qml/redesign/RedesignAddToPlaylist.qml \
+	player/qml/redesign/RedesignNetworkStreams.qml \
+	player/qml/redesign/RedesignNetworkStreamLibrary.qml \
+	player/qml/redesign/RedesignPreferencesWindow.qml \
+	player/qml/redesign/RedesignSettingSlider.qml \
+	player/qml/redesign/RedesignSleepTimer.qml \
+	player/qml/redesign/RedesignModelChoice.qml \
+	player/qml/redesign/RedesignPlaybackSettings.qml \
+	player/qml/redesign/RedesignTrackDefaults.qml \
+	player/qml/redesign/RedesignAudioSettings.qml \
+	player/qml/redesign/RedesignSubtitleSettings.qml \
+	player/qml/redesign/RedesignVideoSettings.qml \
+	player/qml/redesign/RedesignOnboardingView.qml \
+	player/qml/redesign/RedesignOnboardingWindow.qml \
+	player/qml/redesign/RedesignFilterSection.qml \
+	player/qml/redesign/RedesignSwitchRow.qml \
+	player/qml/redesign/RedesignStatistics.qml \
+	player/qml/redesign/RedesignSettings.qml \
+	player/qml/redesign/RedesignPlayerPreset.qml \
+	player/qml/redesign/RedesignTrackPopup.qml \
+	player/qml/redesign/RedesignShortcutEditor.qml \
+	player/qml/redesign/RedesignShortcuts.qml \
+	player/qml/redesign/RedesignTracks.qml \
+	player/qml/redesign/RedesignButton.qml \
+	player/qml/redesign/RedesignToolTip.qml \
+	player/qml/redesign/RedesignIcon.qml \
+	player/qml/redesign/RedesignSvg.qml \
+	player/qml/redesign/RedesignActionMenu.qml \
+	player/qml/redesign/RedesignSurfaceBackdrop.qml \
+	player/qml/redesign/RedesignSoftwareShadow.qml \
+	player/qml/redesign/RedesignDialogSurface.qml \
+	player/qml/redesign/RedesignSettingsDialog.qml \
+	player/qml/redesign/RedesignLibraryArtwork.qml \
+	player/qml/redesign/RedesignAudioArtwork.qml \
+	player/qml/redesign/RedesignLibraryView.qml \
+	player/qml/redesign/RedesignBreadcrumbs.qml \
+	player/qml/redesign/RedesignLibraryPath.qml \
+	player/qml/redesign/RedesignLibraryPins.qml \
+	player/qml/redesign/RedesignLibraryNavigation.qml \
+	player/qml/redesign/RedesignHomeView.qml \
+	player/qml/redesign/RedesignLibraryDrag.qml \
+	player/qml/redesign/RedesignLibraryVisits.qml \
+	player/qml/redesign/RedesignLibrarySort.qml \
+	player/qml/redesign/RedesignMenu.qml \
+	player/qml/redesign/RedesignRecentMenuModel.qml \
+	player/qml/redesign/RedesignPlayerView.qml \
+	player/qml/redesign/RedesignQueue.qml \
+	player/qml/redesign/RedesignSeekBar.qml \
+	player/qml/redesign/RedesignSeekThumbnail.qml \
+	player/qml/redesign/RedesignPlayerSeekBar.qml \
+	player/qml/redesign/RedesignMiniPlayer.qml \
+	player/qml/redesign/RedesignTheme.qml \
+	player/qml/redesign/RedesignVolume.qml \
 	player/qml/PlaybackSpeed.qml \
 	player/qml/LyricsFlickable.qml \
 	player/qml/MiniPlayer.qml \
@@ -1392,6 +1554,7 @@ libqml_module_widgets_a_QML = \
 	widgets/qml/RoundedRectangleShadow.qml \
 	widgets/qml/VoronoiSnow.qml \
 	widgets/qml/DualKawaseBlur.qml \
+	widgets/qml/BackdropBlur.qml \
 	widgets/qml/CheckBoxExt.qml \
 	widgets/qml/ProgressBarExt.qml
 libqml_module_widgets_a_Singleton_QML =
@@ -1673,8 +1836,11 @@ $(QML_MODULE_CACHEGEN_RSP):
 $(QML_MODULE_CACHELOADER):
 	$(cachegen_verbose)$(QMLCACHEGEN) --resource-name $(@D)_cachegen --resource=$(builddir)/$(@D)/res.qrc -o $@ @$<
 
-$(QML_MODULE_CACHEGEN_ASSETS):
-	$(AM_V_GEN)$(RCC) $(RCC_EXTRA_PARAMS) --name $(@D)_assets -o $@ $<
+# Keep the sources beside the compiled units. Qt must be able to fall back
+# when cached units are disabled or rejected by the runtime.
+$(QML_MODULE_CACHEGEN_ASSETS): Makefile
+	$(AM_V_GEN)$(RCC) $(RCC_EXTRA_PARAMS) --name $(@D)_assets \
+	-o $@ $(builddir)/$(@D)/qmldir.qrc $(builddir)/$(@D)/res.qrc
 
 
 CLEANFILES += \
@@ -1757,6 +1923,16 @@ base_model_test_LDFLAGS = $(AM_LDFLAGS) $(QT_LDFLAGS)
 check_PROGRAMS = base_model_test
 TESTS = base_model_test
 
+if HAVE_WIN32
+test_qt_win32_emutls_SOURCES = tests/test_win32_emutls.cpp util/win32_emutls.cpp
+test_qt_win32_emutls_CPPFLAGS = $(AM_CPPFLAGS)
+test_qt_win32_emutls_CXXFLAGS = $(AM_CXXFLAGS) $(QT_CFLAGS) $(CXXFLAGS_qt)
+test_qt_win32_emutls_LDADD = $(QT_LIBS) $(LIBS_qt)
+test_qt_win32_emutls_LDFLAGS = $(AM_LDFLAGS) $(QT_LDFLAGS)
+check_PROGRAMS += test_qt_win32_emutls
+TESTS += test_qt_win32_emutls
+endif
+
 if HAVE_QT_QTEST
 
 LIBVLC = ../../../lib/libvlc.la
@@ -1764,6 +1940,137 @@ QT_QTEST_COMMON_cppflags = $(libqt_plugin_la_CPPFLAGS) -I$(builddir)/tests -DTOP
 QT_QTEST_COMMON_cxxflags = $(AM_CXXFLAGS) $(QT_CFLAGS) $(QT_QTEST_CFLAGS) -fPIC $(CXXFLAGS_qt)
 QT_QTEST_COMMON_ldadd = $(QT_LIBS) $(LIBS_qt) $(QT_QTEST_LIBS) $(LIBVLCCORE) $(LIBVLC)
 QT_QTEST_COMMON_ldflags = $(AM_LDFLAGS) $(QT_LDFLAGS) $(QT_QTEST_LDFLAGS)
+
+if HAVE_WIN32
+test_window_fullscreen_SOURCES = tests/test_window_fullscreen.cpp maininterface/window_fullscreen.hpp maininterface/window_csd_geometry.hpp util/win32_emutls.cpp
+nodist_test_window_fullscreen_SOURCES = tests/test_window_fullscreen.moc
+BUILT_SOURCES += tests/test_window_fullscreen.moc
+CLEANFILES += tests/test_window_fullscreen.moc
+test_window_fullscreen_CPPFLAGS = $(QT_QTEST_COMMON_cppflags)
+test_window_fullscreen_CXXFLAGS = $(QT_QTEST_COMMON_cxxflags)
+test_window_fullscreen_LDADD = $(QT_QTEST_COMMON_ldadd)
+test_window_fullscreen_LDFLAGS = $(QT_QTEST_COMMON_ldflags)
+check_PROGRAMS += test_window_fullscreen
+TESTS += test_window_fullscreen
+
+test_dcomp_backdrop_SOURCES = maininterface/compositor_dcomp_background.hpp tests/test_dcomp_backdrop.cpp maininterface/compositor_dcomp_backdrop.cpp maininterface/compositor_dcomp_backdrop.hpp util/video_backdrop_region.hpp
+nodist_test_dcomp_backdrop_SOURCES = tests/test_dcomp_backdrop.moc
+BUILT_SOURCES += tests/test_dcomp_backdrop.moc
+CLEANFILES += tests/test_dcomp_backdrop.moc
+test_dcomp_backdrop_CPPFLAGS = $(QT_QTEST_COMMON_cppflags)
+test_dcomp_backdrop_CXXFLAGS = $(QT_QTEST_COMMON_cxxflags)
+test_dcomp_backdrop_LDADD = $(QT_QTEST_COMMON_ldadd) -ld3d11 -ldcomp -ldxguid
+test_dcomp_backdrop_LDFLAGS = $(QT_QTEST_COMMON_ldflags)
+check_PROGRAMS += test_dcomp_backdrop
+TESTS += test_dcomp_backdrop
+endif
+
+test_backdrop_blur_SOURCES = tests/test_backdrop_blur.cpp util/textureproviderobserver.cpp util/textureproviderobserver.hpp widgets/native/viewblockingrectangle.cpp widgets/native/viewblockingrectangle.hpp
+nodist_test_backdrop_blur_SOURCES = tests/test_backdrop_blur.moc util/textureproviderobserver.moc.cpp widgets/native/viewblockingrectangle.moc.cpp shaders/shaders.cpp
+BUILT_SOURCES += tests/test_backdrop_blur.moc
+CLEANFILES += tests/test_backdrop_blur.moc
+test_backdrop_blur_CPPFLAGS = $(QT_QTEST_COMMON_cppflags) -DTOP_SRCDIR=\"$(abs_top_srcdir)\"
+test_backdrop_blur_CXXFLAGS = $(QT_QTEST_COMMON_cxxflags)
+test_backdrop_blur_LDADD = $(QT_QTEST_COMMON_ldadd)
+if HAVE_LIBATOMIC
+test_backdrop_blur_CXXFLAGS += -DQT_HAS_LIBATOMIC
+test_backdrop_blur_LDADD += -latomic
+endif
+test_backdrop_blur_LDFLAGS = $(QT_QTEST_COMMON_ldflags)
+check_PROGRAMS += test_backdrop_blur
+TESTS += test_backdrop_blur
+
+test_video_backdrop_SOURCES = tests/test_video_backdrop.cpp maininterface/videobackdrop.cpp maininterface/videobackdrop.hpp
+nodist_test_video_backdrop_SOURCES = tests/test_video_backdrop.moc maininterface/videobackdrop.moc.cpp
+BUILT_SOURCES += tests/test_video_backdrop.moc
+CLEANFILES += tests/test_video_backdrop.moc
+test_video_backdrop_CPPFLAGS = $(QT_QTEST_COMMON_cppflags) -DTOP_SRCDIR=\"$(abs_top_srcdir)\"
+test_video_backdrop_CXXFLAGS = $(QT_QTEST_COMMON_cxxflags)
+test_video_backdrop_LDADD = $(QT_QTEST_COMMON_ldadd)
+test_video_backdrop_LDFLAGS = $(QT_QTEST_COMMON_ldflags)
+check_PROGRAMS += test_video_backdrop
+TESTS += test_video_backdrop
+
+test_video_backdrop_reporter_SOURCES = tests/test_video_backdrop_reporter.cpp util/video_backdrop_reporter.hpp util/video_backdrop_region.hpp widgets/native/viewblockingrectangle.hpp
+nodist_test_video_backdrop_reporter_SOURCES = tests/test_video_backdrop_reporter.moc
+BUILT_SOURCES += tests/test_video_backdrop_reporter.moc
+CLEANFILES += tests/test_video_backdrop_reporter.moc
+test_video_backdrop_reporter_CPPFLAGS = $(QT_QTEST_COMMON_cppflags)
+test_video_backdrop_reporter_CXXFLAGS = $(QT_QTEST_COMMON_cxxflags)
+test_video_backdrop_reporter_LDADD = $(QT_QTEST_COMMON_ldadd)
+test_video_backdrop_reporter_LDFLAGS = $(QT_QTEST_COMMON_ldflags)
+check_PROGRAMS += test_video_backdrop_reporter
+TESTS += test_video_backdrop_reporter
+
+test_viewblockingrectangle_SOURCES = tests/test_viewblockingrectangle.cpp widgets/native/viewblockingrectangle.cpp widgets/native/viewblockingrectangle.hpp
+nodist_test_viewblockingrectangle_SOURCES = tests/test_viewblockingrectangle.moc widgets/native/viewblockingrectangle.moc.cpp
+BUILT_SOURCES += tests/test_viewblockingrectangle.moc
+CLEANFILES += tests/test_viewblockingrectangle.moc
+test_viewblockingrectangle_CPPFLAGS = $(QT_QTEST_COMMON_cppflags)
+test_viewblockingrectangle_CXXFLAGS = $(QT_QTEST_COMMON_cxxflags)
+test_viewblockingrectangle_LDADD = $(QT_QTEST_COMMON_ldadd)
+test_viewblockingrectangle_LDFLAGS = $(QT_QTEST_COMMON_ldflags)
+check_PROGRAMS += test_viewblockingrectangle
+TESTS += test_viewblockingrectangle
+
+test_cover_generator_SOURCES = tests/test_cover_generator.cpp util/covergenerator.cpp util/covergenerator.hpp
+nodist_test_cover_generator_SOURCES = tests/test_cover_generator.moc
+BUILT_SOURCES += tests/test_cover_generator.moc
+CLEANFILES += tests/test_cover_generator.moc
+test_cover_generator_CPPFLAGS = $(QT_QTEST_COMMON_cppflags)
+test_cover_generator_CXXFLAGS = $(QT_QTEST_COMMON_cxxflags)
+test_cover_generator_LDADD = $(QT_QTEST_COMMON_ldadd)
+test_cover_generator_LDFLAGS = $(QT_QTEST_COMMON_ldflags)
+check_PROGRAMS += test_cover_generator
+TESTS += test_cover_generator
+
+test_redesign_folder_model_SOURCES = tests/test_redesign_folder_model.cpp util/redesign_folder_model.cpp util/redesign_folder_model.hpp
+nodist_test_redesign_folder_model_SOURCES = tests/test_redesign_folder_model.moc util/redesign_folder_model.moc.cpp
+BUILT_SOURCES += tests/test_redesign_folder_model.moc
+CLEANFILES += tests/test_redesign_folder_model.moc
+test_redesign_folder_model_CPPFLAGS = $(QT_QTEST_COMMON_cppflags)
+test_redesign_folder_model_CXXFLAGS = $(QT_QTEST_COMMON_cxxflags)
+test_redesign_folder_model_LDADD = $(QT_QTEST_COMMON_ldadd)
+test_redesign_folder_model_LDFLAGS = $(QT_QTEST_COMMON_ldflags)
+check_PROGRAMS += test_redesign_folder_model
+TESTS += test_redesign_folder_model
+
+test_seek_preview_image_provider_SOURCES = tests/test_seek_preview_image_provider.cpp util/seek_preview_image_provider.hpp util/seek_preview_cache.hpp
+nodist_test_seek_preview_image_provider_SOURCES = tests/test_seek_preview_image_provider.moc
+BUILT_SOURCES += tests/test_seek_preview_image_provider.moc
+CLEANFILES += tests/test_seek_preview_image_provider.moc
+test_seek_preview_image_provider_CPPFLAGS = $(QT_QTEST_COMMON_cppflags)
+test_seek_preview_image_provider_CXXFLAGS = $(QT_QTEST_COMMON_cxxflags)
+test_seek_preview_image_provider_LDADD = $(QT_QTEST_COMMON_ldadd)
+test_seek_preview_image_provider_LDFLAGS = $(QT_QTEST_COMMON_ldflags)
+check_PROGRAMS += test_seek_preview_image_provider
+TESTS += test_seek_preview_image_provider
+
+test_subtitle_timeline_scanner_SOURCES = \
+	tests/test_subtitle_timeline_scanner.cpp \
+	player/subtitle_timeline_scanner.cpp player/subtitle_timeline_scanner.hpp
+nodist_test_subtitle_timeline_scanner_SOURCES = tests/test_subtitle_timeline_scanner.moc
+BUILT_SOURCES += tests/test_subtitle_timeline_scanner.moc
+CLEANFILES += tests/test_subtitle_timeline_scanner.moc
+test_subtitle_timeline_scanner_CPPFLAGS = $(QT_QTEST_COMMON_cppflags)
+test_subtitle_timeline_scanner_CXXFLAGS = $(QT_QTEST_COMMON_cxxflags)
+test_subtitle_timeline_scanner_LDADD = $(QT_QTEST_COMMON_ldadd)
+test_subtitle_timeline_scanner_LDFLAGS = $(QT_QTEST_COMMON_ldflags)
+check_PROGRAMS += test_subtitle_timeline_scanner
+TESTS += test_subtitle_timeline_scanner
+
+test_audio_waveform_scanner_SOURCES = \
+	tests/test_audio_waveform_scanner.cpp \
+	player/audio_waveform_scanner.cpp player/audio_waveform_scanner.hpp
+nodist_test_audio_waveform_scanner_SOURCES = tests/test_audio_waveform_scanner.moc
+BUILT_SOURCES += tests/test_audio_waveform_scanner.moc
+CLEANFILES += tests/test_audio_waveform_scanner.moc
+test_audio_waveform_scanner_CPPFLAGS = $(QT_QTEST_COMMON_cppflags)
+test_audio_waveform_scanner_CXXFLAGS = $(QT_QTEST_COMMON_cxxflags)
+test_audio_waveform_scanner_LDADD = $(QT_QTEST_COMMON_ldadd)
+test_audio_waveform_scanner_LDFLAGS = $(QT_QTEST_COMMON_ldflags)
+check_PROGRAMS += test_audio_waveform_scanner
+TESTS += test_audio_waveform_scanner
 
 
 # test_ml_model
@@ -1779,6 +2086,9 @@ test_ml_model_SOURCES = \
 	medialibrary/mlbasemodel.hpp medialibrary/mlbasemodel.cpp \
 	medialibrary/medialib.hpp medialibrary/medialib.cpp \
 	medialibrary/mlthreadpool.hpp medialibrary/mlthreadpool.cpp \
+	medialibrary/mlmediastore.hpp medialibrary/mlmediastore.cpp \
+	medialibrary/mlfoldersmodel.hpp medialibrary/mlfoldersmodel.cpp \
+	medialibrary/mlhelper.hpp medialibrary/mlhelper.cpp \
 	playlist/playlist_controller.hpp playlist/playlist_controller.cpp \
 	playlist/playlist_item.hpp playlist/playlist_item.cpp
 
@@ -1792,6 +2102,8 @@ nodist_test_ml_model_SOURCES = \
 	medialibrary/mlbasemodel.moc.cpp \
 	medialibrary/medialib.moc.cpp \
 	medialibrary/mlthreadpool.moc.cpp \
+	medialibrary/mlmediastore.moc.cpp \
+	medialibrary/mlfoldersmodel.moc.cpp \
 	playlist/playlist_controller.moc.cpp \
 	playlist/playlist_item.moc.cpp
 
@@ -1803,6 +2115,31 @@ test_ml_model_LDADD = $(QT_QTEST_COMMON_ldadd)
 test_ml_model_LDFLAGS = $(QT_QTEST_COMMON_ldflags)
 check_PROGRAMS += test_ml_model
 TESTS += test_ml_model
+
+if HAVE_X
+if HAVE_QT_XCB
+if HAVE_XCB
+
+test_x11_surface_size_SOURCES = \
+	tests/test_x11_surface_size.cpp \
+	maininterface/compositor_x11_uisurface.hpp maininterface/compositor_x11_uisurface.cpp \
+	maininterface/compositor_common.hpp maininterface/compositor_common.cpp
+nodist_test_x11_surface_size_SOURCES = \
+	tests/test_x11_surface_size.moc \
+	maininterface/compositor_x11_uisurface.moc.cpp \
+	maininterface/compositor_common.moc.cpp
+BUILT_SOURCES += tests/test_x11_surface_size.moc
+CLEANFILES += tests/test_x11_surface_size.moc
+test_x11_surface_size_CPPFLAGS = $(QT_QTEST_COMMON_cppflags)
+test_x11_surface_size_CXXFLAGS = $(QT_QTEST_COMMON_cxxflags)
+test_x11_surface_size_LDADD = $(QT_QTEST_COMMON_ldadd)
+test_x11_surface_size_LDFLAGS = $(QT_QTEST_COMMON_ldflags)
+check_PROGRAMS += test_x11_surface_size
+TESTS += test_x11_surface_size
+
+endif
+endif
+endif
 
 # test_renderer_manager_model
 
@@ -1843,6 +2180,147 @@ test_thread_runner_LDFLAGS = $(QT_QTEST_COMMON_ldflags)
 check_PROGRAMS += test_thread_runner
 TESTS += test_thread_runner
 
+# test_vlcqtmessagehandler
+
+test_vlcqtmessagehandler_SOURCES = tests/test_vlcqtmessagehandler.cpp util/vlcqtmessagehandler.cpp
+nodist_test_vlcqtmessagehandler_SOURCES = tests/test_vlcqtmessagehandler.moc
+BUILT_SOURCES += tests/test_vlcqtmessagehandler.moc
+CLEANFILES += tests/test_vlcqtmessagehandler.moc
+test_vlcqtmessagehandler_CPPFLAGS = $(QT_QTEST_COMMON_cppflags)
+test_vlcqtmessagehandler_CXXFLAGS = $(QT_QTEST_COMMON_cxxflags)
+test_vlcqtmessagehandler_LDADD = $(QT_QTEST_COMMON_ldadd)
+test_vlcqtmessagehandler_LDFLAGS = $(QT_QTEST_COMMON_ldflags)
+check_PROGRAMS += test_vlcqtmessagehandler
+TESTS += test_vlcqtmessagehandler
+
+# test_interface_translator
+
+test_interface_translator_SOURCES = tests/test_interface_translator.cpp util/interface_translator.hpp util/interface_translator.cpp util/gettext_translator.hpp util/gettext_translator.cpp
+nodist_test_interface_translator_SOURCES = tests/test_interface_translator.moc util/interface_translator.moc.cpp
+BUILT_SOURCES += tests/test_interface_translator.moc
+CLEANFILES += tests/test_interface_translator.moc
+test_interface_translator_CPPFLAGS = $(QT_QTEST_COMMON_cppflags)
+test_interface_translator_CXXFLAGS = $(QT_QTEST_COMMON_cxxflags)
+test_interface_translator_LDADD = $(QT_QTEST_COMMON_ldadd)
+test_interface_translator_LDFLAGS = $(QT_QTEST_COMMON_ldflags)
+check_PROGRAMS += test_interface_translator
+TESTS += test_interface_translator
+
+# test_gettext_translator
+
+test_gettext_translator_SOURCES = tests/test_gettext_translator.cpp util/gettext_translator.hpp util/gettext_translator.cpp
+nodist_test_gettext_translator_SOURCES = tests/test_gettext_translator.moc
+BUILT_SOURCES += tests/test_gettext_translator.moc
+CLEANFILES += tests/test_gettext_translator.moc
+test_gettext_translator_CPPFLAGS = $(QT_QTEST_COMMON_cppflags)
+test_gettext_translator_CXXFLAGS = $(QT_QTEST_COMMON_cxxflags)
+test_gettext_translator_LDADD = $(QT_QTEST_COMMON_ldadd)
+test_gettext_translator_LDFLAGS = $(QT_QTEST_COMMON_ldflags)
+check_PROGRAMS += test_gettext_translator
+TESTS += test_gettext_translator
+
+# test_embedded_file_browser
+
+test_embedded_file_browser_SOURCES = tests/test_embedded_file_browser.cpp widgets/native/embedded_file_browser.hpp widgets/native/embedded_file_browser.cpp
+nodist_test_embedded_file_browser_SOURCES = tests/test_embedded_file_browser.moc widgets/native/embedded_file_browser.moc.cpp
+BUILT_SOURCES += tests/test_embedded_file_browser.moc
+CLEANFILES += tests/test_embedded_file_browser.moc
+test_embedded_file_browser_CPPFLAGS = $(QT_QTEST_COMMON_cppflags)
+test_embedded_file_browser_CXXFLAGS = $(QT_QTEST_COMMON_cxxflags)
+test_embedded_file_browser_LDADD = $(QT_QTEST_COMMON_ldadd)
+test_embedded_file_browser_LDFLAGS = $(QT_QTEST_COMMON_ldflags)
+check_PROGRAMS += test_embedded_file_browser
+TESTS += test_embedded_file_browser
+
+# test_playlist_tree_model
+
+test_playlist_tree_model_SOURCES = tests/test_playlist_tree_model.cpp playlist/playlist_tree_model.hpp playlist/playlist_tree_model.cpp
+nodist_test_playlist_tree_model_SOURCES = tests/test_playlist_tree_model.moc playlist/playlist_tree_model.moc.cpp
+BUILT_SOURCES += tests/test_playlist_tree_model.moc
+CLEANFILES += tests/test_playlist_tree_model.moc
+test_playlist_tree_model_CPPFLAGS = $(QT_QTEST_COMMON_cppflags)
+test_playlist_tree_model_CXXFLAGS = $(QT_QTEST_COMMON_cxxflags)
+test_playlist_tree_model_LDADD = $(QT_QTEST_COMMON_ldadd)
+test_playlist_tree_model_LDFLAGS = $(QT_QTEST_COMMON_ldflags)
+check_PROGRAMS += test_playlist_tree_model
+TESTS += test_playlist_tree_model
+
+# test_video_window_geometry
+
+test_video_window_geometry_SOURCES = tests/test_video_window_geometry.cpp util/video_window_geometry.hpp
+nodist_test_video_window_geometry_SOURCES = tests/test_video_window_geometry.moc
+BUILT_SOURCES += tests/test_video_window_geometry.moc
+CLEANFILES += tests/test_video_window_geometry.moc
+test_video_window_geometry_CPPFLAGS = $(QT_QTEST_COMMON_cppflags)
+test_video_window_geometry_CXXFLAGS = $(QT_QTEST_COMMON_cxxflags)
+test_video_window_geometry_LDADD = $(QT_QTEST_COMMON_ldadd)
+test_video_window_geometry_LDFLAGS = $(QT_QTEST_COMMON_ldflags)
+check_PROGRAMS += test_video_window_geometry
+TESTS += test_video_window_geometry
+
+# test_tray_notification_policy
+
+test_tray_notification_policy_SOURCES = tests/test_tray_notification_policy.cpp dialogs/systray/notification_policy.hpp
+nodist_test_tray_notification_policy_SOURCES = tests/test_tray_notification_policy.moc
+BUILT_SOURCES += tests/test_tray_notification_policy.moc
+CLEANFILES += tests/test_tray_notification_policy.moc
+test_tray_notification_policy_CPPFLAGS = $(QT_QTEST_COMMON_cppflags)
+test_tray_notification_policy_CXXFLAGS = $(QT_QTEST_COMMON_cxxflags)
+test_tray_notification_policy_LDADD = $(QT_QTEST_COMMON_ldadd)
+test_tray_notification_policy_LDFLAGS = $(QT_QTEST_COMMON_ldflags)
+check_PROGRAMS += test_tray_notification_policy
+TESTS += test_tray_notification_policy
+
+# test_file_log_preferences
+
+test_file_log_preferences_SOURCES = tests/test_file_log_preferences.cpp util/file_log_preferences.hpp
+nodist_test_file_log_preferences_SOURCES = tests/test_file_log_preferences.moc
+BUILT_SOURCES += tests/test_file_log_preferences.moc
+CLEANFILES += tests/test_file_log_preferences.moc
+test_file_log_preferences_CPPFLAGS = $(QT_QTEST_COMMON_cppflags)
+test_file_log_preferences_CXXFLAGS = $(QT_QTEST_COMMON_cxxflags)
+test_file_log_preferences_LDADD = $(QT_QTEST_COMMON_ldadd)
+test_file_log_preferences_LDFLAGS = $(QT_QTEST_COMMON_ldflags)
+check_PROGRAMS += test_file_log_preferences
+TESTS += test_file_log_preferences
+
+# test_message_log
+
+test_message_log_SOURCES = tests/test_message_log.cpp util/message_log.hpp
+nodist_test_message_log_SOURCES = tests/test_message_log.moc
+BUILT_SOURCES += tests/test_message_log.moc
+CLEANFILES += tests/test_message_log.moc
+test_message_log_CPPFLAGS = $(QT_QTEST_COMMON_cppflags)
+test_message_log_CXXFLAGS = $(QT_QTEST_COMMON_cxxflags)
+test_message_log_LDADD = $(QT_QTEST_COMMON_ldadd)
+test_message_log_LDFLAGS = $(QT_QTEST_COMMON_ldflags)
+check_PROGRAMS += test_message_log
+TESTS += test_message_log
+
+test_message_log_buffer_SOURCES = tests/test_message_log_buffer.cpp util/message_log_buffer.hpp
+nodist_test_message_log_buffer_SOURCES = tests/test_message_log_buffer.moc
+BUILT_SOURCES += tests/test_message_log_buffer.moc
+CLEANFILES += tests/test_message_log_buffer.moc
+test_message_log_buffer_CPPFLAGS = $(QT_QTEST_COMMON_cppflags)
+test_message_log_buffer_CXXFLAGS = $(QT_QTEST_COMMON_cxxflags)
+test_message_log_buffer_LDADD = $(QT_QTEST_COMMON_ldadd)
+test_message_log_buffer_LDFLAGS = $(QT_QTEST_COMMON_ldflags)
+check_PROGRAMS += test_message_log_buffer
+TESTS += test_message_log_buffer
+
+# test_warning_log_buffer
+
+test_warning_log_buffer_SOURCES = tests/test_warning_log_buffer.cpp util/warning_log_buffer.hpp
+nodist_test_warning_log_buffer_SOURCES = tests/test_warning_log_buffer.moc
+BUILT_SOURCES += tests/test_warning_log_buffer.moc
+CLEANFILES += tests/test_warning_log_buffer.moc
+test_warning_log_buffer_CPPFLAGS = $(QT_QTEST_COMMON_cppflags)
+test_warning_log_buffer_CXXFLAGS = $(QT_QTEST_COMMON_cxxflags)
+test_warning_log_buffer_LDADD = $(QT_QTEST_COMMON_ldadd)
+test_warning_log_buffer_LDFLAGS = $(QT_QTEST_COMMON_ldflags)
+check_PROGRAMS += test_warning_log_buffer
+TESTS += test_warning_log_buffer
+
 # test_vlc_dialog_model
 
 test_vlc_dialog_model_SOURCES = \
@@ -1863,6 +2341,18 @@ test_vlc_dialog_model_LDFLAGS = $(QT_QTEST_COMMON_ldflags)
 check_PROGRAMS += test_vlc_dialog_model
 TESTS += test_vlc_dialog_model
 
+# test_qt_postprocessing_preferences
+test_qt_postprocessing_preferences_SOURCES = tests/vlc_stub_modules.cpp tests/test_postprocessing_preferences.cpp util/postprocessing_preferences.hpp
+nodist_test_qt_postprocessing_preferences_SOURCES = tests/test_postprocessing_preferences.moc
+BUILT_SOURCES += tests/test_postprocessing_preferences.moc
+CLEANFILES += tests/test_postprocessing_preferences.moc
+test_qt_postprocessing_preferences_CPPFLAGS = $(QT_QTEST_COMMON_cppflags)
+test_qt_postprocessing_preferences_CXXFLAGS = $(QT_QTEST_COMMON_cxxflags)
+test_qt_postprocessing_preferences_LDADD = $(QT_QTEST_COMMON_ldadd)
+test_qt_postprocessing_preferences_LDFLAGS = $(QT_QTEST_COMMON_ldflags)
+check_PROGRAMS += test_qt_postprocessing_preferences
+TESTS += test_qt_postprocessing_preferences
+
 # test_qt_csd_button_model
 check_PROGRAMS += test_qt_csd_button_model
 TESTS += test_qt_csd_button_model
@@ -1882,6 +2372,69 @@ test_qt_csd_button_model_CXXFLAGS = $(QT_QTEST_COMMON_cxxflags)
 test_qt_csd_button_model_LDADD = $(QT_QTEST_COMMON_ldadd)
 test_qt_csd_button_model_LDFLAGS = $(QT_QTEST_COMMON_ldflags)
 
+
+test_qt_track_folder_rules_SOURCES = tests/test_track_folder_rules.cpp ../../misc/medialibrary/track_rule_store.cpp
+nodist_test_qt_track_folder_rules_SOURCES = tests/test_track_folder_rules.moc
+BUILT_SOURCES += tests/test_track_folder_rules.moc
+CLEANFILES += tests/test_track_folder_rules.moc
+test_qt_track_folder_rules_CPPFLAGS = $(QT_QTEST_COMMON_cppflags)
+test_qt_track_folder_rules_CXXFLAGS = $(QT_QTEST_COMMON_cxxflags)
+test_qt_track_folder_rules_LDADD = $(QT_QTEST_COMMON_ldadd)
+test_qt_track_folder_rules_LDFLAGS = $(QT_QTEST_COMMON_ldflags)
+check_PROGRAMS += test_qt_track_folder_rules
+TESTS += test_qt_track_folder_rules
+
+test_qt_github_releases_SOURCES = \
+	tests/test_github_releases.cpp util/release_info.cpp util/release_info.hpp \
+	util/github_release_service.cpp util/github_release_service.hpp
+nodist_test_qt_github_releases_SOURCES = tests/test_github_releases.moc util/github_release_service.moc.cpp
+BUILT_SOURCES += tests/test_github_releases.moc
+CLEANFILES += tests/test_github_releases.moc
+test_qt_github_releases_CPPFLAGS = $(QT_QTEST_COMMON_cppflags)
+test_qt_github_releases_CXXFLAGS = $(QT_QTEST_COMMON_cxxflags)
+test_qt_github_releases_LDADD = $(QT_QTEST_COMMON_ldadd)
+test_qt_github_releases_LDFLAGS = $(QT_QTEST_COMMON_ldflags)
+check_PROGRAMS += test_qt_github_releases
+TESTS += test_qt_github_releases
+
+test_qt_subtitle_sources_SOURCES = \
+	tests/test_subtitle_sources.cpp util/subtitle_source_service.cpp util/subtitle_source_service.hpp
+nodist_test_qt_subtitle_sources_SOURCES = \
+	tests/test_subtitle_sources.moc util/subtitle_source_service.moc.cpp
+BUILT_SOURCES += tests/test_subtitle_sources.moc
+CLEANFILES += tests/test_subtitle_sources.moc
+test_qt_subtitle_sources_CPPFLAGS = $(QT_QTEST_COMMON_cppflags)
+test_qt_subtitle_sources_CXXFLAGS = $(QT_QTEST_COMMON_cxxflags)
+test_qt_subtitle_sources_LDADD = $(QT_QTEST_COMMON_ldadd)
+test_qt_subtitle_sources_LDFLAGS = $(QT_QTEST_COMMON_ldflags)
+check_PROGRAMS += test_qt_subtitle_sources
+TESTS += test_qt_subtitle_sources
+
+test_qt_track_list_model_SOURCES = \
+	tests/test_track_list_model.cpp player/input_models.cpp player/input_models.hpp util/vlctick.cpp util/vlctick.hpp
+nodist_test_qt_track_list_model_SOURCES = \
+	tests/test_track_list_model.moc player/input_models.moc.cpp util/vlctick.moc.cpp
+BUILT_SOURCES += tests/test_track_list_model.moc
+CLEANFILES += tests/test_track_list_model.moc
+test_qt_track_list_model_CPPFLAGS = $(QT_QTEST_COMMON_cppflags)
+test_qt_track_list_model_CXXFLAGS = $(QT_QTEST_COMMON_cxxflags)
+test_qt_track_list_model_LDADD = $(QT_QTEST_COMMON_ldadd)
+test_qt_track_list_model_LDFLAGS = $(QT_QTEST_COMMON_ldflags)
+check_PROGRAMS += test_qt_track_list_model
+TESTS += test_qt_track_list_model
+
+test_qt_effects_image_provider_SOURCES = \
+	tests/test_effects_image_provider.cpp util/effects_image_provider.cpp util/effects_image_provider.hpp
+nodist_test_qt_effects_image_provider_SOURCES = \
+	tests/test_effects_image_provider.moc util/effects_image_provider.moc.cpp
+BUILT_SOURCES += tests/test_effects_image_provider.moc
+CLEANFILES += tests/test_effects_image_provider.moc
+test_qt_effects_image_provider_CPPFLAGS = $(QT_QTEST_COMMON_cppflags)
+test_qt_effects_image_provider_CXXFLAGS = $(QT_QTEST_COMMON_cxxflags)
+test_qt_effects_image_provider_LDADD = $(QT_QTEST_COMMON_ldadd)
+test_qt_effects_image_provider_LDFLAGS = $(QT_QTEST_COMMON_ldflags)
+check_PROGRAMS += test_qt_effects_image_provider
+TESTS += test_qt_effects_image_provider
 
 test_qt_navigation_model_SOURCES = \
 	tests/vlc_stub_modules.cpp \
@@ -1916,7 +2469,64 @@ qml_test_CXXFLAGS = $(AM_CXXFLAGS) $(QT_CFLAGS) -fPIC $(CXXFLAGS_qt) ${QT_QUICK_
 qml_test_LDADD = $(QT_INDIRECT_LIBS) ${QT_QUICK_TEST_LIBS} $(QT_LIBS) $(LIBS_qt) libqml_module_util.a
 qml_test_LDFLAGS = $(AM_LDFLAGS) $(QT_QUICK_TEST_LDFLAGS)
 check_PROGRAMS += qml_test
-EXTRA_DIST += tests/tst_FSM.qml
-TESTS += tests/tst_FSM.qml
+EXTRA_DIST += tests/tst_FSM.qml tests/tst_Redesign.qml tests/tst_RedesignPreferences.qml tests/tst_RedesignPlayback.qml tests/tst_RedesignWaveform.qml tests/tst_RedesignAudio.qml tests/tst_RedesignVideo.qml tests/tst_RedesignOnboarding.qml tests/tst_RedesignMenu.qml
+EXTRA_DIST += tests/tst_RedesignSubtitleTimeline.qml
+EXTRA_DIST += tests/tst_RedesignTheme.qml
+EXTRA_DIST += tests/tst_RedesignSliders.qml
+EXTRA_DIST += tests/tst_RedesignActionMenu.qml
+EXTRA_DIST += tests/tst_RedesignDialogSurfaces.qml
+EXTRA_DIST += tests/tst_RedesignSettingsDialog.qml
+EXTRA_DIST += tests/tst_RedesignShortcutEditor.qml
+EXTRA_DIST += tests/tst_RedesignAppearance.qml tests/tst_RedesignCompactMenus.qml
+EXTRA_DIST += tests/test_stereo_test_signal.cpp
+TESTS += tests/tst_RedesignTheme.qml
+TESTS += tests/tst_RedesignSliders.qml
+TESTS += tests/tst_RedesignActionMenu.qml
+TESTS += tests/tst_RedesignDialogSurfaces.qml
+TESTS += tests/tst_RedesignSettingsDialog.qml
+TESTS += tests/tst_RedesignShortcutEditor.qml
+TESTS += tests/tst_RedesignAppearance.qml tests/tst_RedesignCompactMenus.qml
+EXTRA_DIST += tests/tst_RedesignQueue.qml
+EXTRA_DIST += tests/tst_RedesignIconSizing.qml
+EXTRA_DIST += tests/tst_RedesignCursor.qml
+EXTRA_DIST += tests/tst_RedesignBookmarks.qml
+TESTS += tests/tst_RedesignBookmarks.qml
+EXTRA_DIST += tests/tst_RedesignChapters.qml
+TESTS += tests/tst_RedesignChapters.qml
+EXTRA_DIST += tests/tst_RedesignLibrary.qml
+TESTS += tests/tst_RedesignLibrary.qml
+EXTRA_DIST += tests/tst_RedesignAddons.qml
+TESTS += tests/tst_RedesignAddons.qml
+EXTRA_DIST += tests/tst_RedesignPlugins.qml
+TESTS += tests/tst_RedesignPlugins.qml
+TESTS += tests/tst_RedesignQueue.qml
+TESTS += tests/tst_RedesignIconSizing.qml
+TESTS += tests/tst_RedesignCursor.qml
+EXTRA_DIST += tests/tst_RedesignNetwork.qml
+TESTS += tests/tst_RedesignNetwork.qml
+EXTRA_DIST += tests/tst_RedesignPlaylist.qml
+TESTS += tests/tst_RedesignPlaylist.qml
+EXTRA_DIST += tests/tst_RedesignPlaylistProperties.qml
+TESTS += tests/tst_RedesignPlaylistProperties.qml
+EXTRA_DIST += tests/tst_RedesignPlaylistTrackTarget.qml
+TESTS += tests/tst_RedesignPlaylistTrackTarget.qml
+EXTRA_DIST += tests/tst_RedesignMediaFavorite.qml tests/tst_RedesignCustomizationControls.qml \
+	tests/tst_RedesignCustomizationEditor.qml tests/tst_RedesignAddToPlaylist.qml \
+	tests/tst_RedesignPlayerLayout.qml tests/tst_RedesignPlayerChrome.qml \
+	tests/tst_RedesignEqualizerScroll.qml tests/tst_RedesignChoices.qml tests/tst_RedesignPlayerPreset.qml \
+	tests/tst_RedesignVolume.qml tests/tst_RedesignSpatializer.qml \
+	tests/tst_RedesignSubtitles.qml tests/tst_RedesignToolTip.qml tests/tst_RedesignGlobalEqualizer.qml
+TESTS += tests/tst_RedesignMediaFavorite.qml tests/tst_RedesignCustomizationControls.qml \
+	tests/tst_RedesignCustomizationEditor.qml tests/tst_RedesignAddToPlaylist.qml \
+	tests/tst_RedesignPlayerLayout.qml tests/tst_RedesignPlayerChrome.qml \
+	tests/tst_RedesignEqualizerScroll.qml tests/tst_RedesignChoices.qml tests/tst_RedesignPlayerPreset.qml \
+	tests/tst_RedesignVolume.qml tests/tst_RedesignSpatializer.qml \
+	tests/tst_RedesignSubtitles.qml tests/tst_RedesignToolTip.qml tests/tst_RedesignGlobalEqualizer.qml
+EXTRA_DIST += tests/tst_RedesignTrackAssignments.qml
+TESTS += tests/tst_RedesignTrackAssignments.qml
+EXTRA_DIST += tests/tst_RedesignFolderInfo.qml
+TESTS += tests/tst_RedesignFolderInfo.qml
+TESTS += tests/tst_RedesignSubtitleTimeline.qml
+TESTS += tests/tst_FSM.qml tests/tst_Redesign.qml tests/tst_RedesignPreferences.qml tests/tst_RedesignPlayback.qml tests/tst_RedesignWaveform.qml tests/tst_RedesignAudio.qml tests/tst_RedesignVideo.qml tests/tst_RedesignOnboarding.qml tests/tst_RedesignMenu.qml
 endif
 endif

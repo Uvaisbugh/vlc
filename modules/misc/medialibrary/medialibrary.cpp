@@ -29,6 +29,8 @@
 #include <vlc_media_library.h>
 #include <vlc_dialog.h>
 #include "medialibrary.h"
+#include "track_rules.hpp"
+#include "history_filter.hpp"
 #include "fs/fs.h"
 #include "fs/devicelister.h"
 
@@ -42,10 +44,18 @@
 #include <medialibrary/IPlaylist.h>
 #include <medialibrary/IBookmark.h>
 #include <medialibrary/IFolder.h>
+#include <medialibrary/IFile.h>
 
 #include <algorithm>
 #include <sstream>
 #include <initializer_list>
+#ifdef _WIN32
+# include <windows.h>
+# include <vlc_charset.h>
+# if WINAPI_FAMILY_PARTITION(WINAPI_PARTITION_DESKTOP)
+#  include "library_storage.hpp"
+# endif
+#endif
 
 class Logger : public medialibrary::ILogger
 {
@@ -405,6 +415,33 @@ MediaLibrary* MediaLibrary::create( vlc_medialibrary_module_t* vlc_ml )
         return nullptr;
     auto userDir = vlc::wrap_cptr( userdir );
     auto mlDir = std::string{ userDir.get() } + "/ml/";
+    const auto ruleDirectory = mlDir + "track-folders";
+#ifdef _WIN32
+# if WINAPI_FAMILY_PARTITION(WINAPI_PARTITION_DESKTOP)
+    if (vlc::medialibrary::isWslStorage(userDir.get()))
+    {
+        /* Windows SQLite cannot take its exclusive locks through WSL's file
+         * server. Keep each portable profile's database on the Windows disk.
+         * Configuration and folder rules still use the original profile. */
+        const DWORD length = GetEnvironmentVariableW(L"LOCALAPPDATA", nullptr, 0);
+        std::vector<wchar_t> directory(length);
+        const DWORD copied = length ? GetEnvironmentVariableW(L"LOCALAPPDATA", directory.data(), length) : 0;
+        auto local = vlc::wrap_cptr(copied && copied < length ? FromWide(directory.data()) : nullptr);
+        if (copied >= 3 && copied < length)
+        {
+            const wchar_t drive[] = {directory[0], L':', L'\\', L'\0'};
+            if (GetDriveTypeW(drive) == DRIVE_REMOTE) local.reset();
+        }
+        mlDir = local ? vlc::medialibrary::localLibraryStorage(userDir.get(), local.get()) : std::string{};
+        if (mlDir.empty())
+        {
+            msg_Err(vlc_ml, "Cannot find a local Windows directory for the library database");
+            return nullptr;
+        }
+        msg_Dbg(vlc_ml, "WSL profile: using local library storage at %s", mlDir.c_str());
+    }
+# endif
+#endif
     auto dbPath = mlDir + "ml.db";
     auto mlFolderPath = mlDir + "mlstorage/";
     medialibrary::SetupConfig cfg;
@@ -430,13 +467,14 @@ MediaLibrary* MediaLibrary::create( vlc_medialibrary_module_t* vlc_ml )
     if ( !ml )
         return nullptr;
 
-    return new MediaLibrary( vlc_ml, ml );
+    return new MediaLibrary( vlc_ml, ml, ruleDirectory );
 }
 
 MediaLibrary::MediaLibrary( vlc_medialibrary_module_t* vlc_ml,
-                            medialibrary::IMediaLibrary* ml )
+                            medialibrary::IMediaLibrary* ml, std::string ruleDirectory )
     : m_vlc_ml( vlc_ml )
     , m_ml( ml )
+    , m_trackRules( std::move(ruleDirectory) )
 {
 }
 
@@ -518,6 +556,67 @@ int MediaLibrary::Control( int query, va_list args )
 
     switch ( query )
     {
+        case VLC_ML_FOLDER_GET_TRACK_RULE:
+        case VLC_ML_FOLDER_SET_TRACK_RULE:
+        {
+            const auto folder = va_arg(args, const char*);
+            const auto type = va_arg(args, int);
+            if (!folder) return VLC_EGENERIC;
+            if (query == VLC_ML_FOLDER_SET_TRACK_RULE) {
+                const auto definition = va_arg(args, const char*);
+                return m_trackRules.write(folder, type, definition ? definition : "") ? VLC_SUCCESS : VLC_EGENERIC;
+            }
+            const auto result = va_arg(args, char**);
+            if (!result) return VLC_EGENERIC;
+            *result = nullptr; std::string definition;
+            if (!m_trackRules.read(folder, type, definition)) return VLC_EGENERIC;
+            if (definition.empty()) return VLC_SUCCESS;
+            *result = strdup(definition.c_str()); return *result ? VLC_SUCCESS : VLC_ENOMEM;
+        }
+        case VLC_ML_MEDIA_GET_FOLDER_TRACKS:
+        {
+            const auto uri = va_arg(args, const char*);
+            const auto type = va_arg(args, int);
+            const auto applies = va_arg(args, bool*);
+            const auto result = va_arg(args, vlc_ml_file_list_t**);
+            if (!applies || !result || !uri || (type != VLC_ML_FILE_TYPE_SUBTITLE && type != VLC_ML_FILE_TYPE_SOUNDTRACK)) return VLC_EGENERIC;
+            *applies = false; *result = nullptr;
+            auto path = vlc::wrap_cptr(vlc_uri2path(uri));
+            if (!path) return VLC_SUCCESS;
+            const std::string mediaPath = vlc::medialibrary::trackrules::path(path.get());
+            auto folder = vlc::wrap_cptr(vlc_path2uri(vlc::medialibrary::trackrules::nativePath(vlc::medialibrary::trackrules::parent(mediaPath)).c_str(), nullptr));
+            if (!folder) return VLC_EGENERIC;
+            std::string definition;
+            if (!m_trackRules.read(folder.get(), type, definition)) return VLC_EGENERIC;
+            if (definition.empty()) return VLC_SUCCESS;
+#ifdef MEDIALIBRARY_HAS_TRACK_SELECTIONS
+            if (!Init()) return VLC_EGENERIC;
+            {
+                auto access = m_ml->acquirePriorityAccess();
+                const auto media = m_ml->media(uri);
+                const auto trackType = type == VLC_ML_FILE_TYPE_SUBTITLE ? medialibrary::IFile::Type::Subtitles : medialibrary::IFile::Type::Soundtrack;
+                std::vector<std::string> selected;
+                if (media && medialibrary::getTrackSelection(*media, trackType, selected)) return VLC_SUCCESS;
+                if (media) for (const auto& file : media->files())
+                    if (file->isExternal() && file->type() == trackType) return VLC_SUCCESS;
+            }
+#else
+            return VLC_ENOTSUP;
+#endif
+            std::vector<std::string> paths;
+            if (!m_trackRules.resolve(definition, vlc::medialibrary::trackrules::fileName(mediaPath), *applies, paths)) return VLC_EGENERIC;
+            if (paths.empty()) return VLC_SUCCESS;
+            auto files = static_cast<vlc_ml_file_list_t*>(calloc(1, sizeof(vlc_ml_file_list_t) + paths.size() * sizeof(vlc_ml_file_t)));
+            if (!files) return VLC_ENOMEM;
+            files->i_nb_items = paths.size();
+            for (size_t i = 0; i < paths.size(); ++i) {
+                auto& file = files->p_items[i];
+                file.psz_mrl = vlc_path2uri(vlc::medialibrary::trackrules::nativePath(paths[i]).c_str(), nullptr);
+                if (!file.psz_mrl) { vlc_ml_file_list_release(files); return VLC_ENOMEM; }
+                file.i_type = static_cast<vlc_ml_file_type_t>(type); file.b_external = file.b_present = true;
+            }
+            *result = files; return VLC_SUCCESS;
+        }
         case VLC_ML_ADD_FOLDER:
         case VLC_ML_REMOVE_FOLDER:
         case VLC_ML_BAN_FOLDER:
@@ -663,6 +762,7 @@ int MediaLibrary::Control( int query, va_list args )
         case VLC_ML_MEDIA_SET_ALL_MEDIA_PLAYBACK_STATES:
         case VLC_ML_MEDIA_SET_THUMBNAIL:
         case VLC_ML_MEDIA_ADD_EXTERNAL_MRL:
+        case VLC_ML_MEDIA_SET_EXTERNAL_MRLS:
         case VLC_ML_MEDIA_SET_TYPE:
         case VLC_ML_MEDIA_SET_PLAYED:
         case VLC_ML_MEDIA_SET_FAVORITE:
@@ -1881,10 +1981,28 @@ int MediaLibrary::controlMedia( int query, va_list args )
     switch( query )
     {
         case VLC_ML_MEDIA_UPDATE_PROGRESS:
+        {
+            auto pattern = vlc::wrap_cptr(var_InheritString(m_vlc_ml, "recentplay-filter"));
+            if (pattern && *pattern) {
+                const vlc::medialibrary::HistoryFilter filter(pattern.get());
+                if (!filter.valid()) return VLC_SUCCESS;
+                try {
+                    const auto file = m->mainFile();
+                    if (!file) return VLC_SUCCESS;
+                    const auto uri = file->mrl();
+                    auto path = vlc::wrap_cptr(vlc_uri2path(uri.c_str()));
+                    if (!path) path.reset(vlc_uri_decode_duplicate(uri.c_str()));
+                    if (filter.excludes(uri, path ? path.get() : uri)) return VLC_SUCCESS;
+                } catch (const std::exception&) {
+                    // The file can disappear while playback is stopping.
+                    return VLC_SUCCESS;
+                }
+            }
             if ( m->setLastPosition( va_arg( args, double ) ) ==
                     medialibrary::IMedia::ProgressResult::Error )
                 return VLC_EGENERIC;
             return VLC_SUCCESS;
+        }
         case VLC_ML_MEDIA_GET_MEDIA_PLAYBACK_STATE:
         {
             auto meta = va_arg( args, int );
@@ -1942,6 +2060,28 @@ int MediaLibrary::controlMedia( int query, va_list args )
             if ( m->addExternalMrl( mrl, mlType ) == nullptr )
                 return VLC_EGENERIC;
             return VLC_SUCCESS;
+        }
+        case VLC_ML_MEDIA_SET_EXTERNAL_MRLS:
+        {
+            const auto type = va_arg( args, int );
+            const auto mrls = va_arg( args, const char* const* );
+            const auto count = va_arg( args, size_t );
+            if ((type != VLC_ML_FILE_TYPE_SUBTITLE && type != VLC_ML_FILE_TYPE_SOUNDTRACK)
+                || (count != 0 && mrls == nullptr))
+                return VLC_EGENERIC;
+#ifdef MEDIALIBRARY_HAS_EXTERNAL_TRACK_REPLACEMENT
+            std::vector<std::string> tracks;
+            tracks.reserve(count);
+            for (size_t i = 0; i < count; ++i) {
+                if (!mrls[i] || !*mrls[i]) return VLC_EGENERIC;
+                tracks.emplace_back(mrls[i]);
+            }
+            const auto trackType = type == VLC_ML_FILE_TYPE_SUBTITLE
+                ? medialibrary::IFile::Type::Subtitles : medialibrary::IFile::Type::Soundtrack;
+            return medialibrary::setExternalTracks(*m, trackType, tracks) ? VLC_SUCCESS : VLC_EGENERIC;
+#else
+            return VLC_ENOTSUP;
+#endif
         }
         case VLC_ML_MEDIA_SET_TYPE:
         {
@@ -2008,7 +2148,7 @@ int MediaLibrary::controlMedia( int query, va_list args )
             auto time = va_arg( args, int64_t );
             if ( m->addBookmark( time ) == nullptr )
                 return VLC_EGENERIC;
-            return VLC_EGENERIC;
+            return VLC_SUCCESS;
         }
         case VLC_ML_MEDIA_REMOVE_BOOKMARK:
         {
@@ -2531,6 +2671,13 @@ int MediaLibrary::listPlaylist( int listQuery, const medialibrary::QueryParamete
             }
 
             medialibrary::Query<medialibrary::IPlaylist> query;
+            // All playlists includes empty and unavailable playlists in listAll().
+            // Use the same scope for search, so an empty destination can be found.
+            auto playlistParams = paramsPtr ? *paramsPtr : medialibrary::QueryParameters {};
+            if (mlPlaylistType == medialibrary::PlaylistType::All) {
+                playlistParams.includeMissing = true;
+                paramsPtr = &playlistParams;
+            }
             if ( pattern != nullptr )
                 query = m_ml->searchPlaylists( pattern, mlPlaylistType, paramsPtr );
             else
@@ -2561,7 +2708,7 @@ int MediaLibrary::listPlaylist( int listQuery, const medialibrary::QueryParamete
             if ( pattern != nullptr )
                 query = playlist->searchMedia( pattern, paramsPtr );
             else
-                query = playlist->media( nullptr );
+                query = playlist->media( paramsPtr );
             if ( query == nullptr )
                 return VLC_EGENERIC;
             switch ( listQuery )
@@ -2688,5 +2835,8 @@ vlc_module_begin()
     set_subcategory(SUBCAT_ADVANCED_MISC)
     set_capability("medialibrary", 100)
     set_callbacks(Open, Close)
+    // The library retains our ILogger in process-wide storage after Close().
+    // Its virtual destructor and shared_ptr deleter must remain available.
+    cannot_unload_broken_library()
     add_bool( "ml-verbose", false, ML_VERBOSE, nullptr )
 vlc_module_end()

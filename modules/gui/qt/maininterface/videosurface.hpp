@@ -24,6 +24,7 @@
 #include <QPointer>
 #include "qt.hpp"
 #include "util/vlchotkeyconverter.hpp"
+#include "videobackdrop.hpp"
 
 #include <vlc_threads.h>
 
@@ -36,7 +37,7 @@ Q_MOC_INCLUDE( "maininterface/mainctx.hpp")
 class MainCtx;
 class VideoSurface;
 
-class VideoSurfaceProvider : public QObject
+class VideoSurfaceProvider : public VideoBackdropProvider
 {
     Q_OBJECT
 
@@ -70,6 +71,7 @@ public slots:
     void onWindowClosed();
     void onMousePressed( int vlcButton );
     void onMouseReleased( int vlcButton );
+    void releaseMouseButtons();
     void onMouseDoubleClick( int vlcButton );
     void onMouseMoved( float x, float y );
     void onMouseWheeled(int vlcButton);
@@ -80,10 +82,11 @@ public slots:
 
 protected:
     vlc_window_t* m_voutWindow = nullptr;
+    unsigned m_pressedButtons = 0;
     bool m_videoEmbed = false;
     bool m_threadedSurfaceUpdates = false;
-};
 
+};
 
 class VideoSurface : public ViewBlockingRectangle
 {

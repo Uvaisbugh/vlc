@@ -14,12 +14,12 @@ permissions:
 
 concurrency:
   group: windows-vlc-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   windows-x64:
     runs-on: ubuntu-24.04
-    timeout-minutes: 180
+    timeout-minutes: 360
     container:
       # Same versioned image as extras/ci/gitlab-ci.yml at our baseline.
       image: registry.videolan.org/vlc-debian-win64-posix:20260611225331
@@ -49,7 +49,7 @@ jobs:
       - name: Build native VLC and stage Windows runtime
         run: |
           set -euo pipefail
-          export JOBS=2
+          export JOBS=4
           args=(-a x86_64 -x -o "$PWD/artifacts/vlc-win64")
           contrib_sha=$(extras/ci/get-contrib-sha.sh win64)
           contrib_url="https://artifacts.videolan.org/vlc/win64/vlc-contrib-x86_64-w64-mingw32-${contrib_sha}.tar.zst"
@@ -122,5 +122,49 @@ jobs:
         with:
           name: windows-smoke-${{ github.sha }}
           path: smoke-evidence/
+          if-no-files-found: warn
+          retention-days: 14
+
+  native-qt-tests:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    container:
+      image: registry.videolan.org/vlc-debian-unstable:20260611225331
+      options: --user 0
+    defaults:
+      run:
+        shell: bash
+    env:
+      QT_QPA_PLATFORM: offscreen
+      QT_QUICK_BACKEND: software
+      QT_SCALE_FACTOR: '1'
+    steps:
+      - name: Check out native source and test suite
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Build patched media library and native VLC
+        run: |
+          set -euo pipefail
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          export JOBS=4
+          extras/package/release/build-medialibrary.sh
+          export PKG_CONFIG_PATH="$PWD/build-release-deps/prefix/lib/pkgconfig:${PKG_CONFIG_PATH:-}"
+          export LD_LIBRARY_PATH="$PWD/build-release-deps/prefix/lib:${LD_LIBRARY_PATH:-}"
+          echo "LD_LIBRARY_PATH=$LD_LIBRARY_PATH" >> "$GITHUB_ENV"
+          meson setup build-redesign -Dqt=enabled -Dmedialibrary=enabled -Dtests=enabled -Dextra_checks=true
+          meson compile -C build-redesign -j 4
+
+      - name: Run native Qt and QML tests
+        run: meson test -C build-redesign --suite qt --no-rebuild --print-errorlogs --timeout-multiplier 2
+
+      - name: Preserve native test diagnostics
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: native-qt-tests-${{ github.sha }}
+          path: build-redesign/meson-logs/
           if-no-files-found: warn
           retention-days: 14

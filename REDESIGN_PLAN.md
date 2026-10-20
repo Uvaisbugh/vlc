@@ -1,6 +1,6 @@
 # VLC redesign implementation plan
 
-Status: baseline compiled; first player component patch in progress; no release delivered.
+Status: native redesign integrated locally; full native validation in progress; no release delivered.
 Updated: 2026-10-20.
 
 ## Outcome
@@ -42,6 +42,26 @@ inspected; see `doc/redesign/PLAYER_SPEC.md`. The miniplayer component
 `.github/workflows/windows-build.yml`; its checkout requests complete history.
 
 ## Implementation sequence
+
+### Community implementation integration
+
+The source now incorporates the native implementation from
+https://github.com/dsojevic/juxtopposed-vlc at
+`b876f75f43130249162796fd3057e1327e2b1d2b`, a direct descendant of our VideoLAN
+baseline. Its Git history, software notices, Juxtopposed design attribution,
+and Inter font license are retained. README identifies this integration clearly.
+
+This supplies 85 redesign QML components, native player/library/settings
+controllers, and 46 focused QML test files. Integration is not evidence that
+every supplied Figma frame matches or that every feature works in our build.
+The sequence below now describes auditing and completing this implementation,
+rather than recreating its existing components.
+
+The integrated backend requires patched media-library sources and network-enabled
+Qt. The next Windows build must build matching dependencies; the original
+baseline's upstream dependency archive is insufficient for these features.
+Native Linux Qt tests and Windows packaged-runtime smoke tests have been added
+to the fork's workflow.
 
 ### 1. Capture the complete design specification
 

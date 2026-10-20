@@ -7,6 +7,126 @@
 
 #include "common.h"
 
+#ifdef OUTPUT_TEARDOWN_TEST
+#include <vlc_window.h>
+
+static int teardown_window_Enable(vlc_window_t *window, const vlc_window_cfg_t *cfg)
+{
+    vlc_window_ReportSize(window, cfg->width, cfg->height);
+    return VLC_SUCCESS;
+}
+
+static void teardown_window_Disable(vlc_window_t *window)
+{
+    (void) window;
+    vlc_mutex_lock(&window_teardown.lock);
+    if (window_teardown.blocked)
+    {
+        window_teardown.entered = true;
+        vlc_cond_signal(&window_teardown.wait);
+        const vlc_tick_t deadline = vlc_tick_now() + VLC_TICK_FROM_SEC(5);
+        while (window_teardown.blocked)
+            assert(vlc_cond_timedwait(&window_teardown.wait,
+                                     &window_teardown.lock, deadline) == 0);
+    }
+    vlc_mutex_unlock(&window_teardown.lock);
+}
+
+static void teardown_window_Destroy(vlc_window_t *window)
+{
+    (void) window;
+    vlc_mutex_lock(&window_teardown.lock);
+    window_teardown.closed++;
+    vlc_cond_signal(&window_teardown.wait);
+    vlc_mutex_unlock(&window_teardown.lock);
+}
+
+static int teardown_window_Open(vlc_window_t *window)
+{
+    static const struct vlc_window_operations ops = {
+        .enable = teardown_window_Enable,
+        .disable = teardown_window_Disable,
+        .resize = vlc_window_ReportSize,
+        .destroy = teardown_window_Destroy,
+    };
+    window->type = VLC_WINDOW_TYPE_DUMMY;
+    window->ops = &ops;
+    vlc_mutex_lock(&window_teardown.lock);
+    window_teardown.opened++;
+    vlc_cond_signal(&window_teardown.wait);
+    vlc_mutex_unlock(&window_teardown.lock);
+    return VLC_SUCCESS;
+}
+#endif
+
+#ifdef VIDEO_FILTER_TEST
+#include <stdatomic.h>
+#include <vlc_vout_display.h>
+extern atomic_uint video_filter_opens;
+extern atomic_uint video_filter_closes;
+extern atomic_uint video_filter_frame_value;
+extern vlc_mutex_t video_filter_lock;
+extern vlc_cond_t video_filter_wait;
+extern video_format_t video_display_format;
+extern unsigned video_display_frames;
+
+static void video_display_Display(vout_display_t *display, picture_t *picture)
+{
+    (void) picture;
+    vlc_mutex_lock(&video_filter_lock);
+    video_display_format = *display->source;
+    video_display_frames++;
+    vlc_cond_signal(&video_filter_wait);
+    vlc_mutex_unlock(&video_filter_lock);
+}
+
+static int video_display_Open(vout_display_t *display, video_format_t *format,
+                              vlc_video_context *context)
+{
+    (void) format; (void) context;
+    static const struct vlc_display_operations ops = {
+        .display = video_display_Display,
+    };
+    display->ops = &ops;
+    return VLC_SUCCESS;
+}
+
+static void video_filter_Notify(void)
+{
+    vlc_mutex_lock(&video_filter_lock);
+    vlc_cond_signal(&video_filter_wait);
+    vlc_mutex_unlock(&video_filter_lock);
+}
+
+static picture_t *video_filter_Filter(filter_t *filter, picture_t *picture)
+{
+    atomic_store(&video_filter_frame_value,
+                 var_GetInteger(filter, "test-video-filter-value"));
+    video_filter_Notify();
+    return picture;
+}
+
+static void video_filter_Close(filter_t *filter)
+{
+    (void) filter;
+    atomic_fetch_add(&video_filter_closes, 1);
+    video_filter_Notify();
+}
+
+static int video_filter_Open(filter_t *filter)
+{
+    int ret = var_Create(filter, "test-video-filter-value", VLC_VAR_INTEGER | VLC_VAR_DOINHERIT);
+    if (ret != VLC_SUCCESS)
+        return ret;
+    static const struct vlc_filter_operations ops = {
+        .filter_video = video_filter_Filter, .close = video_filter_Close,
+    };
+    filter->ops = &ops;
+    atomic_fetch_add(&video_filter_opens, 1);
+    return VLC_SUCCESS;
+}
+#endif
+
 #define MODULE_NAME test_src_player
 #undef VLC_DYNAMIC_PLUGIN
 #include <vlc_plugin.h>
@@ -97,6 +217,20 @@ aout_Close(vlc_object_t *obj)
     free(aout->sys);
 }
 
+static int aout_TestVolumeSet(audio_output_t *aout, float volume)
+{
+    aout_VolumeReport(aout, volume);
+    return 0;
+}
+
+static int aout_TestDeviceSelect(audio_output_t *aout, const char *id)
+{
+    if (id != NULL && strcmp(id, "speakers") && strcmp(id, "headphones"))
+        return -1;
+    aout_DeviceReport(aout, id != NULL ? id : "speakers");
+    return 0;
+}
+
 static int aout_Open(vlc_object_t *obj)
 {
     audio_output_t *aout = (audio_output_t *)obj;
@@ -114,6 +248,15 @@ static int aout_Open(vlc_object_t *obj)
 
     sys->ctx = var_InheritAddress(aout, "test-ctx");
     assert(sys->ctx != NULL);
+    if (sys->ctx->flags & AUDIO_TEST_DEFAULTS)
+    {
+        aout->volume_set = aout_TestVolumeSet;
+        aout->device_select = aout_TestDeviceSelect;
+        aout_HotplugReport(aout, "speakers", "Speakers");
+        aout_HotplugReport(aout, "headphones", "Headphones");
+        aout_DeviceReport(aout, "speakers");
+        aout_VolumeReport(aout, 0.75f);
+    }
 
     if (sys->ctx->flags & AUDIO_INSTANT_DRAIN)
         aout->drain = aout_InstantDrain;
@@ -155,6 +298,22 @@ vlc_module_begin()
      * Insert our own resampler that keeps blocks and pts untouched. */
     set_capability ("audio resampler", 9999)
     set_callback (resampler_Open)
+#ifdef VIDEO_FILTER_TEST
+    add_submodule()
+    set_capability("video filter", 0)
+    add_shortcut("test-video-filter")
+    add_integer("test-video-filter-value", 1, "Test value", NULL)
+    set_callback_video_filter(video_filter_Open)
+    add_submodule()
+    add_shortcut("test-video-display")
+    set_callback_display(video_display_Open, 0)
+#endif
+#ifdef OUTPUT_TEARDOWN_TEST
+    add_submodule()
+    set_capability("vout window", 0)
+    add_shortcut("test-window-teardown")
+    set_callback(teardown_window_Open)
+#endif
 vlc_module_end()
 
 VLC_EXPORT const vlc_plugin_cb vlc_static_modules[] = {

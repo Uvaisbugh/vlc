@@ -66,6 +66,7 @@
 #include "player/player.h"
 
 #include "libvlc.h"
+#include "instance_policy.h"
 
 #include <vlc_vlm.h>
 
@@ -175,7 +176,12 @@ int libvlc_InternalInit( libvlc_int_t *p_libvlc, int i_argc,
     if( !var_InheritBool( p_libvlc, "ignore-config" ) )
     {
         if( var_InheritBool( p_libvlc, "reset-config" ) )
+        {
+            /* An explicit System choice also clears a migrated platform
+             * language preference on the next standalone launch. */
+            config_PutPsz("language", "auto");
             config_SaveConfigFile( p_libvlc ); /* Save default config */
+        }
         else
             config_LoadConfigFile( p_libvlc );
     }
@@ -214,7 +220,13 @@ int libvlc_InternalInit( libvlc_int_t *p_libvlc, int i_argc,
 
     vlc_CPU_dump( VLC_OBJECT(p_libvlc) );
 
-    if( var_InheritBool( p_libvlc, "media-library") )
+    bool media_library = var_InheritBool(p_libvlc, "media-library");
+    /* Standalone launchers supply a default, not an explicit user choice.
+     * Keep libVLC's default and explicit command-line overrides independent. */
+    if (var_Type(p_libvlc, "media-library") == 0 &&
+        var_InheritBool(p_libvlc, "media-library-default"))
+        media_library = var_InheritBool(p_libvlc, "media-library-startup");
+    if (media_library)
     {
         priv->p_media_library = libvlc_MlCreate( p_libvlc );
         if ( priv->p_media_library == NULL )
@@ -259,6 +271,9 @@ int libvlc_InternalInit( libvlc_int_t *p_libvlc, int i_argc,
     var_SetString( p_libvlc, "app-id", "org.VideoLAN.VLC" );
     var_Create( p_libvlc, "app-version", VLC_VAR_STRING );
     var_SetString( p_libvlc, "app-version", PACKAGE_VERSION );
+
+    var_Create(p_libvlc, "single-instance-listening", VLC_VAR_BOOL);
+    vlc_instance_MigratePreferences(VLC_OBJECT(p_libvlc));
 
     /* System specific configuration */
     system_Configure( p_libvlc, i_argc - vlc_optind, ppsz_argv + vlc_optind );

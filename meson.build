@@ -1,5 +1,5 @@
 project('VLC', ['c', 'cpp'],
-    version: '4.0.0-dev',
+    version: '4.0.0-beta.4',
     default_options: ['c_std=gnu17', 'cpp_std=c++17'],
     meson_version: '>=1.10.0')
 
@@ -904,10 +904,13 @@ int main(void) {
     return 0;
 }
 '''
-        # Check if linker supports -lssp
-        if cc.links(ssp_test, args: ['-fstack-protector-strong', '-lssp'],
+        # Match contrib's linkage: mixing the DLL import library with a static
+        # libssp pulled in by FLAC defines __stack_chk_fail twice.
+        ssp_dep = cc.find_library('ssp', static: get_option('prefer_static'), required: false)
+        if ssp_dep.found() and cc.links(ssp_test, args: ['-fstack-protector-strong'],
+                    dependencies: ssp_dep,
                     name: 'linker supports stack protectors')
-            add_project_link_arguments('-lssp', language: ['c', 'cpp'])
+            add_project_dependencies(ssp_dep, language: ['c', 'cpp'])
         endif
     endif
 endif
@@ -1159,12 +1162,21 @@ if gcrypt_dep.found()
     cdata.set('HAVE_GCRYPT', 1)
 endif
 
+# The core and launcher also use D-Bus for single-instance forwarding.
+dbus_dep = dependency('dbus-1', version: '>= 1.6.0', required: get_option('dbus'))
+if dbus_dep.found()
+    cdata.set('HAVE_DBUS', 1)
+endif
+
 # Flex/Bison support
 # This defines the `bison_gen` and `flex_gen` generator variables to be used
 # to process Bison and Flex files respectively.
 
 flex = find_program('flex', required: false)
-bison = find_program('bison', required: false)
+# The grammars use `%define api.prefix {...}`, which needs Bison 3.0. Skip
+# older versions (such as the Bison 2.3 shipped with macOS) so the modules
+# are disabled at configure time instead of failing at build time.
+bison = find_program('bison', required: false, version: '>=3.0')
 
 bison_gen = disabler()
 flex_gen = disabler()
@@ -1215,6 +1227,9 @@ subdir('modules')
 
 # VLC binaries
 subdir('bin')
+
+# Shared runtime data
+subdir('share')
 
 # OS specific packaging
 if host_system == 'windows'

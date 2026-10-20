@@ -25,11 +25,15 @@
 #include "util/varchoicemodel.hpp"
 #include "util/shared_input_item.hpp"
 #include "util/renderer_manager.hpp"
+#include "util/seek_preview_cache.hpp"
 
 #include <QTimer>
 #include <QUrl>
 #include <QByteArray>
 #include <QPair>
+#include <QCache>
+#include <QThreadPool>
+#include <vlc_interrupt.h>
 
 #include <optional>
 
@@ -39,6 +43,7 @@
 #endif
 
 typedef struct vlc_preparser_t vlc_preparser_t;
+typedef struct vlc_preparser_req vlc_preparser_req;
 
 class PlayerControllerPrivate {
     Q_DISABLE_COPY(PlayerControllerPrivate)
@@ -62,6 +67,15 @@ public:
     void UpdateSpuOrder(vlc_es_id_t *es_id, enum vlc_vout_order spu_order);
     int interpolateTime(vlc_tick_t system_now);
     bool isCurrentItemSynced();
+    void resetAudioWaveform();
+    void readAudioWaveform();
+    void resetSubtitleTimeline();
+    void readSubtitleTimeline();
+    void resetSeekPreview();
+    void updateSeekSampling();
+    void sampleSeekPreview();
+    bool startSeekPreview(vlc_tick_t time, bool background);
+    void cancelSeekRequest();
 
     // Lazily reads m_syltRaw (the raw sylt-data buffer captured during
     // UpdateMeta) into a list of TimedText entries. The cache is
@@ -92,6 +106,43 @@ public:
     qt_intf_t           *p_intf;
     vlc_player_t            *m_player;
     vlc_preparser_t         *m_preparser = nullptr;
+    vlc_preparser_t *m_seekPreparser = nullptr;
+    vlc_preparser_req *m_seekRequest = nullptr;
+    quint64 m_seekGeneration = 0;
+    QUrl m_seekPreview;
+    double m_seekPreviewPosition = -1;
+    double m_pendingSeekPosition = -1;
+    SeekPreviewCache m_seekPreviewCache;
+    QTimer m_seekSampleTimer;
+    QVector<qint64> m_seekSamplePoints;
+    vlc_tick_t m_seekSampleLength = 0;
+    bool m_seekPreviewEnabled = false;
+    bool m_seekPreviewActive = false;
+    bool m_seekRequestBackground = false;
+    int m_seekSampleFailures = 0;
+    bool m_subtitleTimelineEnabled = false;
+    QVariantList m_subtitleTimelineCues;
+    QString m_subtitleTimelineState = QStringLiteral("off");
+    QTimer m_subtitleTimelineRefresh;
+    QTimer m_subtitleTimelineTimeout;
+    QThreadPool m_subtitleTimelineWorkers;
+    quint64 m_subtitleTimelineGeneration = 0;
+    struct TimelineReadRequest {
+        vlc_interrupt_t* interrupt = vlc_interrupt_create();
+        ~TimelineReadRequest() { if (interrupt) vlc_interrupt_destroy(interrupt); }
+    };
+    std::shared_ptr<TimelineReadRequest> m_subtitleTimelineRequest;
+    bool m_audioWaveformEnabled = false;
+    QVariantList m_audioWaveformPeaks;
+    QString m_audioWaveformState = QStringLiteral("off");
+    QTimer m_audioWaveformRefresh;
+    QTimer m_audioWaveformTimeout;
+    QThreadPool m_audioWaveformWorkers;
+    quint64 m_audioWaveformGeneration = 0;
+    std::shared_ptr<TimelineReadRequest> m_audioWaveformRequest;
+    QString m_audioWaveformCacheKey;
+    QVariantList m_audioWaveformCachePeaks;
+
 
     //callbacks
     vlc_player_listener_id* m_player_listener = nullptr;
@@ -120,6 +171,8 @@ public:
     unsigned m_smpteTimerRequestCount = 0;
 
     SharedInputItem    m_currentItem;
+    SharedInputItem m_seekDragItem;
+    bool m_seekDragWasPlaying = false;
     bool            m_canRestorePlayback = false;
 
     int             m_capabilities = 0;
@@ -134,7 +187,10 @@ public:
     VLCDuration  m_audioDelay;
     VLCDuration  m_subtitleDelay;
     VLCDuration  m_secondarySubtitleDelay;
-    float        m_subtitleFPS = 1.0;
+    float        m_subtitleFPS = 0.f;
+    int m_subtitleTextScale = 100;
+    int m_subtitleTextSizeMode = 0;
+    int m_subtitleTextPixelSize = 30;
 
     //timer
     vlc_player_timer_id* m_player_timer = nullptr;
@@ -194,7 +250,7 @@ public:
 
     //others
     QString         m_artUrl;
-    struct input_stats_t m_stats;
+    struct input_stats_t m_stats {};
 
     RendererManager m_rendererManager;
 

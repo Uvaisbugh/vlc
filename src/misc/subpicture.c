@@ -35,6 +35,19 @@
 #include "subpicture.h"
 
 #include <limits.h>
+#include <stdatomic.h>
+
+static atomic_uint_fast64_t text_style_revision = 0;
+
+void vlc_subpicture_InvalidateTextStyle(void)
+{
+    atomic_fetch_add_explicit(&text_style_revision, 1, memory_order_release);
+}
+
+uint64_t vlc_subpicture_GetTextStyleRevision(void)
+{
+    return atomic_load_explicit(&text_style_revision, memory_order_acquire);
+}
 
 struct subpicture_private_t
 {
@@ -182,6 +195,15 @@ void subpicture_Update( subpicture_t *p_subpicture,
                         unsigned display_width, unsigned display_height,
                         vlc_tick_t i_ts )
 {
+    subpicture_UpdateWithTextSize(p_subpicture, p_fmt_src, p_fmt_dst,
+                                 display_width, display_height, i_ts, NULL);
+}
+
+void subpicture_UpdateWithTextSize(subpicture_t *p_subpicture,
+                        const video_format_t *p_fmt_src, const video_format_t *p_fmt_dst,
+                        unsigned display_width, unsigned display_height, vlc_tick_t i_ts,
+                        const struct vlc_subtitle_text_size *text_size)
+{
     subpicture_updater_t *p_upd = &p_subpicture->updater;
     subpicture_private_t *p_private = p_subpicture->p_private;
 
@@ -202,6 +224,7 @@ void subpicture_Update( subpicture_t *p_subpicture,
                 .video_dst = &p_private->dst,
             },
         .pts       = i_ts,
+        .text_size = text_size,
     };
     p_upd->ops->update( p_subpicture, &cfg );
 

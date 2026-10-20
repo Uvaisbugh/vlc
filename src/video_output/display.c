@@ -43,7 +43,7 @@
 #include "display.h"
 #include "vout_internal.h"
 
-static int UpdateSourceSAR(vout_display_t *, const video_format_t *);
+static int UpdateSourceSAR(vout_display_t *);
 
 /*****************************************************************************
  *
@@ -249,7 +249,8 @@ typedef struct {
 
     /* */
     vlc_rational_t dar;
-    video_format_t source;          // format coming from the decoder
+    video_format_t decoder_source;  // before user crop and aspect overrides
+    video_format_t source;          // format presented to the display
     video_format_t display_fmt;     // format required on the input of the display module
     vlc_video_context *src_vctx;
 
@@ -460,6 +461,10 @@ static int vout_UpdateSourceCrop(vout_display_t *vd)
     unsigned left, top, right, bottom;
     int err1 = VLC_SUCCESS, err2;
 
+    /* User crop settings are absolute. Always start from the decoder crop,
+     * rather than applying another crop to the previous result. Keep the
+     * selected SAR, which is computed from the uncropped decoder geometry. */
+    video_format_CopyCrop(&osys->source, &osys->decoder_source);
     video_format_Print(VLC_OBJECT(vd), "SOURCE ", &osys->source);
 
     switch (osys->crop.mode) {
@@ -503,8 +508,6 @@ static int vout_UpdateSourceCrop(vout_display_t *vd)
     osys->source.i_visible_width = right - left;
     osys->source.i_visible_height = bottom - top;
     video_format_Print(VLC_OBJECT(vd), "CROPPED ", &osys->source);
-
-    err1 = UpdateSourceSAR(vd, vd->source);
 
     bool place_changed = PlaceVideoInDisplay(osys);
 
@@ -580,18 +583,19 @@ void vout_UpdateDisplaySourceProperties(vout_display_t *vd, const video_format_t
     vout_display_priv_t *osys = container_of(vd, vout_display_priv_t, display);
     int err1 = VLC_SUCCESS, err2;
 
-    if (VLC_DAR_IS_FROM_SOURCE(osys->dar)) {
-        err2 = UpdateSourceSAR(vd, source);
+    const bool crop_changed =
+        source->i_x_offset       != osys->decoder_source.i_x_offset ||
+        source->i_y_offset       != osys->decoder_source.i_y_offset ||
+        source->i_visible_width  != osys->decoder_source.i_visible_width ||
+        source->i_visible_height != osys->decoder_source.i_visible_height;
+    video_format_CopyCropAr(&osys->decoder_source, source);
+
+    if (VLC_DAR_IS_FROM_SOURCE(osys->dar) || crop_changed) {
+        err2 = UpdateSourceSAR(vd);
         if (err2 != VLC_SUCCESS)
             err1 = err2;
     }
-    if (source->i_x_offset       != osys->source.i_x_offset ||
-        source->i_y_offset       != osys->source.i_y_offset ||
-        source->i_visible_width  != osys->source.i_visible_width ||
-        source->i_visible_height != osys->source.i_visible_height) {
-
-        video_format_CopyCrop(&osys->source, source);
-
+    if (crop_changed) {
         /* Force the vout to reapply the current user crop settings
          * over the new decoder crop settings. */
         err2 = vout_UpdateSourceCrop(vd);
@@ -611,7 +615,7 @@ void vout_display_SetSize(vout_display_t *vd, unsigned width, unsigned height)
     osys->cfg.display.width  = width;
     osys->cfg.display.height = height;
 
-    err1 = UpdateSourceSAR(vd, vd->source);
+    err1 = UpdateSourceSAR(vd);
 
     bool place_changed = PlaceVideoInDisplay(osys);
 
@@ -672,9 +676,12 @@ void vout_SetDisplayZoom(vout_display_t *vd, unsigned num, unsigned den)
     }
 }
 
-static int UpdateSourceSAR(vout_display_t *vd, const video_format_t *source)
+static int UpdateSourceSAR(vout_display_t *vd)
 {
     vout_display_priv_t *osys = container_of(vd, vout_display_priv_t, display);
+    /* vd->source includes the user crop and SAR. Reusing it compounds the
+     * aspect override each time a preset or window size is applied. */
+    const video_format_t *source = &osys->decoder_source;
     unsigned sar_num, sar_den;
 
     if (VLC_DAR_IS_FROM_SOURCE(osys->dar)) {
@@ -685,15 +692,15 @@ static int UpdateSourceSAR(vout_display_t *vd, const video_format_t *source)
     } else if (VLC_DAR_IS_FILL_DISPLAY(osys->dar)) {
         // trick vout_display_PlacePicture to fill the display
         vlc_ureduce(&sar_num, &sar_den,
-                    (uint64_t)osys->cfg.display.width  * osys->source.i_visible_height,
-                    (uint64_t)osys->cfg.display.height * osys->source.i_visible_width, 0);
+                    (uint64_t)osys->cfg.display.width  * source->i_visible_height,
+                    (uint64_t)osys->cfg.display.height * source->i_visible_width, 0);
     } else if (unlikely(osys->dar.num == 0 || osys->dar.den == 0)) {
         // bogus values should be filtered in GetAspectRatio()
         vlc_assert_unreachable();
     } else {
         vlc_ureduce(&sar_num, &sar_den,
-                    (uint64_t)osys->dar.num * osys->source.i_visible_height,
-                    (uint64_t)osys->dar.den * osys->source.i_visible_width, 0);
+                    (uint64_t)osys->dar.num * source->i_visible_height,
+                    (uint64_t)osys->dar.den * source->i_visible_width, 0);
     }
 
     return vout_SetSourceAspect(vd, sar_num, sar_den);
@@ -704,7 +711,7 @@ void vout_SetDisplayAspect(vout_display_t *vd, vlc_rational_t dar)
     vout_display_priv_t *osys = container_of(vd, vout_display_priv_t, display);
     osys->dar = dar;
 
-    int err1 = UpdateSourceSAR(vd, vd->source);
+    int err1 = UpdateSourceSAR(vd);
     if (err1 != VLC_SUCCESS)
         vout_display_Reset(vd);
 }
@@ -749,13 +756,14 @@ void vout_SetDisplayIccProfile(vout_display_t *vd,
         vd->ops->set_icc_profile(vd, profile);
 }
 
-int vout_SetDisplayFormat(vout_display_t *vd, const video_format_t *fmt,
-                          vlc_video_context *vctx)
+static int SetDisplayFormat(vout_display_t *vd, const video_format_t *fmt,
+                            const video_format_t *display_fmt,
+                            vlc_video_context *vctx)
 {
     if (!vd->ops->update_format)
         return VLC_EGENERIC;
 
-    int ret = vd->ops->update_format(vd, fmt, vctx);
+    int ret = vd->ops->update_format(vd, display_fmt, vctx);
     if (ret != VLC_SUCCESS)
         return ret;
 
@@ -765,24 +773,39 @@ int vout_SetDisplayFormat(vout_display_t *vd, const video_format_t *fmt,
     assert(!fmt->p_palette);
     video_format_Clean(&osys->source);
     osys->source = *fmt;
+    video_format_Clean(&osys->display_fmt);
+    video_format_Copy(&osys->display_fmt, display_fmt);
+    video_format_Clean(&osys->decoder_source);
+    video_format_Copy(&osys->decoder_source, fmt);
     if (vctx)
         vlc_video_context_Hold(vctx);
     if (osys->src_vctx)
         vlc_video_context_Release(osys->src_vctx);
     osys->src_vctx = vctx;
 
-    /* On update_format success, the vout display accepts the target format, so
-     * no display converters are needed. */
+    int source_ret = UpdateSourceSAR(vd);
+    if (source_ret != VLC_SUCCESS)
+        return source_ret;
+    if (osys->crop.mode != VOUT_CROP_NONE) {
+        source_ret = vout_UpdateSourceCrop(vd);
+        if (source_ret != VLC_SUCCESS)
+            return source_ret;
+    }
+
+    /* Replace any converter that still uses the previous dimensions. */
     if (osys->converter != NULL)
     {
         VoutConverterRelease(osys->converter);
         osys->converter = NULL;
     }
+    ret = VoutConverterCreate(vd);
+    if (ret != VLC_SUCCESS)
+        return ret;
 
     bool place_changed = PlaceVideoInDisplay(osys);
     if (place_changed && vd->ops->video_place_changed != NULL)
     {
-        int ret = vd->ops->video_place_changed(vd, &osys->src_place);
+        ret = vd->ops->video_place_changed(vd, &osys->src_place);
         if (ret != VLC_SUCCESS)
         {
             msg_Dbg(vd, "update format update place change failed");
@@ -791,6 +814,27 @@ int vout_SetDisplayFormat(vout_display_t *vd, const video_format_t *fmt,
     }
 
     return VLC_SUCCESS;
+}
+
+int vout_SetDisplayFormat(vout_display_t *vd, const video_format_t *fmt,
+                          vlc_video_context *vctx)
+{
+    return SetDisplayFormat(vd, fmt, fmt, vctx);
+}
+
+const video_format_t *vout_GetDisplayInputFormat(vout_display_t *vd)
+{
+    vout_display_priv_t *osys = container_of(vd, vout_display_priv_t, display);
+    return &osys->decoder_source;
+}
+
+int vout_ResizeDisplay(vout_display_t *vd, const video_format_t *fmt)
+{
+    /* Keep the negotiated display chroma when the software source needs a
+     * converter, for example Goom's XRGB output on Direct3D11. */
+    video_format_t display_fmt = *fmt;
+    display_fmt.i_chroma = vd->fmt->i_chroma;
+    return SetDisplayFormat(vd, fmt, &display_fmt, NULL);
 }
 
 int vout_display_SetFormat(vout_display_t *vd, const video_format_t *fmt,
@@ -850,6 +894,7 @@ vout_display_t *vout_display_New(vlc_object_t *parent,
     osys->converter = NULL;
 
     video_format_Copy(&osys->source, source);
+    video_format_Copy(&osys->decoder_source, source);
     osys->crop.mode = VOUT_CROP_NONE;
 
     osys->src_vctx = vctx ? vlc_video_context_Hold( vctx ) : NULL;
@@ -912,6 +957,7 @@ vout_display_t *vout_display_New(vlc_object_t *parent,
     msg_Dbg(vd, "no %s modules matched with name %s", "vout display", module);
     free(mods);
     video_format_Clean(&osys->source);
+    video_format_Clean(&osys->decoder_source);
     vlc_object_delete(vd);
     return NULL;
 }
@@ -936,6 +982,7 @@ void vout_display_Delete(vout_display_t *vd)
     vlc_objres_clear(VLC_OBJECT(vd));
 
     video_format_Clean(&osys->source);
+    video_format_Clean(&osys->decoder_source);
     video_format_Clean(&osys->display_fmt);
     vlc_object_delete(vd);
 }

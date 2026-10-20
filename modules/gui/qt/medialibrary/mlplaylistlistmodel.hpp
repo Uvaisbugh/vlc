@@ -40,7 +40,9 @@ public:
         PLAYLIST_COUNT,
         PLAYLIST_NB_AUDIO,
         PLAYLIST_NB_VIDEO,
-        PLAYLIST_NB_UNKNOWN
+        PLAYLIST_NB_UNKNOWN,
+        PLAYLIST_READ_ONLY,
+        PLAYLIST_FAVORITE
     };
     Q_ENUM(Roles)
 
@@ -71,6 +73,8 @@ public:
 
 public: // Interface
     Q_INVOKABLE void create(const QString & name, const QVariantList& initialItems);
+    Q_INVOKABLE void createWithFiles(const QString& name, const QStringList& urls, const QUrl& cover);
+    Q_INVOKABLE void saveSelection(const MLItemId& playlistId, const QString& newName, const QVariantList& items);
 
     Q_INVOKABLE void append(const MLItemId & playlistId, const QVariantList & ids);
 
@@ -90,6 +94,10 @@ public: // QAbstractItemModel reimplementation
                         int role = Qt::DisplayRole) const override;
 
 protected: // MLBaseModel implementation
+    vlc_ml_sorting_criteria_t nameToCriteria(QByteArray name) const override
+    {
+        return name == "insertion" ? VLC_ML_SORTING_INSERTIONDATE : VLC_ML_SORTING_ALPHA;
+    }
     QVariant itemRoleData(const MLItem* item, int role = Qt::DisplayRole) const override;
 
     std::unique_ptr<MLListCacheLoader> createMLLoader() const override;
@@ -105,6 +113,8 @@ private: // MLBaseModel implementation
     void onVlcMlEvent(const MLEvent & event) override;
 
 signals:
+    void playlistCreated(bool success, const MLItemId& id, const QString& error);
+    void selectionSaved(bool success, const MLItemId& id, const QString& error);
     void coverSizeChanged   ();
     void coverDefaultChanged();
     void coverPrefixChanged ();
@@ -132,6 +142,7 @@ private: // Variables
 
     bool m_transactionPending = false;
     bool m_resetAfterTransaction = false;
+    QMetaObject::Connection m_detailsConnection;
 
 private:
     struct Loader : public MLListCacheLoader::MLOp

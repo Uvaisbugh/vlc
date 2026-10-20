@@ -81,15 +81,10 @@ T.Pane {
                 text: {
                     switch (UpdateModel.updateStatus) {
                         case UpdateModel.NeedUpdate:
-                            const extra = UpdateModel.extra
-                            return qsTr("A new version of VLC is available: <font color=\"%1\">%2.%3.%4%5</font>").arg(theme.fg.positive)
-                                                                                                                  .arg(UpdateModel.major)
-                                                                                                                  .arg(UpdateModel.minor)
-                                                                                                                  .arg(UpdateModel.revision)
-                                                                                                                  .arg(extra === 0 ? "" : "." + extra)
+                            return qsTr("A new version of VLC is available: <font color=\"%1\">%2</font>").arg(theme.fg.positive)
+                                                                                                                  .arg(UpdateModel.version)
                         case UpdateModel.UpToDate:
-                            return qsTr("You have the latest version of VLC media player: <font color=\"%1\">%2</font>.").arg(theme.accent)
-                                                                                                                         .arg(Application.version)
+                            return qsTr("No newer compatible release is available for this build.")
                         case UpdateModel.CheckFailed:
                             return qsTr("An <font color=\"%1\">error</font> occurred while checking for updates...").arg(theme.fg.negative)
                         case UpdateModel.Checking:
@@ -169,7 +164,7 @@ T.Pane {
 
                 onClicked: {
                     descriptionFlickable.revealed = false
-                    UpdateModel.checkUpdate()
+                    UpdateModel.checkUpdate(true)
                 }
 
                 Navigation.parentItem: root
@@ -183,7 +178,7 @@ T.Pane {
                 visible: (UpdateModel.updateStatus === UpdateModel.NeedUpdate)
 
                 iconTxt: VLCIcons.ic_fluent_arrow_download_24_regular
-                text: qsTr("Download")
+                text: qsTr("View release on GitHub")
                 showText: !rowLayout.collapseText
 
                 Binding on focus {
@@ -193,14 +188,7 @@ T.Pane {
                 }
 
                 onClicked: {
-                    if (!UpdateModel.download())
-                        console.error("UpdateModel::download() failed!")
-
-                    // Since downloading dialog is still a separate one, we
-                    // should request dismissing this pane. In the future
-                    // we can get rid of the separate dialog and represent
-                    // the download status here.
-                    if (UpdateModel.updateStatus !== UpdateModel.Downloading)
+                    if (UpdateModel.openReleasePage())
                         root.dismissRequested()
                 }
 
@@ -315,11 +303,8 @@ T.Pane {
 
                 color: theme.fg.primary
 
-                // Highlight "security", like the old check for updates dialog.
-                // ES6 does not have replaceAll(), but this works too with regex, which we need to use
-                // anyway to match case insensitive:
-                text: UpdateModel.description.replace(/security/gi,
-                                                      (match) => { return "<font color=\"red\">" + match + "</font>" })
+                text: UpdateModel.description
+                textFormat: Text.PlainText
 
                 wrapMode: Text.WordWrap
 

@@ -3,6 +3,11 @@
         <file alias="play.svg">pixmaps/redesign/play.svg</file>
         <file alias="pause.svg">pixmaps/redesign/pause.svg</file>
     </qresource>
+    <qresource prefix="/fonts">
+        <file alias="InterVariable.ttf">fonts/InterVariable.ttf</file>
+        <file alias="InterVariable-Italic.ttf">fonts/InterVariable-Italic.ttf</file>
+        <file alias="Inter-LICENSE.txt">fonts/LICENSE.txt</file>
+    </qresource>
     <qresource prefix="/logo">
         <file alias="vlc256.png">../../../share/icons/256x256/vlc.png</file>
         <file alias="vlc128.png">../../../share/icons/128x128/vlc.png</file>
@@ -15,9 +20,28 @@
         <file alias="vlc128-kb.png">../../../share/icons/128x128/vlc-kb.png</file>
     </qresource>
     <qresource prefix="/icons">
+        <file alias="check.svg">pixmaps/icons/check.svg</file>
         <file alias="atob.svg">pixmaps/icons/atob.svg</file>
         <file alias="ic_fluent_arrow_download_24_regular.svg">pixmaps/icons/ic_fluent_arrow_download_24_regular.svg</file>
         <file alias="ic_fluent_arrow_sync_24_regular.svg">pixmaps/icons/ic_fluent_arrow_sync_24_regular.svg</file>
+    </qresource>
+    <qresource prefix="/menu/redesign">
+        <file alias="play.svg">pixmaps/menu/redesign/play.svg</file>
+        <file alias="stop.svg">pixmaps/menu/redesign/stop.svg</file>
+        <file alias="previous.svg">pixmaps/menu/redesign/previous.svg</file>
+        <file alias="next.svg">pixmaps/menu/redesign/next.svg</file>
+        <file alias="record.svg">pixmaps/menu/redesign/record.svg</file>
+        <file alias="hide-ui.svg">pixmaps/menu/redesign/hide-ui.svg</file>
+        <file alias="playback.svg">pixmaps/menu/redesign/playback.svg</file>
+        <file alias="video.svg">pixmaps/menu/redesign/video.svg</file>
+        <file alias="audio.svg">pixmaps/menu/redesign/audio.svg</file>
+        <file alias="subtitle.svg">pixmaps/menu/redesign/subtitle.svg</file>
+        <file alias="settings.svg">pixmaps/menu/redesign/settings.svg</file>
+        <file alias="playlist.svg">pixmaps/menu/redesign/playlist.svg</file>
+        <file alias="open.svg">pixmaps/menu/redesign/open.svg</file>
+        <file alias="quit.svg">pixmaps/menu/redesign/quit.svg</file>
+        <file alias="remove.svg">pixmaps/menu/redesign/remove.svg</file>
+        <file alias="refresh.svg">pixmaps/menu/redesign/refresh.svg</file>
     </qresource>
     <qresource prefix="/menu">
         <file alias="add.svg">pixmaps/menu/add.svg</file>

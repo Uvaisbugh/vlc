@@ -54,6 +54,7 @@ public:
 
     bool isInEditMode();
     void setEditMode( bool );
+    void discardEdits();
 
 private:
     SharedInputItem p_input;
@@ -116,7 +117,11 @@ public:
     InputStatsPanel( QWidget * );
 protected:
     void hideEvent( QHideEvent * ) override;
+    void changeEvent( QEvent * ) override;
 private:
+    void retranslate();
+    void updateGraphLegend();
+    QLabel *graphLegend = nullptr;
     QTreeWidget *StatsTree;
     QTreeWidgetItem *input;
     QTreeWidgetItem *read_media_stat;

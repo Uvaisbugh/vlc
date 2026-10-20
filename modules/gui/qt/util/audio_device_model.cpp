@@ -23,11 +23,11 @@
 
 extern "C" {
 
-static void on_player_aout_device_changed(audio_output_t *,const char *device, void *data)
+static void on_player_aout_device_changed(audio_output_t *, const char *, void *data)
 {
     AudioDeviceModel* that = static_cast<AudioDeviceModel*>(data);
-    QMetaObject::invokeMethod(that, [that, device=QString::fromUtf8(device)](){
-        that->updateCurrent(device);
+    QMetaObject::invokeMethod(that, [that](){
+        that->refresh();
     }, Qt::QueuedConnection);
 }
 
@@ -51,6 +51,16 @@ AudioDeviceModel::AudioDeviceModel(vlc_player_t *player, QObject *parent)
     m_aout = vlc_player_aout_Hold(m_player);
     if (m_aout)
         m_inputs = aout_DevicesList(m_aout, &m_ids, &m_names);
+    syncCurrent();
+}
+
+void AudioDeviceModel::syncCurrent()
+{
+    if (!m_aout)
+        return;
+    char *current = aout_DeviceGet(m_aout);
+    updateCurrent(current ? qfu(current) : QString());
+    free(current);
 }
 
 AudioDeviceModel::~AudioDeviceModel()
@@ -71,9 +81,9 @@ AudioDeviceModel::~AudioDeviceModel()
         aout_Release(m_aout);
 }
 
-Qt::ItemFlags AudioDeviceModel::flags(const QModelIndex &) const
+Qt::ItemFlags AudioDeviceModel::flags(const QModelIndex &index) const
 {
-    return Qt::ItemIsUserCheckable;
+    return index.isValid() ? Qt::ItemFlags(Qt::ItemIsUserCheckable) : Qt::NoItemFlags;
 }
 
 int AudioDeviceModel::rowCount(const QModelIndex &parent) const
@@ -144,6 +154,52 @@ void AudioDeviceModel::updateCurrent(QString current)
         emit dataChanged(index(oldIndex), index(oldIndex), { Qt::DisplayRole, Qt::CheckStateRole });
     if(currentIndex >= 0)
         emit dataChanged(index(currentIndex), index(currentIndex), { Qt::DisplayRole, Qt::CheckStateRole });
+}
+
+void AudioDeviceModel::refresh()
+{
+    audio_output_t *aout = vlc_player_aout_Hold(m_player);
+    char **ids = nullptr, **names = nullptr;
+    int inputs = aout ? aout_DevicesList(aout, &ids, &names) : 0;
+
+    bool same = aout == m_aout && inputs == m_inputs;
+    for (int i = 0; same && i < inputs; i++)
+        same = !strcmp(ids[i], m_ids[i]) && !strcmp(names[i], m_names[i]);
+    if (same)
+    {
+        for (int i = 0; i < inputs; i++)
+        {
+            free(ids[i]);
+            free(names[i]);
+        }
+        free(ids);
+        free(names);
+        if (aout)
+            aout_Release(aout);
+        syncCurrent();
+        return;
+    }
+
+    beginResetModel();
+    for (int i=0; i<m_inputs; i++)
+    {
+        free(m_ids[i]);
+        free(m_names[i]);
+    }
+    free(m_ids);
+    free(m_names);
+    m_ids = nullptr;
+    m_names = nullptr;
+    m_inputs = 0;
+
+    if (m_aout)
+        aout_Release(m_aout);
+    m_aout = aout;
+    m_ids = ids;
+    m_names = names;
+    m_inputs = inputs;
+    endResetModel();
+    syncCurrent();
 }
 
 QHash<int, QByteArray> AudioDeviceModel::roleNames() const

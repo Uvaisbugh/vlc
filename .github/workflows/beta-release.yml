@@ -1,0 +1,252 @@
+name: Build release
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ['[0-9]*.[0-9]*.[0-9]*']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: beta-release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  JOBS: '4'
+
+jobs:
+  prepare:
+    runs-on: ubuntu-22.04
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      prerelease: ${{ steps.version.outputs.prerelease }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate release version
+        id: version
+        env:
+          RELEASE_TAG: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || '' }}
+        run: |
+          version=$(python3 extras/package/release/version.py)
+          test -s "doc/releases/$version.md"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          if [[ "$version" == *-* ]]; then
+            echo 'prerelease=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'prerelease=false' >> "$GITHUB_OUTPUT"
+          fi
+          python3 -m unittest discover -s extras/package/release/tests
+
+  macos:
+    needs: prepare
+    env:
+      RELEASE_TAG: ${{ needs.prepare.outputs.version }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-15
+            arch: arm64
+          - runner: macos-15-intel
+            arch: x86_64
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 360
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Install dependencies
+        run: |
+          # Current Homebrew formulas often have no Intel macOS bottles.
+          # Explicitly permit source builds; already installed packages are reused.
+          source_options=()
+          if [[ "$(uname -m)" == x86_64 ]]; then
+            source_options+=(--build-from-source)
+          fi
+          brew install "${source_options[@]}" meson ninja cmake pkg-config python bison flex gettext \
+            ffmpeg lua gnutls libarchive libpng freetype harfbuzz fribidi \
+            libass libgcrypt dav1d opus libvorbis flac mpg123 x264 libmatroska libebml taglib libdvbpsi
+      - name: Install pinned Qt SDK
+        run: |
+          python3 -m venv build-release-tools
+          build-release-tools/bin/pip install aqtinstall==3.3.0
+          build-release-tools/bin/aqt install-qt mac desktop 6.8.3 clang_64 -O build-release-qt -m qtshadertools
+          echo "QT_ROOT_DIR=$GITHUB_WORKSPACE/build-release-qt/6.8.3/macos" >> "$GITHUB_ENV"
+      - name: Build and bundle
+        env:
+          OPENSUBTITLES_API_KEY: ${{ secrets.OPENSUBTITLES_API_KEY }}
+        run: bash extras/package/release/build-native.sh
+      - name: Verify relocated app
+        run: |
+          mkdir -p "$RUNNER_TEMP/relocated app"
+          ditto -x -k build-release-output/vlc-juxtopposed-${{ needs.prepare.outputs.version }}-macos-${{ matrix.arch }}.zip "$RUNNER_TEMP/relocated app"
+          python3 extras/package/release/verify.py --expected-version "$RELEASE_TAG" --gui --video "$RUNNER_TEMP/relocated app/VLC Juxtopposed.app/Contents/MacOS/vlc"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ needs.prepare.outputs.version }}-macos-${{ matrix.arch }}
+          path: |
+            build-release-output/*.zip
+            build-release-output/*.sha256
+            build-release-output/*.json
+          if-no-files-found: error
+
+  linux:
+    needs: prepare
+    env:
+      RELEASE_TAG: ${{ needs.prepare.outputs.version }}
+    runs-on: ubuntu-22.04
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Build environment
+        run: docker build -t vlc-release-linux -f extras/package/release/Dockerfile.linux .
+      - name: Build and bundle
+        env:
+          OPENSUBTITLES_API_KEY: ${{ secrets.OPENSUBTITLES_API_KEY }}
+        run: >-
+          docker run --rm -v "$PWD:/src" -e JOBS -e RELEASE_TAG
+          -e OPENSUBTITLES_API_KEY
+          -e GIT_CONFIG_COUNT=1 -e GIT_CONFIG_KEY_0=safe.directory -e GIT_CONFIG_VALUE_0=/src
+          vlc-release-linux bash extras/package/release/build-native.sh
+      - name: Install playback test dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends ffmpeg xvfb xauth weston libgl1-mesa-dri
+      - name: Verify relocated directory bundle
+        run: |
+          mkdir -p "$RUNNER_TEMP/relocated"
+          tar -xzf build-release-output/vlc-juxtopposed-${{ needs.prepare.outputs.version }}-linux-x86_64.tar.gz -C "$RUNNER_TEMP/relocated"
+          QT_QUICK_BACKEND=software xvfb-run -a python3 extras/package/release/verify.py --expected-version "$RELEASE_TAG" --gui --video "$RUNNER_TEMP/relocated/AppDir/AppRun"
+      - name: Verify native Wayland playback
+        run: |
+          export XDG_RUNTIME_DIR="$RUNNER_TEMP/wayland-runtime"
+          mkdir -m 700 "$XDG_RUNTIME_DIR"
+          weston --backend=headless-backend.so --use-pixman --socket=wayland-release --idle-time=0 --log="$RUNNER_TEMP/weston.log" &
+          weston_pid=$!
+          trap 'kill "$weston_pid" 2>/dev/null || true' EXIT
+          for attempt in {1..100}; do
+            [[ -S "$XDG_RUNTIME_DIR/wayland-release" ]] && break
+            sleep 0.1
+          done
+          if [[ ! -S "$XDG_RUNTIME_DIR/wayland-release" ]]; then
+            cat "$RUNNER_TEMP/weston.log"
+            exit 1
+          fi
+          QT_QPA_PLATFORM=wayland WAYLAND_DISPLAY=wayland-release QT_QUICK_BACKEND=software \
+            python3 extras/package/release/verify.py --expected-version "$RELEASE_TAG" --gui --video "$RUNNER_TEMP/relocated/AppDir/AppRun"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ needs.prepare.outputs.version }}-linux-x86_64
+          path: |
+            build-release-output/*.tar.gz
+            build-release-output/*.sha256
+            build-release-output/*-build.json
+          if-no-files-found: error
+
+  windows:
+    needs: prepare
+    env:
+      RELEASE_TAG: ${{ needs.prepare.outputs.version }}
+    runs-on: ubuntu-22.04
+    timeout-minutes: 360
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Make room for Windows contrib compilation
+        run: |
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc
+          df -h .
+      - name: Build and package portable archive
+        env:
+          OPENSUBTITLES_API_KEY: ${{ secrets.OPENSUBTITLES_API_KEY }}
+        run: >-
+          docker run --rm --user root -v "$PWD:/src" -w /src -e JOBS -e RELEASE_TAG
+          -e OPENSUBTITLES_API_KEY
+          -e GIT_CONFIG_COUNT=1 -e GIT_CONFIG_KEY_0=safe.directory -e GIT_CONFIG_VALUE_0=/src
+          registry.videolan.org/vlc-debian-win64-posix@sha256:8e83e800036f8f4a6da1031a6b80c2b5bad8337259c072ffa22398baaeaad880
+          bash extras/package/release/build-windows.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ needs.prepare.outputs.version }}-win64
+          path: |
+            build-release-output/*.zip
+            build-release-output/*.sha256
+            build-release-output/*-build.json
+          if-no-files-found: error
+
+  windows-smoke:
+    needs: [prepare, windows]
+    env:
+      RELEASE_TAG: ${{ needs.prepare.outputs.version }}
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: ${{ needs.prepare.outputs.version }}-win64
+          path: downloads
+      - shell: pwsh
+        run: |
+          Expand-Archive downloads/vlc-juxtopposed-${{ needs.prepare.outputs.version }}-win64.zip "$env:RUNNER_TEMP/relocated"
+          $vlc = "$env:RUNNER_TEMP/relocated/vlc-win64/vlc.exe"
+          python extras/package/release/version.py "$env:RELEASE_TAG" --executable $vlc
+          if ($LASTEXITCODE -ne 0) { throw 'Compiled version does not match release tag' }
+          python -c "import wave; w=wave.open('sample.wav','wb'); w.setparams((1,2,48000,0,'NONE','not compressed')); w.writeframes(b'\0\0'*96000); w.close()"
+          $sample = (Resolve-Path sample.wav).Path
+          # Reuse the portable profile to exercise the cached graphics probe.
+          foreach ($attempt in 1..2) {
+            $log = "$env:RUNNER_TEMP/vlc-smoke-$attempt.log"
+            $process = Start-Process $vlc -ArgumentList '--ignore-config','-vv','-I','qt','--no-video','--aout=dummy','--no-qt-privacy-ask','--no-qt-updates-notif','--no-media-library','--no-metadata-network-access','--play-and-exit','--file-logging',"--logfile=$log",$sample -PassThru
+            if (-not $process.WaitForExit(60000)) { $process.Kill(); throw 'VLC startup timed out' }
+            if ($process.ExitCode -ne 0) { throw "VLC exited $($process.ExitCode)" }
+            $messages = Get-Content $log -Raw
+            if ($messages -notmatch 'using interface module "qt"') { throw 'Qt interface did not start' }
+            if ($messages -notmatch 'using audio decoder module') { throw 'Audio decoder did not start' }
+            if ($messages -match 'failed to load component|QQmlApplicationEngine failed|is not installed|qml loading|Cannot load the VLC interface|svg icon plugin is not found|Scene Graph Error|Failed to create RHI|Failed to initialize graphics backend') { throw 'Qt interface reported a startup failure' }
+          }
+
+  draft:
+    needs: [prepare, macos, linux, windows-smoke]
+    env:
+      RELEASE_TAG: ${{ needs.prepare.outputs.version }}
+      PRERELEASE: ${{ needs.prepare.outputs.prerelease }}
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/download-artifact@v4
+        with:
+          path: downloads
+          merge-multiple: true
+      - name: Prepare provenance and checksums
+        run: |
+          git rev-parse HEAD > downloads/SOURCE_COMMIT.txt
+          git archive --format=tar.gz --prefix=vlc-juxtopposed-${{ needs.prepare.outputs.version }}-source/ HEAD > downloads/vlc-juxtopposed-${{ needs.prepare.outputs.version }}-source.tar.gz
+          cat doc/releases/${{ needs.prepare.outputs.version }}.md > downloads/RELEASE_NOTES.md
+          printf '\nSource commit: `%s`\n' "$(git rev-parse HEAD)" >> downloads/RELEASE_NOTES.md
+          cd downloads
+          sha256sum vlc-juxtopposed-* > SHA256SUMS.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ needs.prepare.outputs.version }}-complete
+          path: downloads/*
+      # Manual runs only produce artifacts. A pushed tag creates a draft;
+      # publication remains an explicit action by the maintainer.
+      - name: Create draft release for a pushed version tag
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          flags=()
+          if [[ "$PRERELEASE" == true ]]; then flags+=(--prerelease); fi
+          gh release create "$RELEASE_TAG" --verify-tag --draft "${flags[@]}" \
+            --title 'VLC Juxtopposed Redesign - ${{ needs.prepare.outputs.version }}' \
+            --notes-file downloads/RELEASE_NOTES.md downloads/vlc-juxtopposed-* \
+            downloads/SHA256SUMS.txt downloads/SOURCE_COMMIT.txt downloads/*-build.json

@@ -52,13 +52,14 @@ extern "C" char **environ;
 #endif
 
 #include <QApplication>
+#include <QFontDatabase>
 #include <QDate>
 #include <QMutex>
 #include <QtQuickControls2/QQuickStyle>
 #include <QLoggingCategory>
 #include <QQmlError>
 #include <QList>
-#include <QTranslator>
+#include "util/interface_translator.hpp"
 
 #if __has_include(<rhi/qrhi.h>) // Qt 6.6
 #define RHI_HEADER_AVAILABLE
@@ -115,6 +116,7 @@ extern "C" char **environ;
 #include "playlist/playlist_item.hpp"
 
 #include <vlc_interface.h>
+#include <vlc_modules.h>
 #include <vlc_plugin.h>
 #include <vlc_window.h>
 #include <vlc_player.h>
@@ -157,10 +159,8 @@ static void ShowDialog   ( intf_thread_t *, int, int, intf_dialog_args_t * );
                                "your taskbar." )
 
 #define KEEPSIZE_TEXT N_( "Resize interface to the native video size" )
-#define KEEPSIZE_LONGTEXT N_( "You have two choices:\n" \
-            " - The interface will resize to the native video size\n" \
-            " - The video will fit to the interface size\n " \
-            "By default, interface resize to the native video size." )
+#define KEEPSIZE_LONGTEXT N_( "Keep the window size or resize it to fit each video. " \
+            "Audio visualizations do not change the window size." )
 
 #define TITLE_TEXT N_( "Show playing item name in window title" )
 #define TITLE_LONGTEXT N_( "Show the name of the song or video in the " \
@@ -287,9 +287,9 @@ static void ShowDialog   ( intf_thread_t *, int, int, intf_dialog_args_t * );
 #define HIDE_WINDOW_ON_CLOSE_TEXT N_( "Hide the window on close" )
 #define HIDE_WINDOW_ON_CLOSE_LONGTEXT N_( "Instead of closing the application, hide the window. This setting is only applicable when system tray icon is enabled." )
 
-#define BACKDROP_BLUR_FILTER_TEXT N_( "Enable backdrop blur filter for the main window if possible" )
-#define BACKDROP_BLUR_FILTER_LONGTEXT N_( "If backdrop blur filter is available, use translucency in the backgrounds of certain parts of the user interface " \
-    "instead of a solid color. This setting impairs readibility of text." )
+#define BACKDROP_BLUR_FILTER_TEXT N_( "Transparency and blur" )
+#define BACKDROP_BLUR_FILTER_LONGTEXT N_( "Use transparent panels and menus with a blurred background. " \
+    "Turn this off to use solid backgrounds." )
 
 #define PIP_MODE_TEXT N_( "Enable picture-in-picture (PiP) mode" )
 #define PIP_MODE_LONGTEXT N_( "Picture-in-picture mode allows playing video contained in a smaller area so that the interface remains usable." )
@@ -346,6 +346,11 @@ static const char *const compositor_user[] = {
 };
 
 /**********************************************************************/
+static const int redesign_autohide_values[] = {0, 1, 2};
+static const char* const redesign_autohide_labels[] = {
+    N_("Never"), N_("In fullscreen only"), N_("Always")
+};
+
 vlc_module_begin ()
     set_shortname( "Qt" )
     set_description( N_("Qt interface") )
@@ -357,6 +362,21 @@ vlc_module_begin ()
 
     add_bool( "qt-minimal-view", false, QT_MINIMAL_MODE_TEXT,
               nullptr )
+
+    add_bool("qt-remember-window-geometry", true, N_("Remember window size and position"), nullptr)
+    add_bool("qt-audio-waveform", false, N_("Show Audio Waveform on Seekbar"),
+        N_("Read audio levels from a local file. Show them on the seekbar."))
+    add_bool("qt-subtitle-timeline", false, N_("Show Subtitle Timeline on Seekbar"), nullptr)
+    add_bool("qt-seek-preview", true, N_("Show video previews on the seekbar"),
+        N_("Show a video frame when you point to the seekbar."))
+    add_bool("qt-buffering-custom", false, N_("Keep custom buffer values editable"),
+        N_("Keep the buffer value fields editable when they match a preset."))
+    add_integer("qt-controls-autohide", 1, N_("Auto-hide the controls"), nullptr)
+        change_integer_list(redesign_autohide_values, redesign_autohide_labels)
+    add_integer_with_range("qt-controls-hide-timeout", 1800, 0, 10000,
+        N_("Playback controls hide delay (ms)"), nullptr)
+    add_integer_with_range("qt-notification-timeout", 3000, 0, 10000,
+        N_("Track notification duration (ms)"), nullptr)
 
     add_bool( "qt-system-tray", true, SYSTRAY_TEXT, SYSTRAY_LONGTEXT)
 
@@ -372,7 +392,7 @@ vlc_module_begin ()
 
     add_float_with_range( "qt-opacity", 1., 0.1, 1., OPACITY_TEXT,
                           OPACITY_LONGTEXT )
-    add_float_with_range( "qt-fs-opacity", 0.8, 0.1, 1., OPACITY_FS_TEXT,
+    add_float_with_range( "qt-fs-opacity", 1., 0.1, 1., OPACITY_FS_TEXT,
                           OPACITY_FS_LONGTEXT )
 
     //qt-interface-scale is stored in Qt config file
@@ -381,7 +401,7 @@ vlc_module_begin ()
                           nullptr )
         change_volatile()
 
-    add_bool( "qt-video-autoresize", true, KEEPSIZE_TEXT,
+    add_bool( "qt-video-autoresize", false, KEEPSIZE_TEXT,
               KEEPSIZE_LONGTEXT )
     add_bool( "qt-name-in-title", true, TITLE_TEXT,
               TITLE_LONGTEXT )
@@ -398,7 +418,7 @@ vlc_module_begin ()
 #ifdef UPDATE_CHECK
     add_bool( "qt-updates-notif", true, UPDATER_TEXT,
               UPDATER_LONGTEXT )
-    add_integer_with_range( "qt-updates-days", 3, 0, 180,
+    add_integer_with_range( "qt-updates-days", 1, 0, 180,
               UPDATER_DAYS_TEXT, nullptr )
 #endif
 
@@ -414,17 +434,12 @@ vlc_module_begin ()
               QT_DISABLE_VOLUME_KEYS_LONGTEXT      /* longtext */)
 #endif
 
-    add_bool( "qt-titlebar",
-#ifdef _WIN32
-              false                              /* use CSD by default on windows */,
-#else
-              true                               /* but not on linux */,
-#endif
+    add_bool( "qt-titlebar", false,
               QT_CLIENT_SIDE_DECORATION_TEXT, QT_CLIENT_SIDE_DECORATION_LONGTEXT )
 
     add_bool( "qt-menubar", false, QT_MENUBAR_TEXT, QT_MENUBAR_LONGTEXT )
 
-    add_bool( "qt-embedded-open", false, QT_NATIVEOPEN_TEXT,
+    add_bool( "qt-embedded-open", true, QT_NATIVEOPEN_TEXT,
                nullptr )
 
     add_bool( "qt-pin-controls", false, QT_PIN_CONTROLS_TEXT, QT_PIN_CONTROLS_LONGTEXT )
@@ -436,6 +451,8 @@ vlc_module_begin ()
         change_integer_list( initial_prefs_view_list, initial_prefs_view_list_texts )
     add_bool( "qt-error-dialogs", true, ERROR_TEXT,
               nullptr )
+    add_bool( "qt-minor-warnings", false, N_("Show minor warnings"),
+              N_("Show short notices for warnings in VLC's log. Warnings that arrive together share a notice.") )
 
     add_obsolete_string( "qt-slider-colours")
 
@@ -447,6 +464,9 @@ vlc_module_begin ()
 
     add_bool( "qt-autoload-extensions", true,
               QT_AUTOLOAD_EXTENSIONS_TEXT, QT_AUTOLOAD_EXTENSIONS_LONGTEXT )
+
+    add_bool( "qt-discover-cast-devices", true, N_("Discover cast devices"),
+              N_("Search for cast devices when you open the device list. Turn this off to stop the search. This does not stop a cast that is in use.") )
 
     add_bool( "qt-bgcone", true, QT_BGCONE_TEXT, QT_BGCONE_LONGTEXT )
     add_bool( "qt-bgcone-expands", false, QT_BGCONE_EXPANDS_TEXT,
@@ -473,11 +493,31 @@ vlc_module_begin ()
 
     add_bool( "qt-backdrop-blur", true, BACKDROP_BLUR_FILTER_TEXT, BACKDROP_BLUR_FILTER_LONGTEXT )
 
+    add_bool( "qt-compact-menus", false, N_("Compact menus"),
+              N_("Show menus without icons. Decrease the space around menu items.") )
+
     add_bool( "qt-pip-mode", true, PIP_MODE_TEXT, PIP_MODE_LONGTEXT )
 
     add_float_with_range( "qt-safe-area", 0, 0, 100.0, SAFE_AREA_TEXT, SAFE_AREA_LONGTEXT )
 
     add_string( "qt-accent-color", "default", ACCENT_COLOR_TEXT, ACCENT_COLOR_LONGTEXT )
+
+    // An interface shortcut; there is no corresponding core/global action.
+    add_string_inner( CONFIG_ITEM_KEY, "key-toggle-library", N_("Show or hide the file browser"), nullptr, "Ctrl+Shift+L" )
+
+    // Keep named player presets in the same atomic transaction as their options.
+    add_string( "qt-player-presets", "", "Player settings presets", nullptr )
+        change_private()
+
+    add_string( "qt-application-profiles", "", "Application profiles", nullptr )
+        change_private()
+
+    add_string( "qt-player-layout", "", "Player control layout", nullptr )
+        change_private()
+
+    // Preserve the logical Rotate/Flip pair when native transforms overlap.
+    add_string( "qt-video-transform-state", "", "Video rotation and flip state", nullptr )
+        change_private()
 
     cannot_unload_broken_library()
 
@@ -546,28 +586,6 @@ static inline void triggerQuit()
             qApp->exit();
         }, Qt::QueuedConnection);
 }
-
-class Translator : public QTranslator
-{
-public:
-    explicit Translator(QObject* parent) : QTranslator(parent) { }
-
-    bool isEmpty() const override { return false; };
-
-    QString translate(const char *context,
-                      const char *sourceText,
-                      const char *disambiguation = nullptr,
-                      int n = -1) const override
-    {
-        Q_UNUSED(context);
-
-        const char* text = (n >= 0 && disambiguation != nullptr) ? vlc_ngettext(sourceText, disambiguation, n)
-                                                                 : vlc_gettext(sourceText);
-
-        assert(text);
-        return QString::fromUtf8(text);
-    }
-};
 
 /*****************************************************************************
  * Module callbacks
@@ -802,7 +820,7 @@ static void *Thread( void *obj )
     auto vlcQtMessageHandler = VlcQtMessageHandlerRegisterer{VLC_OBJECT(p_intf)};
 
     char vlc_name[] = "vlc"; /* for WM_CLASS */
-    char *argv[3] = { nullptr };
+    char *argv[5] = { nullptr };
     int argc = 0;
 
 #if !defined(__APPLE__)
@@ -901,6 +919,26 @@ static void *Thread( void *obj )
 #endif
 
     auto compositor = var_InheritString(p_intf, "qt-compositor");
+#ifdef QT_HAS_X11_COMPOSITOR
+    // Qt can select Wayland even when this VLC build cannot embed video there.
+    // Pick X11 before QApplication starts; a running QPA cannot be replaced.
+    bool waylandIntegration = false;
+#ifdef QT_HAS_WAYLAND_COMPOSITOR
+    waylandIntegration = module_exists("qt_wayland");
+#endif
+    if (!waylandIntegration && compositor && !strcmp(compositor, "auto")
+        && var_InheritBool(p_intf, "embedded-video")
+        && qEnvironmentVariableIsEmpty("QT_QPA_PLATFORM")
+        && !qEnvironmentVariableIsEmpty("DISPLAY")
+        && (!qEnvironmentVariableIsEmpty("WAYLAND_DISPLAY")
+            || qEnvironmentVariable("XDG_SESSION_TYPE") == QLatin1String("wayland")))
+    {
+        msg_Warn(p_intf, "Wayland video integration is unavailable; using X11 for embedded video");
+        argv[argc++] = strdup("-platform");
+        argv[argc++] = strdup("xcb");
+        argv[argc] = nullptr;
+    }
+#endif
     vlc::CompositorFactory compositorFactory(p_intf, compositor);
     free(compositor);
 
@@ -912,9 +950,34 @@ static void *Thread( void *obj )
     QApplication app( argc, argv );
     app.setProperty("initialStyle", app.style()->name());
 
+    // Use the Figma design's font on every platform, including machines where
+    // Inter is not installed. Preserve system fallback for other scripts.
+    const int interfaceFont = QFontDatabase::addApplicationFont(QStringLiteral(":/fonts/InterVariable.ttf"));
+    QFontDatabase::addApplicationFont(QStringLiteral(":/fonts/InterVariable-Italic.ttf"));
+    const auto families = QFontDatabase::applicationFontFamilies(interfaceFont);
+    if (!families.isEmpty()) {
+        auto font = app.font();
+        font.setFamily(families.first());
+        app.setFont(font);
+    } else {
+        msg_Warn(p_intf, "Cannot load the bundled Inter interface font");
+    }
+
     {
         // Install custom translator:
-        const auto translator = new Translator(&app);
+        char* directory = config_GetSysPath(VLC_LOCALE_DIR, nullptr);
+        char* systemLanguage = config_GetSystemInterfaceLanguage();
+        QStringList systemLanguages;
+        if (systemLanguage) systemLanguages = qfu(systemLanguage).split(QLatin1Char(':'), Qt::SkipEmptyParts);
+#if defined(Q_OS_UNIX) && !defined(Q_OS_MACOS)
+        else systemLanguages = {QStringLiteral("en")};
+#else
+        else systemLanguages = QLocale::system().uiLanguages();
+#endif
+        const auto translator = new InterfaceTranslator(qfu(directory ? directory : ""), systemLanguages,
+            qfu(vlc_gettext("C")), &app);
+        free(systemLanguage);
+        free(directory);
         const auto ret = QCoreApplication::installTranslator(translator);
         assert(ret);
     }
@@ -955,7 +1018,9 @@ static void *Thread( void *obj )
 
     /* Set application direction to locale direction,
      * necessary for  RTL locales */
-    app.setLayoutDirection(QLocale().textDirection());
+    // Follow the translation that was actually loaded, including English
+    // fallback when the system uses an unavailable right-to-left language.
+    app.setLayoutDirection(QLocale(qfu(vlc_gettext("C"))).textDirection());
 
     /* All the settings are in the .conf/.ini style */
 #ifdef _WIN32
@@ -1172,7 +1237,7 @@ static void *Thread( void *obj )
             //some part of the probing needs to be executed on the GUI thread and some part will be ran in a background thread,
             //so we defer the execution of this once the app is started. We can't start the task directly as qApp isn't set yet
             //and there are scenarios where the main loop will never be run.
-            QMetaObject::invokeMethod(&app, [&](){
+            QMetaObject::invokeMethod(&app, [p_intf, graphicsApiValue, enableRhiSoftwareRenderer](){
                 // A cached (by then) valid graphics api is found, use it:
                 QQuickWindow::setGraphicsApi(static_cast<QSGRendererInterface::GraphicsApi>(graphicsApiValue.value<int>()));
                 if (p_intf->mainSettings->value(graphicsApiRhiSoftwareKey).value<bool>())
@@ -1251,6 +1316,7 @@ static void *Thread( void *obj )
             const QSGRendererInterface::GraphicsApi graphicsApi = rhiResult.first;
             QQuickWindow::setGraphicsApi(graphicsApi);
             p_intf->mainSettings->setValue(graphicsApiKey, static_cast<int>(graphicsApi));
+            p_intf->mainSettings->setValue(graphicsApiRhiSoftwareKey, rhiResult.second);
             p_intf->mainSettings->sync();
         }
     }
@@ -1370,7 +1436,7 @@ static void *Thread( void *obj )
                              [&app, mainCtx, settings](QQuickWindow::SceneGraphError error, const QString &message) {
                                  qCritical() << "Compositor: Scene Graph Error: " << error << ", Message: " << message;
                                  assert(mainCtx);
-#ifdef _WIN32
+#if defined(_WIN32) && defined(RHI_HEADER_AVAILABLE)
                                 // This is not really important, as with graceful exit the events in the queue should
                                 // be cleared first. This means that in the worst case the application should wait
                                 // until asynchronous probing is completed before exiting.
@@ -1474,6 +1540,12 @@ static void *Thread( void *obj )
 
 static void *ThreadCleanup( qt_intf_t *p_intf, CleanupReason cleanupReason )
 {
+    // WindowOpen holds lock while the compositor waits for its first frame.
+    // Cancel that wait before taking lock, while the GUI thread can still
+    // complete teardown even if rendering has not started.
+    if (p_intf->p_compositor)
+        p_intf->p_compositor->cancelVoutWindowSetup();
+
     {
         vlc::threads::mutex_locker locker (lock);
         if( cleanupReason == CLEANUP_ERROR )

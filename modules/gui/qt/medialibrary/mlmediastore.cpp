@@ -24,10 +24,36 @@
 #include "mlhelper.hpp"
 #include "medialib.hpp"
 #include "mlmedia.hpp"
+#include <QTimer>
 
 static const char *UPDATE_QUEUE = "MLMEDIASTORE_UPDATEQUEUE";
 
 MLMediaStore::~MLMediaStore() = default;
+
+MLMediaStore::Details MLMediaStore::details(vlc_medialibrary_t* ml, const vlc_ml_media_t* media, bool audioMetadata,
+                                          QHash<int64_t, QString>* artists)
+{
+    if (!media) return {};
+    Details result {MLMedia(media), {}};
+    if (audioMetadata && media->i_type == VLC_ML_MEDIA_TYPE_AUDIO
+            && media->i_subtype == VLC_ML_MEDIA_SUBTYPE_ALBUMTRACK && media->album_track.i_artist_id > 0) {
+        const auto id = media->album_track.i_artist_id;
+        if (artists && artists->contains(id)) result.artist = artists->value(id);
+        else {
+            ml_unique_ptr<vlc_ml_artist_t> artist(vlc_ml_get_artist(ml, id));
+            if (artist) result.artist = qfu(artist->psz_name);
+            if (artists) artists->insert(id, result.artist);
+        }
+    }
+    return result;
+}
+
+void MLMediaStore::notifyMetadata(const QString& mrl, const Details& details)
+{
+    if (m_readAudioMetadata && m_files.contains(mrl) && details.media.valid()
+            && details.media.type() == VLC_ML_MEDIA_TYPE_AUDIO)
+        emit audioMetadataUpdated(mrl, details.media.title(), details.artist);
+}
 
 MLMediaStore::MLMediaStore(MediaLib *ml, QObject *parent)
     : QObject(parent)
@@ -44,30 +70,34 @@ MLMediaStore::MLMediaStore(MediaLib *ml, QObject *parent)
     );
 }
 
-void MLMediaStore::insert(const QString &mrl)
+void MLMediaStore::insert(const QString &mrl, bool createMissing)
 {
-    struct Ctx
-    {
-        MLMedia media;
-    };
+    using Ctx = Details;
 
     m_files.insert(mrl);
+    const auto revision = ++m_revisions[mrl];
 
     m_ml->runOnMLThread<Ctx>(this,
     //ML thread
-    [mrl](vlc_medialibrary_t *ml, Ctx &ctx)
+    [mrl, createMissing, audioMetadata = m_readAudioMetadata](vlc_medialibrary_t *ml, Ctx &ctx)
     {
         ml_unique_ptr<vlc_ml_media_t> media {vlc_ml_get_media_by_mrl(ml, qtu(mrl))};
+        if (!media && createMissing)
+            media.reset(vlc_ml_new_external_media(ml, qtu(mrl)));
         if (media)
-            ctx.media = MLMedia(media.get());
+            ctx = details(ml, media.get(), audioMetadata);
     },
     //UI thread
-    [this, mrl](quint64, Ctx &ctx)
+    [this, mrl, revision, generation = m_generation](quint64, Ctx &ctx)
     {
-        if (!ctx.media.valid())
-            return; // failed to get media, TODO: notify??
-
-        setMedia(mrl, std::move(ctx.media));
+        if (generation != m_generation || m_revisions.value(mrl) != revision)
+            return;
+        if (!ctx.media.valid()) {
+            emit updated(mrl, ctx.media);
+            return;
+        }
+        setMedia(mrl, ctx.media);
+        notifyMetadata(mrl, ctx);
     });
 }
 
@@ -80,11 +110,79 @@ void MLMediaStore::remove(const MLItemId &id)
 
     m_mrls.remove(id);
     m_files.remove(mrl);
+    m_revisions.remove(mrl);
+}
+
+void MLMediaStore::insertMany(const QStringList &mrls, std::function<void()> completed)
+{
+    auto batch = std::make_shared<Batch>();
+    batch->generation = m_generation;
+    batch->completed = std::move(completed);
+    QSet<QString> unique;
+    batch->entries.reserve(mrls.size());
+    for (const auto& mrl : mrls) {
+        if (unique.contains(mrl)) continue;
+        unique.insert(mrl);
+        m_files.insert(mrl);
+        batch->entries.push_back({mrl, ++m_revisions[mrl]});
+    }
+    // Replace queued work, but let the one in-flight chunk finish before starting
+    // another. Rapid searches cannot build up a queue of database jobs.
+    cancelBatch();
+    m_batch = std::move(batch);
+    QTimer::singleShot(0, this, &MLMediaStore::readNextBatch);
+}
+
+void MLMediaStore::readNextBatch()
+{
+    if (m_batchRunning || !m_batch) return;
+    const auto batch = m_batch;
+    if (batch->offset == batch->entries.size()) {
+        m_batch.reset();
+        if (batch->completed) batch->completed();
+        return;
+    }
+    const auto chunk = batch->entries.mid(batch->offset, 64);
+    m_batchRunning = true;
+    m_ml->runOnMLThread<QVector<Details>>(this,
+        [batch, chunk, audioMetadata = m_readAudioMetadata](vlc_medialibrary_t* ml, QVector<Details>& result) {
+            result.reserve(chunk.size());
+            for (const auto& entry : chunk) {
+                if (batch->cancelled) break;
+                ml_unique_ptr<vlc_ml_media_t> media {vlc_ml_get_media_by_mrl(ml, qtu(entry.mrl))};
+                result.push_back(details(ml, media.get(), audioMetadata, &batch->artists));
+            }
+        },
+        [this, batch, chunk](quint64, QVector<Details>& result) {
+            m_batchRunning = false;
+            if (batch == m_batch && batch->generation == m_generation) {
+                for (qsizetype i = 0; i < chunk.size(); ++i) {
+                    if (batch != m_batch || batch->generation != m_generation) break;
+                    const auto& entry = chunk[i];
+                    if (m_revisions.value(entry.mrl) != entry.revision) continue;
+                    if (result[i].media.valid()) setMedia(entry.mrl, result[i].media);
+                    else emit updated(entry.mrl, result[i].media);
+                    notifyMetadata(entry.mrl, result[i]);
+                }
+                batch->offset += chunk.size();
+            }
+            QTimer::singleShot(0, this, &MLMediaStore::readNextBatch);
+        });
+}
+
+void MLMediaStore::cancelBatch()
+{
+    if (m_batch) m_batch->cancelled = true;
+    m_batch.reset();
 }
 
 void MLMediaStore::clear()
 {
+    ++m_generation;
+    cancelBatch();
+    m_files.clear();
     m_mrls.clear();
+    m_revisions.clear();
 }
 
 void MLMediaStore::onVlcMlEvent(void *data, const vlc_ml_event_t *event)
@@ -93,8 +191,13 @@ void MLMediaStore::onVlcMlEvent(void *data, const vlc_ml_event_t *event)
     switch (event->i_type)
     {
     case VLC_ML_EVENT_MEDIA_ADDED:
+    case VLC_ML_EVENT_MEDIA_THUMBNAIL_GENERATED:
     {
-        const vlc_ml_media_t *media = event->creation.p_media;
+        if (event->i_type == VLC_ML_EVENT_MEDIA_THUMBNAIL_GENERATED
+                && event->media_thumbnail_generated.i_size != VLC_ML_THUMBNAIL_SMALL)
+            break;
+        const vlc_ml_media_t *media = event->i_type == VLC_ML_EVENT_MEDIA_ADDED
+                ? event->creation.p_media : event->media_thumbnail_generated.p_media;
         QString mrl;
         for (const vlc_ml_file_t &file : ml_range_iterate<vlc_ml_file_t>(media->p_files))
         {
@@ -111,7 +214,10 @@ void MLMediaStore::onVlcMlEvent(void *data, const vlc_ml_event_t *event)
         MLMedia mlMedia (media);
         QMetaObject::invokeMethod(self, [self, mrl, mlMedia]()
         {
-            self->setMedia(mrl, mlMedia);
+            if (self->m_readAudioMetadata && self->m_files.contains(mrl)
+                    && mlMedia.type() == VLC_ML_MEDIA_TYPE_AUDIO)
+                self->insert(mrl);
+            else self->setMedia(mrl, mlMedia);
         });
 
         break;
@@ -149,26 +255,26 @@ void MLMediaStore::update(const MLItemId &id)
     if (!m_mrls.contains(id))
         return;
 
-    struct Ctx
-    {
-        MLMedia media;
-    };
+    using Ctx = Details;
+
+    const auto mrl = m_mrls[id];
+    const auto revision = ++m_revisions[mrl];
 
     m_ml->runOnMLThread<Ctx>(this,
     //ML thread
-    [id](vlc_medialibrary_t *ml, Ctx &ctx)
+    [id, audioMetadata = m_readAudioMetadata](vlc_medialibrary_t *ml, Ctx &ctx)
     {
         ml_unique_ptr<vlc_ml_media_t> media {vlc_ml_get_media(ml, id.id)};
-        ctx.media = media ? MLMedia(media.get()) : MLMedia {};
+        ctx = details(ml, media.get(), audioMetadata);
     },
     //UI thread
-    [this, id](quint64, Ctx &ctx)
+    [this, id, mrl, revision, generation = m_generation](quint64, Ctx &ctx)
     {
-        if (!m_mrls.contains(id))
+        if (generation != m_generation || m_revisions.value(mrl) != revision || !m_mrls.contains(id))
             return; // item was removed?
 
-        const QString mrl = m_mrls[id];
         emit updated(mrl, ctx.media);
+        notifyMetadata(mrl, ctx);
     }, UPDATE_QUEUE); // update in a single queue in case there
                       // is a overlap of same media update
 }
@@ -178,6 +284,8 @@ void MLMediaStore::setMedia(const QString &mrl, MLMedia media)
     if (!m_files.contains(mrl))
         return;
 
+    // A newer event must win over a lookup started before that event.
+    ++m_revisions[mrl];
     m_mrls[media.getId()] = mrl;
     emit updated(mrl, media);
 }

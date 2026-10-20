@@ -25,8 +25,12 @@
 #include <QHash>
 #include <QSet>
 #include <QString>
+#include <QStringList>
+#include <QVector>
 
 #include <memory>
+#include <atomic>
+#include <functional>
 
 #include "mlmedia.hpp"
 
@@ -42,14 +46,19 @@ public:
     MLMediaStore(MediaLib *ml, QObject *parent = nullptr);
     ~MLMediaStore();
 
-    void insert(const QString &mrl);
+    void insert(const QString &mrl, bool createMissing = false);
+    // Read existing metadata in bounded batches, without importing or parsing files.
+    void insertMany(const QStringList &mrls, std::function<void()> completed);
+    void cancelBatch();
     void remove(const MLItemId &id);
     void clear();
+    void setReadAudioMetadata(bool enabled) { m_readAudioMetadata = enabled; }
 
     bool contains(const QString &mrl) const;
 
 signals:
     void updated(const QString &mrl, const MLMedia &media);
+    void audioMetadataUpdated(const QString& mrl, const QString& title, const QString& artist);
 
 private:
     static void onVlcMlEvent(void* data
@@ -59,6 +68,23 @@ private:
     void update(const MLItemId &id);
 
     void setMedia(const QString &mrl, MLMedia media);
+    struct Details { MLMedia media; QString artist; };
+    static Details details(vlc_medialibrary_t* ml, const vlc_ml_media_t* media, bool audioMetadata,
+                           QHash<int64_t, QString>* artists = nullptr);
+    void notifyMetadata(const QString& mrl, const Details& details);
+    struct Batch {
+        struct Entry { QString mrl; quint64 revision; };
+        QVector<Entry> entries;
+        qsizetype offset = 0;
+        quint64 generation;
+        std::atomic_bool cancelled {false};
+        std::function<void()> completed;
+        QHash<int64_t, QString> artists;
+    };
+    void readNextBatch();
+    std::shared_ptr<Batch> m_batch;
+    bool m_batchRunning = false;
+    bool m_readAudioMetadata = false;
 
     MediaLib *m_ml;
 
@@ -71,4 +97,6 @@ private:
     // MLEvent doesn't provide media mrl
     // maintain a map for faster handling of ml events
     QHash<MLItemId, QString> m_mrls;
+    QHash<QString, quint64> m_revisions;
+    quint64 m_generation = 0;
 };

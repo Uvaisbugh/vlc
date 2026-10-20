@@ -1,4 +1,5 @@
 #include "mainui.hpp"
+#include "util/interface_translator.hpp"
 
 #include <cassert>
 
@@ -13,9 +14,12 @@
 #include "medialibrary/mlgenremodel.hpp"
 #include "medialibrary/mlurlmodel.hpp"
 #include "medialibrary/mlmediamodel.hpp"
+#include "medialibrary/mlfileartwork.hpp"
 #include "medialibrary/mlvideomodel.hpp"
 #include "medialibrary/mlrecentmediamodel.hpp"
 #include "medialibrary/mlrecentvideomodel.hpp"
+#include "medialibrary/mlrecentaudiomodel.hpp"
+#include "medialibrary/mlplayedartistmodel.hpp"
 #include "medialibrary/mlfoldersmodel.hpp"
 #include "medialibrary/mlvideogroupsmodel.hpp"
 #include "medialibrary/mlvideofoldersmodel.hpp"
@@ -34,6 +38,7 @@
 #include "dialogs/toolbar/controlbar_profile.hpp"
 
 #include "playlist/playlist_model.hpp"
+#include "playlist/playlist_tree_model.hpp"
 #include "playlist/playlist_controller.hpp"
 
 #include "util/csdmenu.hpp"
@@ -48,6 +53,7 @@
 #include "util/color_svg_image_provider.hpp"
 #include "util/effects_image_provider.hpp"
 #include "util/vlcaccess_image_provider.hpp"
+#include "util/seek_preview_image_provider.hpp"
 #include "util/csdbuttonmodel.hpp"
 #include "util/vlctick.hpp"
 #include "util/list_selection_model.hpp"
@@ -60,6 +66,13 @@
 
 #include "dialogs/help/aboutmodel.hpp"
 #include "dialogs/dialogs_provider.hpp"
+#include "dialogs/preferences/redesign_preferences.hpp"
+#include "dialogs/firstrun/firstrunwizard.hpp"
+#include "util/redesign_folder_model.hpp"
+#include "util/subtitle_source_service.hpp"
+#include <QDir>
+#include <vlc_configuration.h>
+#include <QQmlContext>
 #include "dialogs/dialogs/dialogmodel.hpp"
 #ifdef UPDATE_CHECK
 #include "dialogs/help/help.hpp" // UpdateModel
@@ -149,6 +162,7 @@ MainUI::~MainUI()
 bool MainUI::setup(QQmlEngine* engine)
 {
     m_engineBound = engine;
+    if (auto* translator = InterfaceTranslator::instance()) translator->watchEngine(engine);
 
     if (m_mainCtx->hasMediaLibrary())
     {
@@ -162,7 +176,10 @@ bool MainUI::setup(QQmlEngine* engine)
     if (!EffectsImageProvider::instance(engine, engine))
         new EffectsImageProvider(engine);
     engine->addImageProvider(QStringLiteral("svgcolor"), new SVGColorImageImageProvider());
+    engine->rootContext()->setContextProperty(QStringLiteral("redesignSvgImages"), true);
+    engine->rootContext()->setContextProperty(QStringLiteral("redesignAppearance"), m_mainCtx);
     engine->addImageProvider(QStringLiteral("vlcaccess"), new VLCAccessImageProvider());
+    engine->addImageProvider(QStringLiteral("seekpreview"), new SeekPreviewImageProvider());
 
     m_component  = new QQmlComponent(engine, QStringLiteral("qrc:/qt/qml/VLC/MainInterface/MainInterface.qml"), QQmlComponent::PreferSynchronous, engine);
     if (m_component->isLoading())
@@ -174,11 +191,9 @@ bool MainUI::setup(QQmlEngine* engine)
     {
         for(auto& error: m_component->errors())
             msg_Err(m_intf, "qml loading %s %s:%u", qtu(error.description()), qtu(error.url().toString()), error.line());
-#ifdef QT_STATIC
-            assert( !"Missing qml modules from qt contribs." );
-#else
-            msg_Err( m_intf, "Install missing modules using your packaging tool" );
-#endif
+        // A QML error can also come from an unavailable resource or a rejected
+        // compiled unit. Report the actual errors and let startup clean up.
+        msg_Err(m_intf, "Cannot load the VLC interface. See the errors above.");
         return false;
     }
     return true;
@@ -238,6 +253,8 @@ void MainUI::registerQMLTypes()
         qmlRegisterSingletonInstance<UINotifier>(uri, versionMajor, versionMinor, "UINotifier", new UINotifier(m_mainCtx, m_mainCtx));
         qmlRegisterSingletonInstance<NavigationHistory>(uri, versionMajor, versionMinor, "History", new NavigationHistory(this));
         qmlRegisterType<VideoSurface>(uri, versionMajor, versionMinor, "VideoSurface");
+        qmlRegisterAnonymousType<VideoBackdropProvider>(uri, versionMajor);
+        qmlRegisterType<VideoBackdrop>(uri, versionMajor, versionMinor, "VideoBackdrop");
         qmlRegisterUncreatableType<BaseModel>( uri, versionMajor, versionMinor, "BaseModel", "Base Model is uncreatable." );
         qmlRegisterUncreatableType<VLCVarChoiceModel>(uri, versionMajor, versionMinor, "VLCVarChoiceModel", "generic variable with choice model" );
         qmlRegisterUncreatableType<CSDButton>(uri, versionMajor, versionMinor, "CSDButton", "");
@@ -272,6 +289,9 @@ void MainUI::registerQMLTypes()
         const int versionMinor = 0;
 
         // @uri VLC.Dialogs
+        qmlRegisterType<RedesignPreferences>(uri, versionMajor, versionMinor, "RedesignPreferences");
+        qmlRegisterType<FirstRunWizard>(uri, versionMajor, versionMinor, "RedesignFirstRunSetup");
+        qmlRegisterType<RedesignFolderModel>(uri, versionMajor, versionMinor, "RedesignFolderModel");
         qmlRegisterType<VLCDialog>( uri, versionMajor, versionMinor, "VLCDialog" );
         assert(VLCDialogModel::getInstance<false>());
         qmlRegisterSingletonInstance<VLCDialogModel>(uri, versionMajor, versionMinor, "VLCDialogModel", VLCDialogModel::getInstance<false>());
@@ -315,6 +335,11 @@ void MainUI::registerQMLTypes()
         assert(m_intf->p_mainPlayerController);
         qmlRegisterSingletonInstance<PlayerController>(uri, versionMajor, versionMinor, "Player", m_intf->p_mainPlayerController);
         qmlRegisterTypesAndRevisions<TimedText>(uri, versionMajor);
+        auto* subtitleSources = new SubtitleSourceService(this);
+        char* userDirectory = config_GetUserDir(VLC_USERDATA_DIR);
+        if (userDirectory) subtitleSources->setStorageDirectory(QDir(qfu(userDirectory)).filePath(QStringLiteral("subtitles")));
+        free(userDirectory);
+        qmlRegisterSingletonInstance<SubtitleSourceService>(uri, versionMajor, versionMinor, "SubtitleSources", subtitleSources);
         qmlRegisterType<PlayerHighResolutionTimeUpdater>(uri, versionMajor, versionMinor, "HighResolutionTimeUpdater");
         qmlRegisterUncreatableMetaObject(VLCTickForeign::staticMetaObject, uri, versionMajor, versionMinor, "VLCTick", "Not Instantiable" );
         qmlRegisterTypesAndRevisions<VLCDuration>(uri, versionMajor);
@@ -357,6 +382,7 @@ void MainUI::registerQMLTypes()
         // @uri VLC.Playlist
         qmlRegisterUncreatableType<PlaylistItem>(uri, versionMajor, versionMinor, "playlistItem", "");
         qmlRegisterType<PlaylistListModel>( uri, versionMajor, versionMinor, "PlaylistListModel" );
+        qmlRegisterType<PlaylistTreeModel>( uri, versionMajor, versionMinor, "PlaylistTreeModel" );
         qmlRegisterType<PlaylistController>( uri, versionMajor, versionMinor, "PlaylistController" );
         qmlRegisterType<PlaylistContextMenu>( uri, versionMajor, versionMinor, "PlaylistContextMenu" );
         assert(m_intf->p_mainPlaylistController);
@@ -474,7 +500,10 @@ void MainUI::registerQMLTypes()
         qmlRegisterType<MLGenreModel>( uri, versionMajor, versionMinor, "MLGenreModel" );
         qmlRegisterType<MLUrlModel>( uri, versionMajor, versionMinor, "MLUrlModel" );
         qmlRegisterType<MLMediaModel>( uri, versionMajor, versionMinor, "MLMediaModel" );
+        qmlRegisterType<MLFileArtwork>( uri, versionMajor, versionMinor, "MLFileArtwork" );
         qmlRegisterType<MLVideoModel>( uri, versionMajor, versionMinor, "MLVideoModel" );
+        qmlRegisterType<MLRecentAudioModel>( uri, versionMajor, versionMinor, "MLRecentAudioModel" );
+        qmlRegisterType<MLPlayedArtistModel>( uri, versionMajor, versionMinor, "MLPlayedArtistModel" );
         qmlRegisterType<MLRecentVideoModel>( uri, versionMajor, versionMinor, "MLRecentVideoModel" );
         qmlRegisterType<MLVideoGroupsModel>( uri, versionMajor, versionMinor, "MLVideoGroupsModel" );
         qmlRegisterType<MLVideoFoldersModel>( uri, versionMajor, versionMinor, "MLVideoFoldersModel" );

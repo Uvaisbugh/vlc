@@ -29,6 +29,11 @@ See `REDESIGN_PLAN.md` for sequencing and the source map.
 
 ## Native implementation
 
+The native implementation from `dsojevic/juxtopposed-vlc` at
+`b876f75f43130249162796fd3057e1327e2b1d2b` is integrated locally with its history
+and attribution. The areas below have source implementations available, but
+remain unchecked until audited against Figma and validated in this fork.
+
 The following areas are a provisional work breakdown. Final frame coverage
 must come from the actual Figma inventory, not these category names.
 
@@ -122,3 +127,20 @@ successfully compiled and uploaded the Windows runtime for commit
 `84d6aa25f6fb5970c7bc8c2ad9380f02fdaba2e1`. Runtime smoke testing is pending.
 
 No redesigned screen or public release is currently claimed complete.
+
+## Integration validation
+
+- [x] Confirm the community source descends from our official VLC baseline.
+- [x] Preserve community authorship/history, design credit, and font license.
+- [x] Resolve the resource merge by retaining both the SVGs and Inter fonts.
+- [x] Run release-tool unit tests: 16 passed after two Windows portability fixes.
+- [x] Run Qt Designer text-extraction tests: 2 passed, 1 platform skip.
+- [ ] Run the QML suite with the actual compiled VLC.Util module and target Qt.
+- [ ] Complete a fresh native build with the integration's patched dependencies.
+- [ ] Run packaged Windows startup/playback checks on the integrated build.
+- [ ] Complete screen-by-screen visual and interaction comparison with Figma.
+
+A standalone Windows Qt 6.12 run recorded 645 passes and 23 failures. Several
+views could not compile because the standalone environment lacks VLC.Util;
+remaining failures include platform/font/layout behavior. This result is not
+treated as a passing full suite. Native CI must resolve the actual result.

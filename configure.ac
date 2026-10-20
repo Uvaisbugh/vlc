@@ -2,15 +2,15 @@ dnl Autoconf settings for vlc
 
 AC_COPYRIGHT([Copyright 1999-2026 VLC authors and VideoLAN])
 
-AC_INIT([vlc], [4.0.0-dev])
+AC_INIT([vlc], [4.0.0-beta.4])
 VERSION_MAJOR=4
 VERSION_MINOR=0
 VERSION_REVISION=0
 VERSION_EXTRA=0
-VERSION_DEV=dev
+VERSION_DEV=beta.4
 
 VERSION_DATE=$(
-    VERSION_PATTERN='^v?([[0-9]]+\.?)+(-[[0-9]]+)?$'
+    VERSION_PATTERN='^v?([[0-9]]+\.?)+(-[[0-9A-Za-z]]+(\.[[0-9A-Za-z]]+)*)?$'
     VERSION_TAG=$(git tag --points-at HEAD --sort=-version:refname 2>/dev/null | grep -E "$VERSION_PATTERN" | head -n 1)
     if test -n "$VERSION_TAG"; then
         DATE=$(git for-each-ref --format='%(taggerdate:short)' "refs/tags/${VERSION_TAG}" 2>/dev/null)
@@ -5071,12 +5071,10 @@ dnl update checking system
 dnl
 AC_ARG_ENABLE([update-check],
   AS_HELP_STRING([--enable-update-check], [update checking system (default disabled)]))
-if test "${enable_update_check}" = "yes"
-then
- AS_IF([test "${have_gcrypt}" != "yes"],[
-    AC_MSG_ERROR([libgcrypt is required for update checking system]) ])
-fi
-AM_CONDITIONAL([UPDATE_CHECK], [test "${enable_update_check}" = "yes"])
+dnl GitHub notifications need Qt Network only. Retain the signed core updater
+dnl when libgcrypt is available for a future authenticated install mechanism.
+AM_CONDITIONAL([UPDATE_CHECK], [test "${enable_update_check}" = "yes" -a "${have_gcrypt}" = "yes"])
+AM_CONDITIONAL([QT_UPDATE_CHECK], [test "${enable_update_check}" = "yes"])
 
 dnl
 dnl OS X notification plugin

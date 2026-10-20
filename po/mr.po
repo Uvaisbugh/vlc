@@ -20662,9 +20662,11 @@ msgstr "व नाही"
 msgid "VLC media player updates"
 msgstr "व्हीएलसी मीडिया प्लेअर सुधारणा"
 
+#. Qt placeholder correction by Codex (first pass; review welcome).
+#, qt-format
 #: modules/gui/qt/dialogs/help.cpp:294
 msgid "A new version of VLC (%1.%2.%3%4) is available."
-msgstr "व्हीएलसीची नवीन आवृत्ती (%१.%२.%३%४) उपलब्ध आहेत."
+msgstr "व्हीएलसीची नवीन आवृत्ती (%1.%2.%3%4) उपलब्ध आहे."
 
 #: modules/gui/qt/dialogs/help.cpp:319
 msgid "You have the latest version of VLC media player."
@@ -32512,3 +32514,15 @@ msgstr "माध्यम व्यवस्थापक यादी"
 #, fuzzy
 #~ msgid "Video Filters..."
 #~ msgstr "ध्वनीचित्रफित धारिका"
+
+#. Redesign translation by Codex (first pass; review welcome).
+msgid "System language"
+msgstr "प्रणालीची भाषा"
+
+#. Redesign translation by Codex (first pass; review welcome).
+msgid "Choose a language for the interface. Changes apply at once. Text without a translation is shown in English."
+msgstr "इंटरफेससाठी भाषा निवडा. बदल लगेच लागू होतात. अनुवाद नसलेला मजकूर इंग्रजीत दिसतो."
+
+#. Redesign translation by Codex (first pass; review welcome).
+msgid "VLC cannot load this language."
+msgstr "VLC ही भाषा लोड करू शकत नाही."

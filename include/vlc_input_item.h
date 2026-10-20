@@ -157,7 +157,10 @@ enum slave_priority
     SLAVE_PRIORITY_MATCH_RIGHT,
     SLAVE_PRIORITY_MATCH_LEFT,
     SLAVE_PRIORITY_MATCH_ALL,
-    SLAVE_PRIORITY_USER
+    SLAVE_PRIORITY_USER,
+    /* A folder match sorts as MATCH_ALL; an ML source keeps its association rank. */
+    SLAVE_PRIORITY_FOLDER_RULE,
+    SLAVE_PRIORITY_ML_AUTO,
 };
 
 /* Extensions must be in alphabetical order */
@@ -392,8 +395,10 @@ VLC_API input_item_t * input_item_Copy(input_item_t * ) VLC_USED;
  *
  * Copies metadata and associated fields from @p src to @p dst. The function
  * creates a temporary copy of the source item and transfers ownership of
- * relevant data fields (such as name, URI, duration, meta, ES and slave lists)
+ * relevant data fields (such as name, duration, meta and ES)
  * to the destination item, replacing any existing values.
+ * The destination keeps current track links and their selection flags.
+ * This function adds new track links from the source.
  *
  * @param[in,out] dst   Destination input item to be updated.
  * @param[in]     src   Source input item containing new values.

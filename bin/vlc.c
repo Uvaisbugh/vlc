@@ -212,11 +212,13 @@ int main(int argc, const char *argv[])
     pthread_t self = pthread_self ();
     pthread_sigmask (SIG_SETMASK, &set, NULL);
 
-    const char *args[argc + 3];
+    const char *args[argc + 5];
     int count = 0;
 
+    args[count++] = "--load-startup-options";
     args[count++] = "--no-ignore-config";
-    args[count++] = "--media-library";
+    args[count++] = "--media-library-default";
+    args[count++] = "--single-instance-default";
 #ifdef HAVE_DBUS
     args[count++] = "--dbus";
 #endif
@@ -237,7 +239,7 @@ int main(int argc, const char *argv[])
     vlc_enable_override ();
 
     /* Initialize libvlc */
-    libvlc_instance_t *vlc = libvlc_new(count, args);
+    libvlc_instance_t *vlc = libvlc_new_standalone(count, args);
     if (vlc == NULL)
         return 1;
 

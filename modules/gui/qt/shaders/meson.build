@@ -65,5 +65,6 @@ build_shaders = configure_file(
 )
 
 shaders_processed = qt6.preprocess(
+        method: qt_dependency_method,
         qresources: build_shaders,
         dependencies: qt6_dep)

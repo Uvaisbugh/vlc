@@ -114,20 +114,20 @@ static void CloseIntf( vlc_object_t *p_this )
 
 //Medialib module
 
-static void* MLGet( vlc_medialibrary_module_t*, int, va_list )
+static void* MLGet( vlc_medialibrary_module_t*, int query, va_list args )
 {
-    return nullptr;
+    return testenv->mediaGet ? testenv->mediaGet(query, args) : nullptr;
 }
 
-static int MLList( vlc_medialibrary_module_t*, int,
-                const vlc_ml_query_params_t*, va_list )
+static int MLList( vlc_medialibrary_module_t*, int query,
+                const vlc_ml_query_params_t* params, va_list args )
 {
-    return VLC_EGENERIC;
+    return testenv->mediaList ? testenv->mediaList(query, params, args) : VLC_EGENERIC;
 }
 
-static int MLControl( vlc_medialibrary_module_t*, int, va_list )
+static int MLControl( vlc_medialibrary_module_t*, int query, va_list args )
 {
-    return VLC_EGENERIC;
+    return testenv->mediaControl ? testenv->mediaControl(query, args) : VLC_EGENERIC;
 }
 
 static int MLOpen( vlc_object_t* obj )

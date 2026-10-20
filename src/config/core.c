@@ -75,6 +75,13 @@ int config_GetType(const char *name)
     }
 }
 
+bool config_IsPersistent(const char *name)
+{
+    const struct vlc_param *param = name ? vlc_param_Find(name) : NULL;
+    return param != NULL && CONFIG_ITEM(param->item.i_type)
+        && !param->obsolete && !param->unsaved;
+}
+
 bool config_IsSafe( const char *name )
 {
     const struct vlc_param *param = vlc_param_Find(name);
@@ -403,6 +410,21 @@ static struct
     size_t count;
 } config = { NULL, 0 };
 
+void config_ForEachPersistent(void (*callback)(void *, const char *), void *opaque)
+{
+    assert(callback != NULL);
+    const char *previous = NULL;
+    for (size_t i = 0; i < config.count; ++i)
+    {
+        const char *name = config.list[i]->item.psz_name;
+        if (previous != NULL && !strcmp(previous, name)) continue;
+        previous = name;
+        const struct vlc_param *param = vlc_param_Find(name);
+        if (!param->obsolete && !param->unsaved)
+            callback(opaque, name);
+    }
+}
+
 /**
  * Index the configuration items by name for faster lookups.
  */
@@ -457,6 +479,23 @@ struct vlc_param *vlc_param_Find(const char *name)
 
     assert(name != NULL);
     p = bsearch (name, config.list, config.count, sizeof (*p), confnamecmp);
+    if (p != NULL && (*p)->obsolete)
+    {
+        /* A removed option in one module must not hide a live option in
+         * another module (for example, SRT input and output payload-size). */
+        for (struct vlc_param *const *other = p; other > config.list;)
+        {
+            --other;
+            if (strcmp(name, (*other)->item.psz_name)) break;
+            if (!(*other)->obsolete) return *other;
+        }
+        for (struct vlc_param *const *other = p + 1;
+             other < config.list + config.count; ++other)
+        {
+            if (strcmp(name, (*other)->item.psz_name)) break;
+            if (!(*other)->obsolete) return *other;
+        }
+    }
     return (p != NULL) ? *p : NULL;
 }
 

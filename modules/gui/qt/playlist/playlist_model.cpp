@@ -117,10 +117,24 @@ on_playlist_items_updated(vlc_playlist_t *playlist, size_t index,
     that->callAsync([=](){
         if (that->m_playlist != playlist)
             return;
+        const auto previousDuration = that->m_duration;
         int count = updated.size();
         for (int i = 0; i < count; ++i)
+        {
+            that->m_duration -= that->m_items[index + i].getDuration();
             that->m_items[index + i] = updated[i]; /* sync metadata */
+            that->m_duration += updated[i].getDuration();
+        }
+        // If the last known duration was removed, restore the unknown state.
+        if (that->m_duration.toVLCTick() == 0)
+        {
+            that->m_duration = VLCDuration{};
+            for (const auto& item : that->m_items)
+                that->m_duration += item.getDuration();
+        }
         that->notifyItemsChanged(index, count);
+        if (!(that->m_duration == previousDuration))
+            emit that->q_func()->durationChanged();
     });
 }
 
@@ -188,6 +202,7 @@ void PlaylistListModelPrivate::onItemsReset(const QVector<PlaylistItem>&& newCon
     }
 
     emit q->countChanged(m_items.size());
+    emit q->durationChanged();
 }
 
 void PlaylistListModelPrivate::onItemsAdded(const QVector<PlaylistItem>&& added, size_t index)
@@ -205,6 +220,7 @@ void PlaylistListModelPrivate::onItemsAdded(const QVector<PlaylistItem>&& added,
     }
 
     emit q->countChanged(m_items.size());
+    emit q->durationChanged();
 }
 
 void PlaylistListModelPrivate::onItemsMoved(size_t index, size_t count, size_t target)
@@ -251,6 +267,7 @@ void PlaylistListModelPrivate::onItemsRemoved(size_t index, size_t count)
     }
 
     emit q->countChanged(m_items.size());
+    emit q->durationChanged();
 }
 
 
@@ -294,7 +311,9 @@ PlaylistListModel::roleNames() const
         { ArtistRole , QByteArrayLiteral("artist") },
         { AlbumRole  , QByteArrayLiteral("album") },
         { ArtworkRole, QByteArrayLiteral("artwork") },
-        { UrlRole, QByteArrayLiteral("url") }
+        { UrlRole, QByteArrayLiteral("url") },
+        { ItemIdRole, QByteArrayLiteral("itemId") },
+        { AncestorsRole, QByteArrayLiteral("ancestors") }
     };
 }
 
@@ -505,6 +524,10 @@ PlaylistListModel::data(const QModelIndex &index, int role) const
         return d->m_items[row].getArtwork();
     case UrlRole:
         return d->m_items[row].getUrl();
+    case ItemIdRole:
+        return d->m_items[row].getId();
+    case AncestorsRole:
+        return d->m_items[row].getAncestors();
     case PlaylistListModel::PreparsedRole:
         return d->m_items[row].preparsed();
     default:

@@ -42,6 +42,9 @@ anl_lib = cc.find_library('anl', required: false)
 libvlccore_deps = [
     m_lib, dl_lib, threads_dep, intl_dep, socket_libs, iconv_dep, anl_lib, idn_dep
 ]
+if dbus_dep.found()
+    libvlccore_deps += dbus_dep
+endif
 
 vlccore_cargs = [ '-DMODULE_STRING="core"', '-DHAVE_DYNAMIC_PLUGINS' ]
 libvlccore_link_args = []
@@ -71,6 +74,7 @@ min_windows_version_test = '''
     libvlccore_deps += cc.find_library('normaliz')
     if not have_win_store
         libvlccore_deps += cc.find_library('winmm')
+        libvlccore_deps += cc.find_library('winhttp')
     else
         libvlccore_deps += cc.find_library('runtimeobject')
     endif
@@ -101,6 +105,8 @@ libvlccore_sources_base = files(
     'config/help.c',
     'config/intf.c',
     'config/cmdline.c',
+    'config/startup.c',
+    'config/language.c',
     'config/getopt.c',
     'config/vlc_getopt.h',
     'config/jaro_winkler.c',
@@ -471,10 +477,9 @@ else
     endif
 endif
 
-if get_option('update-check').allowed()
-    if not gcrypt_dep.found()
-        error('libgcrypt is required for update checking system')
-    endif
+# GitHub notifications live in Qt. Keep the optional signed download backend
+# available when libgcrypt is present.
+if get_option('update-check').allowed() and gcrypt_dep.found()
     libvlccore_sources += [ 'misc/update.c', 'misc/update_crypto.c' ]
     vlccore_cargs += '-DUPDATE_CHECK'
     libvlccore_deps += gcrypt_dep

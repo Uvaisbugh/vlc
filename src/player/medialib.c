@@ -23,6 +23,7 @@
 #endif
 
 #include <vlc_common.h>
+#include <vlc_arrays.h>
 #include "player.h"
 #include "misc/variables.h"
 
@@ -47,6 +48,82 @@ vlc_player_input_RestoreMlStates(struct vlc_player_input* input, bool force_pos)
     vlc_ml_media_t* media = vlc_ml_get_media_by_mrl( ml, item->psz_uri);
     if (!media)
         return;
+    if (media->b_subtitle_track_selection)
+    {
+        /* An explicit empty choice must also suppress the filesystem's
+         * automatic subtitle search. This input has not started yet. */
+        var_Create(input->thread, "sub-autodetect-file", VLC_VAR_BOOL);
+        var_SetBool(input->thread, "sub-autodetect-file", false);
+    }
+    /* Associated tracks are independent of saved playback preferences. */
+    vlc_mutex_lock(&item->lock);
+    if (media->b_subtitle_track_selection)
+    {
+        for (int j = 0; j < item->i_slaves;)
+        {
+            input_item_slave_t *slave = item->pp_slaves[j];
+            bool selected = slave->i_type != SLAVE_TYPE_SPU;
+            if (media->p_files)
+                for (size_t i = 0; i < media->p_files->i_nb_items; ++i)
+                {
+                    const vlc_ml_file_t *file = &media->p_files->p_items[i];
+                    if (file->i_type == VLC_ML_FILE_TYPE_SUBTITLE &&
+                        !file->b_unselected && file->psz_mrl &&
+                        !strcmp(file->psz_mrl, slave->psz_uri))
+                        selected = true;
+                }
+            if (!selected)
+            {
+                input_item_slave_Delete(slave);
+                TAB_ERASE(item->i_slaves, item->pp_slaves, j);
+            }
+            else ++j;
+        }
+    }
+    if (media->p_files)
+    {
+        for (size_t i = 0; i < media->p_files->i_nb_items; ++i)
+        {
+            const vlc_ml_file_t *file = &media->p_files->p_items[i];
+            if (file->b_unselected && file->psz_mrl)
+            {
+                for (int j = 0; j < item->i_slaves;)
+                {
+                    if (!strcmp(item->pp_slaves[j]->psz_uri, file->psz_mrl))
+                    {
+                        input_item_slave_Delete(item->pp_slaves[j]);
+                        TAB_ERASE(item->i_slaves, item->pp_slaves, j);
+                    }
+                    else ++j;
+                }
+            }
+            if (!file->psz_mrl || !strcmp(file->psz_mrl, item->psz_uri) ||
+                file->b_unselected ||
+                (file->i_type != VLC_ML_FILE_TYPE_SUBTITLE &&
+                                  file->i_type != VLC_ML_FILE_TYPE_SOUNDTRACK))
+                continue;
+            bool exists = false;
+            const bool saved_choice = file->i_type == VLC_ML_FILE_TYPE_SUBTITLE
+                ? media->b_subtitle_track_selection : media->b_soundtrack_track_selection;
+            for (int j = 0; j < item->i_slaves; ++j)
+                if (!strcmp(item->pp_slaves[j]->psz_uri, file->psz_mrl))
+                {
+                    exists = true;
+                    input_item_slave_t *slave = item->pp_slaves[j];
+                    if (saved_choice || file->b_external)
+                        slave->i_priority = SLAVE_PRIORITY_USER;
+                    else if (slave->i_priority == SLAVE_PRIORITY_FOLDER_RULE ||
+                             slave->i_priority == SLAVE_PRIORITY_ML_AUTO)
+                        slave->i_priority = SLAVE_PRIORITY_ML_AUTO;
+                }
+            if (exists) continue;
+            input_item_slave_t *slave = input_item_slave_New(file->psz_mrl,
+                file->i_type == VLC_ML_FILE_TYPE_SUBTITLE ? SLAVE_TYPE_SPU : SLAVE_TYPE_GENERIC,
+                saved_choice || file->b_external ? SLAVE_PRIORITY_USER : SLAVE_PRIORITY_ML_AUTO);
+            if (slave) TAB_APPEND(item->i_slaves, item->pp_slaves, slave);
+        }
+    }
+    vlc_mutex_unlock(&item->lock);
     if (media->i_type != VLC_ML_MEDIA_TYPE_VIDEO ||
         vlc_ml_media_get_all_playback_pref(ml, media->i_id,
                                            &input->ml.states) != VLC_SUCCESS)
@@ -167,6 +244,24 @@ vlc_player_CompareAssignState(char **target_ptr, char **input_ptr)
     }
 }
 
+/* Same start/end margins as the media library's
+ * Media::computePositionType(), which only applies them when it knows the
+ * media duration. */
+static float
+vlc_player_GetMlProgressMargin(vlc_tick_t length)
+{
+    const vlc_tick_t hour = VLC_TICK_FROM_SEC(3600);
+    if (length < hour)
+        return .05f;
+    if (length < 2 * hour)
+        return .04f;
+    if (length < 3 * hour)
+        return .03f;
+    if (length < 4 * hour)
+        return .02f;
+    return .01f;
+}
+
 void
 vlc_player_UpdateMLStates(vlc_player_t *player, struct vlc_player_input* input)
 {
@@ -203,7 +298,26 @@ vlc_player_UpdateMLStates(vlc_player_t *player, struct vlc_player_input* input)
     assert(media->i_type != VLC_ML_MEDIA_TYPE_UNKNOWN);
 
     if ( var_GetBool( input->thread, "save-recentplay" ) )
-        vlc_ml_media_update_progress( ml, media->i_id, input->position );
+    {
+        /* Match the float precision used by Media::computePositionType(),
+         * including positions exactly at a margin. */
+        float position = input->position;
+        /* A short clip can finish before its last position update reaches
+         * the end margin. Use the stop reason instead: let the library handle
+         * completion when it knows the duration, or clear progress directly. */
+        if (input->ml.completed)
+            position = media->i_duration > 0 ? 1.f : -1.f;
+        else if (media->i_duration <= 0 && input->length > 0)
+        {
+            /* External media have no library duration. Apply the library's
+             * start/end margins using the length the player knows. There is
+             * still no play count bump without a library duration. */
+            const float margin = vlc_player_GetMlProgressMargin(input->length);
+            if (position < margin || position > 1.f - margin)
+                position = -1.f;
+        }
+        vlc_ml_media_update_progress( ml, media->i_id, position );
+    }
 
     /* If the value changed during the playback, update it in the medialibrary.
      * If not, set each state to their "unset" values, so that they aren't saved

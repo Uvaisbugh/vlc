@@ -11,6 +11,7 @@ player_programs = \
 	test_src_player_abloop \
 	test_src_player_attachments \
 	test_src_player_capabilities \
+	test_src_player_delays \
 	test_src_player_discontinuities \
 	test_src_player_eof \
 	test_src_player_errors \
@@ -20,6 +21,7 @@ player_programs = \
 	test_src_player_media \
 	test_src_player_next_prev \
 	test_src_player_outputs \
+	test_src_player_video_filters \
 	test_src_player_pause \
 	test_src_player_programs \
 	test_src_player_seeks \
@@ -31,6 +33,8 @@ player_programs = \
 
 noinst_PROGRAMS =
 check_PROGRAMS = \
+    test_src_misc_media_library_startup \
+	test_src_misc_iso_language \
 	test_libvlc_core \
 	test_libvlc_downloader \
 	test_libvlc_equalizer \
@@ -51,16 +55,31 @@ check_PROGRAMS = \
 	test_libvlc_slaves \
 	test_src_audio_output_dec \
 	test_src_config_chain \
+	test_src_config_startup \
+	test_src_config_language \
 	test_src_clock_clock \
 	test_src_clock_start \
 	test_src_misc_ancillary \
+	test_src_misc_log_observer \
+	test_src_misc_file_logger \
 	test_src_misc_variables \
+	test_src_misc_actions \
 	test_src_input_stream \
 	test_src_input_stream_fifo \
 	test_src_preparser_cmp_internal_external \
+	test_src_preparser_subtree_identity \
+	test_src_playlist_preparse_depth \
+	test_src_preparser_fetcher_shutdown \
 	test_src_preparser_thumbnail \
 	test_src_preparser_thumbnail_to_files \
 	test_src_input_decoder \
+	test_src_input_subtitle_style \
+	test_src_input_subtitle_duration \
+	test_src_input_subtitle_encoding \
+	test_src_input_overlay_opacity \
+	test_src_input_subtitle_ass_text \
+	test_src_input_item_update \
+	test_src_playlist_export \
 	test_src_interface_dialog \
 	test_src_media_source \
 	test_src_misc_bits \
@@ -68,13 +87,21 @@ check_PROGRAMS = \
 	test_src_misc_epg \
 	test_src_misc_keystore \
 	test_src_misc_image \
+	test_src_misc_addons \
+	test_src_misc_instance_policy \
+	test_src_misc_instance_forward \
 	test_src_misc_viewpoint \
 	test_src_video_output \
+	test_src_video_output_filter_format \
 	test_src_video_output_inhibit \
 	test_src_video_output_opengl \
+	test_src_video_output_osd \
 	test_src_video_output_spu \
 	test_modules_lua_extension \
 	test_modules_misc_medialibrary \
+	test_modules_misc_media_tracks \
+	test_modules_visualization_resize \
+	test_modules_video_filter_puzzle \
 	test_modules_packetizer_helpers \
 	test_modules_packetizer_hxxx \
 	test_modules_packetizer_h264 \
@@ -94,6 +121,7 @@ check_PROGRAMS = \
 	test_modules_demux_ts_pes \
 	test_modules_playlist_m3u \
 	test_modules_stream_out_pcr_sync \
+	test_modules_stream_out_renderer_quality \
 	test_modules_stream_out_sdi \
 	test_modules_tls \
 	test_modules_stream_out_transcode \
@@ -103,8 +131,16 @@ check_PROGRAMS = \
 
 check_PROGRAMS += $(player_programs)
 
+if HAVE_FREETYPE
+check_PROGRAMS += test_modules_text_renderer_freetype
+endif
+test_modules_text_renderer_freetype_SOURCES = modules/text_renderer/freetype.c
+test_modules_text_renderer_freetype_LDADD = $(LIBVLCCORE) $(LIBVLC)
+
 if HAVE_GL
 check_PROGRAMS += \
+	test_modules_visualization_gl_resize \
+	test_modules_video_output_opengl_offscreen \
 	test_modules_video_output_opengl_filters \
 	test_modules_video_output_opengl_sub_renderer
 endif
@@ -141,6 +177,7 @@ EXTRA_PROGRAMS = \
 	$(NULL)
 
 EXTRA_DIST = \
+	bin/cachegen.py \
 	modules/lua/extensions/extensions.lua \
 	modules/lua/playlist/playlist.lua \
 	samples/certs/certkey.pem \
@@ -168,6 +205,20 @@ endif
 AM_LDFLAGS = -no-install $(LDFLAGS_vlc)
 LIBVLCCORE = -L../src/ -lvlccore
 LIBVLC = -L../lib -lvlc
+
+if HAVE_WIN32
+check_PROGRAMS += test_src_config_dirs_win32
+test_src_config_dirs_win32_SOURCES = src/config/dirs_win32.c
+test_src_config_dirs_win32_LDADD = $(LIBVLCCORE) -lshell32 -lole32 -ladvapi32 -luuid
+check_PROGRAMS += test_src_misc_win32_pipe
+test_src_misc_win32_pipe_SOURCES = src/misc/win32_pipe.c
+test_src_misc_win32_pipe_LDADD = $(LIBVLCCORE)
+if !HAVE_WINSTORE
+check_PROGRAMS += test_src_misc_win32_proxy
+test_src_misc_win32_proxy_SOURCES = src/misc/win32_proxy.c
+test_src_misc_win32_proxy_LDADD = $(LIBVLCCORE) ../compat/libcompat.la -lwinhttp -lws2_32
+endif
+endif
 
 test_libvlc_core_SOURCES = libvlc/core.c
 test_libvlc_core_LDADD = $(LIBVLC)
@@ -239,8 +290,15 @@ test_src_clock_start_LDADD = $(LIBVLCCORE) $(LIBVLC)
 
 test_src_misc_ancillary_SOURCES = src/misc/ancillary.c
 test_src_misc_ancillary_LDADD = $(LIBVLCCORE) $(LIBVLC)
+test_src_misc_iso_language_SOURCES = src/misc/iso_language.c
+test_src_misc_iso_language_LDADD = $(LIBVLCCORE)
 test_src_misc_variables_SOURCES = src/misc/variables.c
 test_src_misc_variables_LDADD = $(LIBVLCCORE) $(LIBVLC)
+test_src_misc_actions_SOURCES = src/misc/actions.c
+test_src_misc_actions_LDADD = $(LIBVLCCORE) $(LIBVLC)
+test_src_config_startup_SOURCES = src/config/startup.c
+test_src_config_startup_LDADD = $(LIBVLC) $(LIBVLCCORE)
+
 test_src_config_chain_SOURCES = src/config/chain.c
 test_src_config_chain_LDADD = $(LIBVLCCORE)
 test_src_crypto_update_SOURCES = src/crypto/update.c
@@ -254,6 +312,15 @@ test_src_input_stream_fifo_SOURCES = src/input/stream_fifo.c
 test_src_input_stream_fifo_LDADD = $(LIBVLCCORE) $(LIBVLC)
 test_src_preparser_cmp_internal_external_SOURCES = src/preparser/cmp_internal_external.c
 test_src_preparser_cmp_internal_external_LDADD = $(LIBVLCCORE) $(LIBVLC)
+test_src_preparser_subtree_identity_SOURCES = src/preparser/subtree_identity.c
+test_src_preparser_subtree_identity_LDADD = $(LIBVLCCORE) $(LIBVLC)
+test_src_playlist_preparse_depth_SOURCES = src/playlist/preparse_depth.c
+test_src_playlist_preparse_depth_LDADD = $(LIBVLCCORE) $(LIBVLC)
+test_src_preparser_fetcher_shutdown_SOURCES = src/preparser/fetcher_shutdown.c \
+    ../src/preparser/art.c ../src/misc/interrupt.c ../src/misc/objects.c \
+    ../src/misc/variables.c ../src/input/item.c ../src/text/strings.c
+test_src_preparser_fetcher_shutdown_CPPFLAGS = $(AM_CPPFLAGS) -I$(top_srcdir)/src
+test_src_preparser_fetcher_shutdown_LDADD = $(LIBVLCCORE) $(LIBVLC) ../compat/libcompat.la $(SOCKET_LIBS)
 test_src_preparser_thumbnail_SOURCES = src/preparser/thumbnail.c
 test_src_preparser_thumbnail_LDADD = $(LIBVLCCORE) $(LIBVLC)
 test_src_preparser_thumbnail_to_files_SOURCES = src/preparser/thumbnail_to_files.c
@@ -267,6 +334,24 @@ test_src_player_attachments_LDADD = $(LIBVLCCORE) $(LIBVLC) $(LIBM)
 test_src_player_capabilities_SOURCES = src/player/common.h src/player/modules.c \
 	src/player/capabilities.c
 test_src_player_capabilities_LDADD = $(LIBVLCCORE) $(LIBVLC) $(LIBM)
+test_src_player_delays_SOURCES = src/player/common.h src/player/modules.c \
+	src/player/delays.c
+test_src_player_delays_LDADD = $(LIBVLCCORE) $(LIBVLC) $(LIBM)
+test_src_input_subtitle_style_SOURCES = src/input/subtitle_style.c
+test_src_input_subtitle_style_LDADD = $(LIBVLCCORE) $(LIBVLC)
+test_src_misc_media_library_startup_SOURCES = src/misc/media_library_startup.c
+test_src_misc_media_library_startup_LDADD = $(LIBVLCCORE) $(LIBVLC)
+test_src_input_overlay_opacity_SOURCES = src/input/overlay_opacity.c
+test_src_input_overlay_opacity_LDADD = $(LIBVLCCORE) $(LIBVLC)
+test_src_input_subtitle_duration_SOURCES = src/input/subtitle_duration.c
+test_src_input_subtitle_duration_LDADD = $(LIBVLCCORE) $(LIBVLC)
+test_src_input_subtitle_encoding_SOURCES = src/input/subtitle_encoding.c
+test_src_input_subtitle_encoding_LDADD = $(LIBVLCCORE) $(LIBVLC)
+test_src_input_subtitle_ass_text_SOURCES = src/input/subtitle_ass_text.c
+test_src_input_item_update_SOURCES = src/input/item_update.c
+test_src_input_item_update_LDADD = $(LIBVLCCORE) $(LIBVLC)
+test_src_playlist_export_SOURCES = src/playlist/export.c
+test_src_playlist_export_LDADD = $(LIBVLCCORE) $(LIBVLC)
 test_src_player_discontinuities_SOURCES = src/player/common.h src/player/modules.c \
 	src/player/discontinuities.c
 test_src_player_discontinuities_LDADD = $(LIBVLCCORE) $(LIBVLC) $(LIBM)
@@ -294,6 +379,12 @@ test_src_player_next_prev_LDADD = $(LIBVLCCORE) $(LIBVLC) $(LIBM)
 test_src_player_outputs_SOURCES = src/player/common.h src/player/modules.c \
 	src/player/outputs.c
 test_src_player_outputs_LDADD = $(LIBVLCCORE) $(LIBVLC) $(LIBM)
+test_src_player_outputs_CPPFLAGS = $(AM_CPPFLAGS) -DOUTPUT_TEARDOWN_TEST
+
+test_src_player_video_filters_SOURCES = src/player/common.h src/player/modules.c \
+	src/player/video_filters.c
+test_src_player_video_filters_CPPFLAGS = $(AM_CPPFLAGS) -DVIDEO_FILTER_TEST
+test_src_player_video_filters_LDADD = $(LIBVLCCORE) $(LIBVLC) $(LIBM)
 test_src_player_pause_SOURCES = src/player/common.h src/player/modules.c \
 	src/player/pause.c
 test_src_player_pause_LDADD = $(LIBVLCCORE) $(LIBVLC) $(LIBM)
@@ -343,12 +434,18 @@ test_src_video_output_SOURCES = \
 	src/video_output/video_output.h \
 	src/video_output/video_output_scenarios.c
 test_src_video_output_LDADD = $(LIBVLCCORE) $(LIBVLC)
+test_src_video_output_filter_format_SOURCES = src/video_output/filter_format.c
+test_src_video_output_filter_format_LDADD = $(LIBVLCCORE) $(LIBVLC)
 test_src_video_output_inhibit_SOURCES = src/video_output/inhibit.c
 test_src_video_output_inhibit_LDADD = $(LIBVLCCORE) $(LIBVLC)
 test_src_video_output_opengl_SOURCES = src/video_output/opengl.c
 test_src_video_output_opengl_LDADD = $(LIBVLCCORE) $(LIBVLC)
 test_src_video_output_spu_SOURCES = src/video_output/spu.c
 test_src_video_output_spu_LDADD = $(LIBVLCCORE) $(LIBVLC)
+test_src_video_output_osd_SOURCES = src/video_output/osd.c \
+	../src/video_output/video_text.c ../src/video_output/video_widgets.c
+test_src_video_output_osd_CPPFLAGS = $(AM_CPPFLAGS) -Dvout_PutSubpicture=CaptureSubpicture
+test_src_video_output_osd_LDADD = $(LIBVLCCORE) $(LIBVLC)
 
 test_src_input_decoder_SOURCES = \
 	src/input/decoder/input_decoder.c \
@@ -361,6 +458,18 @@ test_src_misc_chroma_probe_LDADD = $(LIBVLCCORE) $(LIBVLC)
 
 test_src_misc_image_SOURCES = src/misc/image.c
 test_src_misc_image_LDADD = $(LIBVLCCORE) $(LIBVLC)
+test_src_misc_addons_SOURCES = src/misc/addons.c
+test_src_misc_addons_LDADD = $(LIBVLCCORE) $(LIBVLC)
+test_src_misc_instance_policy_SOURCES = src/misc/instance_policy.c
+test_src_misc_instance_policy_LDADD = $(LIBVLCCORE) $(LIBVLC)
+test_src_misc_instance_policy_CPPFLAGS = $(AM_CPPFLAGS)
+test_src_misc_instance_forward_SOURCES = src/misc/instance_forward.c
+test_src_misc_instance_forward_LDADD = $(LIBVLCCORE) $(LIBVLC)
+test_src_misc_instance_forward_CPPFLAGS = $(AM_CPPFLAGS)
+if HAVE_DBUS
+test_src_misc_instance_policy_CPPFLAGS += -DHAVE_DBUS
+test_src_misc_instance_forward_CPPFLAGS += -DHAVE_DBUS
+endif
 
 test_modules_lua_extension_SOURCES = modules/lua/extension.c
 test_modules_lua_extension_LDADD = $(LIBVLCCORE) $(LIBVLC)
@@ -372,6 +481,15 @@ test_modules_lua_playlist_parser_CPPFLAGS = $(AM_CPPFLAGS)
 
 test_modules_misc_medialibrary_SOURCES = modules/misc/medialibrary.c
 test_modules_misc_medialibrary_LDADD = $(LIBVLCCORE) $(LIBVLC)
+
+test_modules_misc_media_tracks_SOURCES = modules/misc/media_tracks.c
+test_modules_misc_media_tracks_LDADD = $(LIBVLCCORE) $(LIBVLC) ../compat/libcompat.la
+test_modules_visualization_resize_SOURCES = modules/visualization/resize.c
+test_modules_visualization_resize_LDADD = $(LIBVLCCORE) $(LIBVLC)
+test_modules_video_filter_puzzle_SOURCES = modules/video_filter/puzzle.c \
+	../modules/video_filter/puzzle/puzzle_lib.c \
+	../modules/video_filter/puzzle/puzzle_lib.h
+test_modules_video_filter_puzzle_LDADD = $(LIBVLCCORE)
 test_modules_packetizer_helpers_SOURCES = modules/packetizer/helpers.c
 test_modules_packetizer_helpers_LDADD = $(LIBVLCCORE) $(LIBVLC)
 test_modules_packetizer_hxxx_SOURCES = modules/packetizer/hxxx.c
@@ -441,6 +559,30 @@ test_modules_video_output_opengl_filters_SOURCES = \
 	../modules/video_output/opengl/interop.h \
 	../modules/video_output/opengl/importer.c \
 	../modules/video_output/opengl/importer.h
+test_modules_visualization_gl_resize_SOURCES = modules/visualization/resize.c
+test_modules_visualization_gl_resize_CPPFLAGS = $(AM_CPPFLAGS) -DVISUAL_RESIZE_TEST_GL
+test_modules_visualization_gl_resize_LDADD = $(LIBVLCCORE) $(LIBVLC)
+if HAVE_GL
+check_PROGRAMS += test_modules_visualization_projectm_resize
+endif
+test_modules_visualization_projectm_resize_SOURCES = modules/visualization/resize.c
+test_modules_visualization_projectm_resize_CPPFLAGS = $(AM_CPPFLAGS) -DVISUAL_RESIZE_TEST_GL -DVISUAL_RESIZE_TEST_PROJECTM
+test_modules_visualization_projectm_resize_LDADD = $(LIBVLCCORE) $(LIBVLC)
+EXTRA_DIST += modules/visualization/projectm-presets/canvas-check.milk
+
+test_modules_video_output_opengl_offscreen_SOURCES = modules/video_output/opengl/offscreen.c
+test_modules_video_output_opengl_offscreen_LDADD = $(LIBVLCCORE) $(LIBVLC) ../modules/libvlc_opengl.la
+test_modules_video_output_opengl_offscreen_CPPFLAGS = $(AM_CPPFLAGS)
+if HAVE_GL
+if HAVE_EGL
+check_PROGRAMS += test_modules_video_output_opengl_es2_offscreen
+test_modules_video_output_opengl_offscreen_CPPFLAGS += -DVLC_TEST_EXTERNAL_EGL $(EGL_FLAGS)
+test_modules_video_output_opengl_offscreen_LDADD += $(EGL_LIBS)
+test_modules_video_output_opengl_es2_offscreen_SOURCES = $(test_modules_video_output_opengl_offscreen_SOURCES)
+test_modules_video_output_opengl_es2_offscreen_CPPFLAGS = $(AM_CPPFLAGS) -DVLC_TEST_OPENGL_API=VLC_OPENGL_ES2 -DVLC_TEST_EXTERNAL_EGL $(EGL_FLAGS)
+test_modules_video_output_opengl_es2_offscreen_LDADD = $(LIBVLCCORE) $(LIBVLC) ../modules/libvlc_opengl.la $(EGL_LIBS)
+endif
+endif
 test_modules_video_output_opengl_filters_LDADD = $(LIBVLCCORE) $(LIBVLC) ../modules/libvlc_opengl.la
 test_modules_video_output_opengl_filters_CPPFLAGS = $(AM_CPPFLAGS) -DVLC_TEST_OPENGL_API=VLC_OPENGL
 test_modules_video_output_opengl_es2_filters_SOURCES = $(test_modules_video_output_opengl_filters_SOURCES)
@@ -476,6 +618,10 @@ test_modules_stream_out_pcr_sync_SOURCES = modules/stream_out/pcr_sync.c \
 	../modules/stream_out/transcode/pcr_helper.h \
 	../modules/stream_out/transcode/pcr_helper.c
 test_modules_stream_out_pcr_sync_LDADD = $(LIBVLCCORE)
+
+test_modules_stream_out_renderer_quality_SOURCES = modules/stream_out/renderer_quality.cpp \
+	modules/stream_out/renderer_quality_profiles.h
+test_modules_stream_out_renderer_quality_LDADD = $(LIBVLCCORE) $(LIBVLC)
 
 test_modules_stream_out_sdi_SOURCES = modules/stream_out/sdi.cpp \
 	../modules/stream_out/sdi/SDIStream.cpp \
@@ -660,3 +806,12 @@ vlc_window_LDADD = ../lib/libvlc.la ../src/libvlccore.la ../compat/libcompat.la
 if HAVE_DYNAMIC_PLUGINS
 noinst_PROGRAMS += vlc-window
 endif
+
+test_src_config_language_SOURCES = src/config/language.c
+test_src_config_language_LDADD = $(LIBVLC) $(LIBVLCCORE)
+
+test_src_misc_log_observer_SOURCES = src/misc/log_observer.c
+test_src_misc_log_observer_LDADD = $(LIBVLC) $(LIBVLCCORE)
+
+test_src_misc_file_logger_SOURCES = src/misc/file_logger.c
+test_src_misc_file_logger_LDADD = $(LIBVLC) $(LIBVLCCORE)

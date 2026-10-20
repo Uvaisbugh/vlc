@@ -49,12 +49,13 @@ public:
     Q_PROPERTY(int scanRemain READ getScanRemain NOTIFY scanRemainChanged FINAL)
     Q_PROPERTY(RendererStatus status READ getStatus NOTIFY statusChanged FINAL)
     Q_PROPERTY(bool useRenderer READ useRenderer NOTIFY useRendererChanged FINAL)
+    Q_PROPERTY(bool discoveryEnabled READ discoveryEnabled WRITE setDiscoveryEnabled NOTIFY discoveryEnabledChanged FINAL)
 
 public:
     RendererManager( qt_intf_t* intf, vlc_player_t* player );
     virtual ~RendererManager();
 
-    void disableRenderer();
+    Q_INVOKABLE void disableRenderer();
 
 public slots:
     void StartScan();
@@ -72,10 +73,13 @@ public:
     int getScanRemain() const;
     RendererStatus getStatus() const;
     bool useRenderer() const;
+    bool discoveryEnabled() const;
+    void setDiscoveryEnabled(bool enabled);
 signals:
     void statusChanged();
     void scanRemainChanged();
     void useRendererChanged();
+    void discoveryEnabledChanged();
 
 private:
     Q_DECLARE_PRIVATE(RendererManager);

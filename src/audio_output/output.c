@@ -26,6 +26,7 @@
 
 #include <stdlib.h>
 #include <assert.h>
+#include <math.h>
 
 #include <vlc_common.h>
 #include <vlc_configuration.h>
@@ -103,6 +104,9 @@ static void aout_DrainedNotify(audio_output_t *aout)
 static void aout_VolumeNotify (audio_output_t *aout, float volume)
 {
     var_SetFloat (aout, "volume", volume);
+    if (atomic_load_explicit(&aout_owner(aout)->volume_initialized, memory_order_relaxed)
+        && isfinite(volume) && volume >= 0.f && var_InheritBool(aout, "volume-save"))
+        config_PutFloat("audio-last-volume", clampf(volume, 0.f, 3.f));
 }
 
 static void aout_MuteNotify (audio_output_t *aout, bool mute)
@@ -205,6 +209,40 @@ static const struct vlc_audio_output_events aout_events = {
     aout_GainNotify,
 };
 
+/** Callback for visualization selection */
+static int VisualizationCallback (vlc_object_t *obj, const char *var,
+                                  vlc_value_t oldval, vlc_value_t newval,
+                                  void *data)
+{
+    const char *mode = newval.psz_string;
+
+    if (!*mode)
+        mode = "none";
+    /* FIXME: This ugly hack enforced by visual effect-list, as is the need for
+     * separate "visual" (external) and "audio-visual" (internal) variables...
+     * The visual plugin should have one submodule per effect instead. */
+    static const char *const effects[] = {
+        "dummy", "scope", "spectrometer", "spectrum", "vuMeter",
+    };
+    for (size_t i = 0; i < ARRAY_SIZE(effects); i++)
+        if (!strcasecmp (mode, effects[i]))
+        {
+            var_Create (obj, "effect-list", VLC_VAR_STRING);
+            var_SetString (obj, "effect-list", mode);
+            mode = "visual";
+            break;
+        }
+
+    var_SetString (obj, "audio-visual", mode);
+    audio_output_t *aout = (audio_output_t *)obj;
+    aout_owner_t *owner = aout_owner(aout);
+    vlc_mutex_lock(&owner->lock);
+    aout_InputRequestRestart(aout);
+    vlc_mutex_unlock(&owner->lock);
+    (void) var; (void) oldval; (void) data;
+    return VLC_SUCCESS;
+}
+
 static int FilterCallback (vlc_object_t *obj, const char *var,
                            vlc_value_t prev, vlc_value_t cur, void *data)
 {
@@ -246,6 +284,18 @@ static int MixModeCallback (vlc_object_t *obj, const char *varname,
     return 0;
 }
 
+static int SpatialModeCallback(vlc_object_t *obj, const char *varname,
+                               vlc_value_t oldval, vlc_value_t newval, void *data)
+{
+    (void)varname; (void)oldval; (void)newval; (void)data;
+    aout_owner_t *owner = aout_owner((audio_output_t *)obj);
+    vlc_mutex_lock(&owner->lock);
+    if (owner->main_stream)
+        vlc_aout_stream_RequestRestart(owner->main_stream, AOUT_RESTART_OUTPUT);
+    vlc_mutex_unlock(&owner->lock);
+    return VLC_SUCCESS;
+}
+
 static void aout_ChangeViewpoint(audio_output_t *, const vlc_viewpoint_t *);
 
 static int ViewpointCallback (vlc_object_t *obj, const char *var,
@@ -282,6 +332,7 @@ audio_output_t *aout_New (vlc_object_t *parent)
     vlc_audio_meter_Init(&owner->meter, aout);
 
     owner->main_stream = NULL;
+    atomic_init(&owner->volume_initialized, false);
 
     /* Audio output module callbacks */
     var_Create (aout, "volume", VLC_VAR_FLOAT);
@@ -366,6 +417,9 @@ audio_output_t *aout_New (vlc_object_t *parent)
     }
     free (str);
 
+    /* Keep idle choices in sync before a stream creates its filters. */
+    var_AddCallback(aout, "visual", VisualizationCallback, NULL);
+
     var_Create (aout, "audio-filter", VLC_VAR_STRING | VLC_VAR_DOINHERIT);
     var_AddCallback (aout, "audio-filter", FilterCallback, NULL);
     var_Change(aout, "audio-filter", VLC_VAR_SETTEXT, _("Audio filters"));
@@ -400,6 +454,11 @@ audio_output_t *aout_New (vlc_object_t *parent)
     var_AddCallback (aout, "mix-mode", MixModeCallback, NULL);
     var_Change(aout, "mix-mode", VLC_VAR_SETTEXT, _("Audio mix mode"));
 
+    var_Create(aout, "audio-spatial", VLC_VAR_BOOL | VLC_VAR_DOINHERIT);
+    var_Create(aout, "audio-spatial-mode", VLC_VAR_INTEGER | VLC_VAR_DOINHERIT);
+    var_AddCallback(aout, "audio-spatial", SpatialModeCallback, NULL);
+    var_AddCallback(aout, "audio-spatial-mode", SpatialModeCallback, NULL);
+
     /* Equalizer */
     int doinherit = module_exists("equalizer") ? VLC_VAR_DOINHERIT : 0;
     var_Create (aout, "equalizer-preamp", VLC_VAR_FLOAT | doinherit);
@@ -407,6 +466,36 @@ audio_output_t *aout_New (vlc_object_t *parent)
     var_Create (aout, "equalizer-preset", VLC_VAR_STRING | doinherit);
 
     owner->bitexact = var_InheritBool (aout, "audio-bitexact");
+
+    /* Apply the configured device only to the driver that enumerated it. */
+    char *device = var_InheritString(aout, "audio-device-default");
+    char *driver = var_InheritString(aout, "audio-device-default-module");
+    if (device != NULL && *device != '\0'
+        && (driver == NULL || *driver == '\0' || !strcmp(driver, module_get_object(owner->module))))
+    {
+        char **ids = NULL, **names = NULL;
+        int count = aout_DevicesList(aout, &ids, &names);
+        bool available = false;
+        for (int i = 0; i < count; ++i)
+        {
+            available |= !strcmp(ids[i], device);
+            free(ids[i]); free(names[i]);
+        }
+        free(ids); free(names);
+        if (available) aout_DeviceSet(aout, device);
+        else msg_Dbg(aout, "configured device unavailable; retaining the audio driver's default");
+    }
+    free(device); free(driver);
+
+    float volume = var_InheritBool(aout, "volume-save")
+        ? var_InheritFloat(aout, "audio-last-volume")
+        : var_InheritInteger(aout, "audio-startup-volume") / 100.f;
+    if (isfinite(volume) && volume >= 0.f && volume <= 3.f)
+    {
+        msg_Dbg(aout, "applying startup volume %.1f%%", volume * 100.f);
+        aout_VolumeSet(aout, volume);
+    }
+    atomic_store_explicit(&owner->volume_initialized, true, memory_order_relaxed);
 
     return aout;
 }
@@ -426,6 +515,8 @@ static void aout_Destroy (audio_output_t *aout)
 {
     aout_owner_t *owner = aout_owner (aout);
 
+    var_DelCallback(aout, "visual", VisualizationCallback, NULL);
+
     vlc_mutex_lock(&owner->lock);
     module_unneed (aout, owner->module);
     /* Protect against late call from intf.c */
@@ -443,6 +534,8 @@ static void aout_Destroy (audio_output_t *aout)
     var_DelCallback(aout, "volume", var_Copy, vlc_object_parent(aout));
     var_DelCallback (aout, "stereo-mode", StereoModeCallback, NULL);
     var_DelCallback (aout, "mix-mode", MixModeCallback, NULL);
+    var_DelCallback(aout, "audio-spatial", SpatialModeCallback, NULL);
+    var_DelCallback(aout, "audio-spatial-mode", SpatialModeCallback, NULL);
 
     aout_dev_t *dev;
     vlc_list_foreach(dev, &owner->dev.list, node)
@@ -465,6 +558,8 @@ void aout_Release(audio_output_t *aout)
     aout_Destroy(aout);
 }
 
+static bool aout_HasStereoMode(audio_output_t *aout, int mode);
+
 static int aout_PrepareStereoMode(audio_output_t *aout,
                                   const audio_sample_format_t *restrict fmt)
 {
@@ -478,7 +573,7 @@ static int aout_PrepareStereoMode(audio_output_t *aout,
     if (!AOUT_FMT_LINEAR(fmt) || fmt->i_channels != 2)
         return AOUT_VAR_CHAN_UNSET;
 
-    int i_default_mode = owner->requested_stereo_mode;
+    int i_default_mode;
 
     val.i_int = AOUT_VAR_CHAN_MONO;
     var_Change(aout, "stereo-mode", VLC_VAR_ADDCHOICE, val, _("Mono"));
@@ -509,7 +604,8 @@ static int aout_PrepareStereoMode(audio_output_t *aout,
     var_Change(aout, "stereo-mode", VLC_VAR_ADDCHOICE, val,
                _("Reverse stereo"));
 
-    return i_default_mode;
+    return aout_HasStereoMode(aout, owner->requested_stereo_mode)
+        ? owner->requested_stereo_mode : i_default_mode;
 }
 
 static void aout_UpdateStereoMode(audio_output_t *aout, int mode,
@@ -741,8 +837,16 @@ int aout_OutputNew(audio_output_t *aout, vlc_aout_stream *stream,
 
         /* Prefer the user requested mode if available, otherwise, use the
          * default one */
-        if (aout_HasMixModeChoice(aout, owner->requested_mix_mode))
-            aout_UpdateMixMode(aout, owner->requested_mix_mode, fmt);
+        int mix_mode = owner->requested_mix_mode;
+        if (var_GetBool(aout, "audio-spatial"))
+        {
+            if (var_GetInteger(aout, "audio-spatial-mode") == AOUT_MIX_MODE_BINAURAL)
+                mix_mode = AOUT_MIX_MODE_BINAURAL;
+            else if (mix_mode == AOUT_MIX_MODE_BINAURAL)
+                mix_mode = AOUT_MIX_MODE_UNSET;
+        }
+        if (aout_HasMixModeChoice(aout, mix_mode))
+            aout_UpdateMixMode(aout, mix_mode, fmt);
 
         aout_FormatPrepare (fmt);
         assert (aout_FormatNbChannels(fmt) > 0);
@@ -805,10 +909,12 @@ int aout_OutputNew(audio_output_t *aout, vlc_aout_stream *stream,
     }
     assert(aout->flush != NULL && aout->play != NULL);
 
-    /* Autoselect the headphones mode if available and if the user didn't
-     * request any mode */
+    /* Keep binaural rendering when the output chooses a headphone sink.
+     * An explicit speaker mode or disabled spatial audio must not enable it. */
     if (aout->current_sink_info.headphones
-     && owner->requested_mix_mode == AOUT_VAR_CHAN_UNSET
+     && var_GetBool(aout, "audio-spatial")
+     && var_GetInteger(aout, "audio-spatial-mode") == AOUT_MIX_MODE_BINAURAL
+     && stereo_mode == AOUT_VAR_CHAN_UNSET
      && fmt->i_physical_channels == AOUT_CHANS_STEREO
      && aout_HasMixModeChoice(aout, AOUT_MIX_MODE_BINAURAL))
     {

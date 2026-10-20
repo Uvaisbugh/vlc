@@ -34,6 +34,10 @@
 #include <QQmlEngine>
 #include <QMutex>
 #include <QWaitCondition>
+#include <QTimer>
+#include "util/warning_log_buffer.hpp"
+
+struct vlc_log_subscription;
 
 #include "qt.hpp"
 #include "util/singleton.hpp"
@@ -62,15 +66,20 @@ class DialogErrorModel : public QAbstractListModel, public Singleton<DialogError
 {
     Q_OBJECT
 
+    Q_PROPERTY(bool notificationsEnabled READ notificationsEnabled NOTIFY notificationsEnabledChanged FINAL)
+    Q_PROPERTY(bool warningNotificationsEnabled READ warningNotificationsEnabled NOTIFY notificationsEnabledChanged FINAL)
+    Q_PROPERTY(bool notificationAllowed READ notificationAllowed NOTIFY notificationChanged FINAL)
+    Q_PROPERTY(bool notificationIsWarning READ notificationIsWarning NOTIFY notificationChanged FINAL)
     Q_PROPERTY(int count READ count NOTIFY countChanged FINAL)
-    Q_PROPERTY(QString notificationText READ notificationText NOTIFY countChanged FINAL)
-    Q_PROPERTY(int repeatedMessageCount READ repeatedMessageCount NOTIFY countChanged FINAL)
+    Q_PROPERTY(QString notificationText READ notificationText NOTIFY notificationChanged FINAL)
+    Q_PROPERTY(int repeatedMessageCount READ repeatedMessageCount NOTIFY notificationChanged FINAL)
 
 public: // Enums
     enum DialogRoles
     {
         DIALOG_TITLE = Qt::UserRole + 1,
-        DIALOG_TEXT
+        DIALOG_TEXT,
+        DIALOG_WARNING
     };
     Q_ENUM(DialogRoles)
 
@@ -79,9 +88,11 @@ private:
     {
         QString title;
         QString text;
+        bool warning = false;
     };
     QString lastNotificationText;
     int repeatedNotificationCount = 0;
+    bool m_notificationWarning = false;
 
 public:
     explicit DialogErrorModel(qt_intf_t* intf, QObject * parent = nullptr);
@@ -101,15 +112,30 @@ public slots:
 
 private: // Functions
     void pushError(const DialogError & error);
+    void appendHistory(const DialogError &error);
+    void stopWarningObserver();
+    static void onLog(void *, int, const vlc_log_t *, const char *, va_list);
 
+private slots:
+    void flushWarnings();
+
+private:
     static void onError(void * p_data, const char * psz_title, const char * psz_text);
 
 signals:
     void modelChanged();
 
     void countChanged();
+    void notificationsEnabledChanged();
+    void notificationChanged();
+    void notificationRequested();
 
 public: // Properties
+    bool notificationsEnabled() const;
+    bool warningNotificationsEnabled() const;
+    bool notificationAllowed() const;
+    bool notificationIsWarning() const { return m_notificationWarning; }
+    void refreshNotificationPreference();
     int count() const;
     QString notificationText() const;
     int repeatedMessageCount() const;
@@ -118,6 +144,10 @@ public: // Properties
 private: // Variables
     QList<DialogError> m_data;
     qt_intf_t* m_intf = nullptr;
+    vlc_log_subscription *m_logSubscription = nullptr;
+    WarningLogBuffer m_warnings;
+    QTimer m_warningTimer;
+    int m_warningHistoryCount = 0;
 
     friend class Singleton<DialogErrorModel>;
 };
@@ -184,6 +214,8 @@ public:
     void setProvider(VLCDialog*);
 
 public:
+    bool shouldShowQuestion(vlc_dialog_question_type type) const;
+
     //block dialog until m_provider is available the call the callback on it
     void dialogCallback(vlc_dialog_id*, std::function<void(VLCDialog* provider)>);
 

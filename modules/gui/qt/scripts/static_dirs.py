@@ -65,6 +65,11 @@ if __name__ == "__main__":
                         help="moc include dirs")
     args = parser.parse_args()
 
+    def absolute_qmake_path(path):
+        # qmake writes paths relative to its own working directory. Meson uses
+        # these flags from the top-level build directory instead.
+        return os.path.abspath(os.path.join(args.builddir, path))
+
     result = ''
     sources = [ os.path.join(args.builddir, '.qmake.stash') ]
     in_sources = False
@@ -93,11 +98,15 @@ if __name__ == "__main__":
             if args.cflags:
                 l = re.sub(r'INCPATH[\W]+=', ' ', line)
                 for i in l.strip().split(' '):
+                    if i.startswith(('-I', '-F')):
+                        i = i[:2] + absolute_qmake_path(i[2:])
                     result += ' ' + i
         elif line.startswith('LFLAGS '):
             if args.ldflags:
                 l = re.sub(r'LFLAGS[\W]+=', ' ', line)
                 for i in l.strip().split(' '):
+                    if i.startswith(('-L', '-F')):
+                        i = i[:2] + absolute_qmake_path(i[2:])
                     result += ' ' + i
         elif line.startswith('LIBS '):
             if args.libs:
@@ -112,10 +121,12 @@ if __name__ == "__main__":
                     elif lib.endswith('.so') or lib.endswith('.a'):
                         libname = os.path.splitext(os.path.basename(lib))[0]
                         if libname.startswith('lib'):
-                            libdir = os.path.dirname(lib)
+                            libdir = absolute_qmake_path(os.path.dirname(lib))
                             result += ' -L' + libdir
                             result += ' -l' + libname[3:]
                     else:
+                        if lib.startswith(('-L', '-F')):
+                            lib = lib[:2] + absolute_qmake_path(lib[2:])
                         result += ' ' + lib
         elif args.moc_include_dirs:
             m = moc_include_dirs_re.match(line)

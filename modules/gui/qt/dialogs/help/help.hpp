@@ -92,6 +92,8 @@ public:
     Q_PROPERTY(int minor READ getMinor NOTIFY updateStatusChanged FINAL)
     Q_PROPERTY(int revision READ getRevision NOTIFY updateStatusChanged FINAL)
     Q_PROPERTY(int extra READ getExtra NOTIFY updateStatusChanged FINAL)
+    Q_PROPERTY(QString version READ getVersion NOTIFY updateStatusChanged FINAL)
+    Q_PROPERTY(QString assetUrl READ getAssetUrl NOTIFY updateStatusChanged FINAL)
     Q_PROPERTY(QString description READ getDescription NOTIFY updateStatusChanged FINAL)
     Q_PROPERTY(QString url READ getUrl NOTIFY updateStatusChanged FINAL)
     Q_PROPERTY(double progress READ getProgress NOTIFY progressChanged FINAL) // TODO
@@ -103,6 +105,7 @@ public:
 
     Q_INVOKABLE void checkUpdate(bool explicitCheck = false);
 
+    Q_INVOKABLE bool openReleasePage();
     Q_INVOKABLE bool download(QString destDir);
     Q_INVOKABLE bool download();
 
@@ -113,6 +116,8 @@ public:
     int getMinor() const;
     int getRevision() const;
     int getExtra() const;
+    QString getVersion() const;
+    QString getAssetUrl() const;
     QString getDescription() const;
     QString getUrl() const;
     double getProgress() const;

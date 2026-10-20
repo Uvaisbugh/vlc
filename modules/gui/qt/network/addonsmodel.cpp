@@ -28,8 +28,10 @@
 #include <memory>
 #include <QPixmap>
 #include <QQmlFile>
+#include <QHash>
 
 #include <vlc_media_source.h>
+#include <vlc_interface.h>
 #include <vlc_addons.h>
 #include <vlc_cxx_helpers.hpp>
 #include <vlc_addons.h>
@@ -75,6 +77,11 @@ public:
         sourceUrl = QUrl( addon->psz_source_uri );
         entry = addon;
         uuid = QByteArray( reinterpret_cast<const char*>(addon->uuid), sizeof( addon_uuid_t ));
+        if (std::all_of(uuid.cbegin(), uuid.cend(), [](char value) { return value == 0; })) {
+            const auto filename = addon->files.i_size ? qfu(addon->files.p_elems[0]->psz_filename) : name;
+            identifier = QStringLiteral("local:%1:%2").arg(int(addon->e_type)).arg(filename);
+        } else
+            identifier = QString::fromLatin1(uuid.toHex());
 
         if ( addon->psz_image_data ) {
             char *cDir = config_GetUserDir( VLC_CACHE_DIR );
@@ -110,6 +117,7 @@ public:
 
 public:
     QByteArray  uuid;
+    QString identifier;
     QString name;
     QString summary;
     QString description;
@@ -129,8 +137,7 @@ using AddonItemList = std::vector<AddonItemPtr> ;
 template<>
 bool ListCache<AddonItemPtr>::compareItems(const AddonItemPtr& a, const AddonItemPtr& b)
 {
-    //just compare the pointers here
-    return a->uuid == b->uuid;
+    return a->identifier == b->identifier;
 }
 
 // AddonsModelPrivate
@@ -193,7 +200,7 @@ public: //BaseModelPrivateT implementation
 
 public: //discovery callbacks
     void addonFound( AddonPtr addon );
-    void addonChanged( AddonPtr addon );
+    void addonChanged( AddonPtr addon, addon_state_t state );
     void discoveryEnded();
 
 public: //LocalListCacheLoader implementation
@@ -225,6 +232,9 @@ public: // data
     MainCtx* m_ctx = nullptr;
     addons_manager_t* m_manager = nullptr;
     AddonItemList m_items;
+    struct PendingAction { bool install; bool started = false; };
+    QHash<QByteArray, PendingAction> m_pending;
+    QString m_error;
     AddonsModel::Type m_typeFilter = AddonsModel::Type::TYPE_NONE;
     AddonsModel::State m_stateFilter = AddonsModel::State::STATE_NONE;
 };
@@ -292,6 +302,8 @@ QVariant AddonsModel::data( const QModelIndex& index, int role ) const
         }
         case Role::UUID:
             return item->uuid;
+        case Role::IDENTIFIER:
+            return item->identifier;
         case Role::DOWNLOAD_COUNT:
         {
             vlc_mutex_locker locker{&item->entry->lock};
@@ -396,6 +408,7 @@ QHash<int, QByteArray> AddonsModel::roleNames() const
         { Role::BROKEN, QByteArrayLiteral("broken") },
         { Role::MANAGEABLE, QByteArrayLiteral("manageable") },
         { Role::UPDATABLE, QByteArrayLiteral("updatable") },
+        { Role::IDENTIFIER, QByteArrayLiteral("identifier") },
     };
 }
 
@@ -430,14 +443,80 @@ void AddonsModel::removeService(int idx)
 void AddonsModel::loadFromDefaultRepository()
 {
     Q_D(AddonsModel);
+    if (d->m_loading) return;
     d->gatherRepository("repo://");
 }
 
 void AddonsModel::loadFromExternalRepository(QUrl uri)
 {
     Q_D(AddonsModel);
+    if (d->m_loading) return;
     d->gatherRepository(uri.toEncoded().constData());
 }
+
+unsigned int AddonsModel::revision() const
+{
+    Q_D(const AddonsModel);
+    return d->m_revision;
+}
+
+QString AddonsModel::errorMessage() const
+{
+    Q_D(const AddonsModel);
+    return d->m_error;
+}
+
+QVariantMap AddonsModel::addonById(const QString& identifier) const
+{
+    Q_D(const AddonsModel);
+    QString key = identifier;
+    if (!key.startsWith(QLatin1String("local:"))) {
+        const auto uuid = QByteArray::fromHex(identifier.toLatin1());
+        if (uuid.size() != sizeof(addon_uuid_t) || QString::fromLatin1(uuid.toHex()) != identifier.toLower()) return {};
+        key = identifier.toLower();
+    }
+    for (const auto& item : d->m_items) {
+        if (item->identifier != key) continue;
+        vlc_mutex_locker locker{&item->entry->lock};
+        QStringList files;
+        addon_file_t* file;
+        ARRAY_FOREACH(file, item->entry->files)
+            files.append(qfu(file->psz_filename));
+        return {{QStringLiteral("identifier"), identifier}, {QStringLiteral("name"), item->name},
+            {QStringLiteral("summary"), item->summary}, {QStringLiteral("description"), item->description},
+            {QStringLiteral("author"), item->author}, {QStringLiteral("version"), qfu(item->entry->psz_version)},
+            {QStringLiteral("typeLabel"), getLabelForType(static_cast<Type>(item->entry->e_type))},
+            {QStringLiteral("website"), item->sourceUrl}, {QStringLiteral("files"), files},
+            {QStringLiteral("state"), item->entry->e_state}, {QStringLiteral("pending"), d->m_pending.contains(item->uuid)},
+            {QStringLiteral("manageable"), bool(item->entry->e_flags & ADDON_MANAGEABLE)},
+            {QStringLiteral("broken"), bool(item->entry->e_flags & ADDON_BROKEN)}};
+    }
+    return {};
+}
+
+bool AddonsModel::requestAddon(const QString& identifier, bool install)
+{
+    Q_D(AddonsModel);
+    if (identifier.startsWith(QLatin1String("local:"))) return false;
+    const auto selected = addonById(identifier);
+    if (!d->m_manager || selected.isEmpty() || selected.value(QStringLiteral("pending")).toBool()
+        || !selected.value(QStringLiteral("manageable")).toBool()
+        || selected.value(QStringLiteral("state")).toInt() != (install ? ADDON_NOTINSTALLED : ADDON_INSTALLED)
+        || (install && selected.value(QStringLiteral("broken")).toBool())) return false;
+    const auto uuid = QByteArray::fromHex(identifier.toLatin1());
+    addon_uuid_t nativeUuid;
+    memcpy(nativeUuid, uuid.constData(), sizeof(nativeUuid));
+    const int result = install ? addons_manager_Install(d->m_manager, nativeUuid) : addons_manager_Remove(d->m_manager, nativeUuid);
+    if (result != VLC_SUCCESS) return false;
+    d->m_pending.insert(uuid, {install, false});
+    d->m_error.clear();
+    d->m_revision++;
+    emit catalogChanged();
+    return true;
+}
+
+bool AddonsModel::installAddon(const QString& identifier) { return requestAddon(identifier, true); }
+bool AddonsModel::removeAddon(const QString& identifier) { return requestAddon(identifier, false); }
 
 void AddonsModel::setCtx(MainCtx* ctx)
 {
@@ -571,6 +650,14 @@ QString AddonsModel::getIconForType(AddonsModel::Type type)
     vlc_assert_unreachable();
 }
 
+bool AddonsModel::isTypeVisible(Type type)
+{
+    // Interface scripts remain loadable when installed manually.
+    constexpr bool showInterfaces = false;
+    return (type != Type::TYPE_SKIN2 || VLC_SKINS_ENABLED)
+        && (type != Type::TYPE_INTERFACE || showInterfaces);
+}
+
 int AddonsModel::getMaxScore()
 {
     return ADDON_MAX_SCORE;
@@ -597,9 +684,14 @@ static void addonsDiscoveryEndedCallback( addons_manager_t *manager )
 static void addonChangedCallback( addons_manager_t *manager, addon_entry_t *entry )
 {
     AddonsModelPrivate* d = (AddonsModelPrivate*) manager->owner.sys;
-    QMetaObject::invokeMethod( d->q_func(), [d, entryPtr = AddonPtr(entry)]()
+    addon_state_t state;
+    {
+        vlc_mutex_locker locker{&entry->lock};
+        state = entry->e_state;
+    }
+    QMetaObject::invokeMethod( d->q_func(), [d, entryPtr = AddonPtr(entry), state]()
         {
-            d->addonChanged( std::move( entryPtr ) );
+            d->addonChanged( std::move( entryPtr ), state );
         }, Qt::QueuedConnection);
 }
 
@@ -635,16 +727,34 @@ bool AddonsModelPrivate::initializeModel()
 
 void AddonsModelPrivate::addonFound( AddonPtr addon )
 {
+    if (!AddonsModel::isTypeVisible(static_cast<AddonsModel::Type>(addon->e_type)))
+        return;
     m_items.emplace_back(std::make_shared<AddonItem>(addon));
+    m_revision++;
+    emit q_func()->catalogChanged();
 }
 
-void AddonsModelPrivate::addonChanged( AddonPtr addon )
+void AddonsModelPrivate::addonChanged( AddonPtr addon, addon_state_t state )
 {
+    if (!AddonsModel::isTypeVisible(static_cast<AddonsModel::Type>(addon->e_type)))
+        return;
     AddonItemPtr sdItem = std::make_shared<AddonItem>(addon);
-    m_cache->updateItem(std::move(sdItem));
+    for (auto& item : m_items)
+        if (item->identifier == sdItem->identifier) { item = sdItem; break; }
+    if (state == ADDON_INSTALLING || state == ADDON_UNINSTALLING) {
+        if (m_pending.contains(sdItem->uuid)) m_pending[sdItem->uuid].started = true;
+    } else if (m_pending.contains(sdItem->uuid) && m_pending[sdItem->uuid].started) {
+        // An older queued completion must not clear a newer request.
+        const bool install = m_pending[sdItem->uuid].install;
+        if (state != (install ? ADDON_INSTALLED : ADDON_NOTINSTALLED))
+            m_error = (install ? qtr("VLC cannot add %1.") : qtr("VLC cannot remove %1.")).arg(sdItem->name);
+        m_pending.remove(sdItem->uuid);
+    }
+    if (m_cache) m_cache->updateItem(std::move(sdItem));
 
     m_revision++;
     invalidateCache();
+    emit q_func()->catalogChanged();
 }
 
 void AddonsModelPrivate::discoveryEnded()
@@ -655,4 +765,5 @@ void AddonsModelPrivate::discoveryEnded()
     emit q->loadingChanged();
     m_revision++;
     invalidateCache();
+    emit q->catalogChanged();
 }

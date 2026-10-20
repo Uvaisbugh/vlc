@@ -32,6 +32,7 @@
 #include <QJSEngine>
 
 #include "mainctx.hpp"
+#include "window_fullscreen.hpp"
 #include "mainctx_submodels.hpp"
 #include "medialibrary/mlhelper.hpp"
 
@@ -54,6 +55,7 @@
 
 #include "videosurface.hpp"
 
+#include "menus/redesign_menu_style.hpp"
 #include "menus/menus.hpp"                            // Menu creation
 
 #include "dialogs/toolbar/controlbar_profile_model.hpp"
@@ -73,6 +75,7 @@
 #include <QScreen>
 
 #include <QOperatingSystemVersion>
+#include <climits>
 
 #if QT_VERSION >= QT_VERSION_CHECK(6, 8, 0)
 #include <QStyleHints>
@@ -160,6 +163,10 @@ MainCtx::MainCtx(qt_intf_t *_p_intf)
 
     settings = getSettings();
     m_colorScheme = new ColorSchemeModel(this);
+    connect(m_colorScheme, &ColorSchemeModel::currentChanged, this, [this]() {
+        settings->setValue(QStringLiteral("MainWindow/color-scheme-index"), m_colorScheme->currentIndex());
+        settings->sync();
+    });
 
 #if QT_VERSION >= QT_VERSION_CHECK(6, 8, 0)
     connect(m_colorScheme, &ColorSchemeModel::currentChanged, qGuiApp, [colorScheme = m_colorScheme]() {
@@ -206,6 +213,7 @@ MainCtx::MainCtx(qt_intf_t *_p_intf)
 
     loadPrefs(false);
     loadFromSettingsImpl(false);
+    watchRedesignMenus(this);
 
     /* Get the available interfaces */
     m_extraInterfaces = new VLCVarChoiceModel(VLC_OBJECT(p_intf->intf), "intf-add", this);
@@ -292,8 +300,8 @@ MainCtx::MainCtx(qt_intf_t *_p_intf)
         !var_InheritBool( p_intf, "qt-privacy-ask" ) )
     {
         int interval = var_InheritInteger( p_intf, "qt-updates-days" );
-        if( QDate::currentDate() >
-            getSettings()->value( "updatedate" ).toDate().addDays( interval ) )
+        const auto lastCheck = getSettings()->value("updatedate").toDate();
+        if (!lastCheck.isValid() || QDate::currentDate() >= lastCheck.addDays(interval))
         {
             /* check for update at startup */
             getUpdateModel()->checkUpdate();
@@ -412,8 +420,39 @@ void MainCtx::setWindowExtendedMargin(unsigned int margin) {
  *   Main UI handling        *
  *****************************/
 
+QVariantMap MainCtx::redesignPlayerPreferences() const
+{
+    char* layout = config_GetPsz("qt-player-layout");
+    QVariantMap preferences{{QStringLiteral("autoHide"), QVariant::fromValue<qlonglong>(config_GetInt("qt-controls-autohide"))},
+        {QStringLiteral("hideTimeout"), QVariant::fromValue<qlonglong>(config_GetInt("qt-controls-hide-timeout"))},
+        {QStringLiteral("fullscreenControls"), bool(config_GetInt("qt-fs-controller"))},
+        {QStringLiteral("fullscreenSensitivity"), QVariant::fromValue<qlonglong>(var_InheritInteger(p_intf, "qt-fs-sensitivity"))},
+        {QStringLiteral("seekPreview"), bool(config_GetInt("qt-seek-preview"))},
+        {QStringLiteral("subtitleTimeline"), bool(config_GetInt("qt-subtitle-timeline"))},
+        {QStringLiteral("audioWaveform"), bool(config_GetInt("qt-audio-waveform"))},
+        {QStringLiteral("layout"), qfu(layout ? layout : "")}};
+    free(layout);
+    return preferences;
+}
+
 void MainCtx::loadPrefs(const bool callSignals)
 {
+    auto *instance = vlc_object_instance(p_intf);
+    const auto visualizationSize = callSignals ? config_GetInt("visualization-size")
+        : var_InheritInteger(p_intf, "visualization-size");
+    if (var_Type(instance, "visualization-size") == 0)
+        var_Create(instance, "visualization-size", VLC_VAR_INTEGER);
+    var_SetInteger(instance, "visualization-size", visualizationSize);
+    if (callSignals) emit redesignPlayerPreferencesChanged();
+    char* accent = var_InheritString(p_intf, "qt-accent-color");
+    QColor color = accent && strcmp(accent, "default") && strcmp(accent, "system") ? QColor(qfu(accent)) : QColor(QStringLiteral("#d37918"));
+    free(accent);
+    if (!color.isValid()) color = QColor(QStringLiteral("#d37918"));
+    if (color != m_redesignAccent) {
+        m_redesignAccent = color;
+        if (callSignals) emit redesignAccentChanged();
+    }
+
     const auto loadFromVLCOption = [this, callSignals](auto &variable, const char *name
             , const std::function<void(MainCtx *)> signal)
     {
@@ -428,11 +467,17 @@ void MainCtx::loadPrefs(const bool callSignals)
             signal(this);
     };
 
-    bool minimalMode = false;
-    /* Are we in the enhanced always-video mode or not ? */
-    loadFromVLCOption(minimalMode, "qt-minimal-view", nullptr);
-    setMinimalView(minimalMode);
+    loadFromVLCOption(m_backdropBlurEnabled, "qt-backdrop-blur", &MainCtx::backdropBlurEnabledChanged);
+    loadFromVLCOption(m_compactMenus, "qt-compact-menus", &MainCtx::compactMenusChanged);
 
+    if (!callSignals)
+    {
+        // The startup preference must not replace a user's current view when
+        // an unrelated setting is saved (or a launch override is still set).
+        setMinimalView(var_InheritBool(p_intf, "qt-minimal-view"));
+    }
+
+    loadFromVLCOption(m_playlistTree, "playlist-tree", &MainCtx::playlistTreeChanged);
     loadFromVLCOption(m_bgCone, "qt-bgcone", &MainCtx::bgConeToggled);
 
     /* Should the UI stays on top of other windows */
@@ -494,7 +539,7 @@ void MainCtx::loadFromSettingsImpl(const bool callSignals)
 
     loadFromSettings(m_lyricsMode, "MainWindow/lyrics-mode", true, this, &MainCtx::lyricsModeChanged);
 
-    const auto colorSchemeIndex = getSettings()->value( "MainWindow/color-scheme-index", 0 ).toInt();
+    const auto colorSchemeIndex = getSettings()->value( "MainWindow/color-scheme-index", 2 ).toInt();
     m_colorScheme->setCurrentIndex(colorSchemeIndex);
 
     /* user interface scale factor */
@@ -508,6 +553,34 @@ void MainCtx::loadFromSettingsImpl(const bool callSignals)
     }
 }
 
+QVariantMap MainCtx::profileSettings() const
+{
+    QVariantMap values;
+    for (const auto& key : settings->allKeys()) values.insert(key, settings->value(key));
+    // These values are normally flushed at shutdown. Capture the current UI.
+    values.insert(QStringLiteral("MainWindow/ShowRemainingTime"), m_showRemainingTime);
+    values.insert(QStringLiteral("MainWindow/interface-scale"), QString::number(m_intfUserScaleFactor));
+    values.insert(QStringLiteral("MainWindow/playqueue-panel-docked"), m_playqueuePanel->m_docked);
+    values.insert(QStringLiteral("MainWindow/playqueue-panel-visible"), m_playqueuePanel->m_visible);
+    values.insert(QStringLiteral("MainWindow/playqueue-panel-width"), QString::number(m_playqueuePanel->m_width));
+    values.insert(QStringLiteral("MainWindow/navigation-panel-visible"), m_navigationPanel->m_visible);
+    values.insert(QStringLiteral("MainWindow/navigation-panel-width"), QString::number(m_navigationPanel->m_width));
+    values.insert(QStringLiteral("MainWindow/player-playlist-width"), QString::number(m_playerPlaylistWidth));
+    values.insert(QStringLiteral("MainWindow/artist-albums-width"), QString::number(m_artistAlbumsWidth));
+    values.insert(QStringLiteral("MainWindow/grid-view"), m_gridView);
+    values.insert(QStringLiteral("MainWindow/grouping"), m_grouping);
+    values.insert(QStringLiteral("MainWindow/color-scheme-index"), m_colorScheme->currentIndex());
+    values.insert(QStringLiteral("MainWindow/album-sections"), m_albumSections);
+    values.insert(QStringLiteral("MainWindow/lyrics-mode"), m_lyricsMode);
+    return values;
+}
+
+void MainCtx::reloadFromSettings()
+{
+    loadFromSettingsImpl(true);
+    emit settingsReloaded();
+}
+
 void MainCtx::reloadPrefs()
 {
     loadPrefs(true);
@@ -515,6 +588,17 @@ void MainCtx::reloadPrefs()
 
 void MainCtx::onInputChanged( bool hasInput )
 {
+    if (m_suppressStartupRaise)
+    {
+        // Keep the initial media in the tray. A later media selection uses the
+        // normal raise policy, as does an explicit request to show the player.
+        if (hasInput && !m_startupInputSeen)
+        {
+            m_startupInputSeen = true;
+            return;
+        }
+        m_suppressStartupRaise = false;
+    }
     if( hasInput == false )
         return;
     int autoRaise = var_InheritInteger( p_intf, "qt-auto-raise" );
@@ -532,6 +616,8 @@ void MainCtx::onInputChanged( bool hasInput )
 
 void MainCtx::onVOutChanged( bool video )
 {
+    if (m_suppressStartupRaise)
+        return;
     int autoRaise = var_InheritInteger( p_intf, "qt-auto-raise" );
     if ( video && ( autoRaise & MainCtx::RAISE_VIDEO ) )
         emit askRaise();
@@ -646,13 +732,39 @@ inline void MainCtx::initSystray()
         {
             b_systrayWanted = true;
             b_hideAfterCreation = true;
+            vlc_playlist_locker lock(p_intf->p_playlist);
+            m_suppressStartupRaise = var_InheritBool(p_intf, "playlist-autostart")
+                && vlc_playlist_Count(p_intf->p_playlist) > 0;
+            // Use the GUI's state: the core can already have a media item while
+            // its first inputChanged notification is still in the event queue.
+            m_startupInputSeen = !THEMIM->getUrl().isEmpty();
         }
         else
             msg_Err( p_intf, "cannot start minimized without system tray bar" );
     }
 
-    if( b_systrayAvailable && b_systrayWanted )
-        m_systray = std::make_unique<VLCSystray>(this);
+    setSystrayVisible(b_systrayWanted);
+}
+
+void MainCtx::refreshSystray()
+{
+    setSystrayVisible(var_InheritBool(p_intf, "qt-system-tray"));
+}
+
+void MainCtx::setSystrayVisible(bool visible)
+{
+    if (visible)
+    {
+        // Qt also adds a visible icon if the system tray becomes available later.
+        if (!m_systray)
+            m_systray = std::make_unique<VLCSystray>(this);
+    }
+    else if (m_systray)
+    {
+        if (m_windowVisibility == QWindow::Hidden || m_windowVisibility == QWindow::Minimized)
+            emit setInterfaceVisibible(true, true);
+        m_systray.reset();
+    }
 }
 
 ThreadRunner* MainCtx::threadRunner() const
@@ -771,13 +883,34 @@ bool MainCtx::hasEmbededVideo() const
 
 void MainCtx::setVideoSurfaceProvider(VideoSurfaceProvider* videoSurfaceProvider)
 {
+    disconnect(m_releaseVideoMouseConnection);
+    disconnect(m_visualizationSizeConnection);
+    auto *instance = vlc_object_instance(p_intf);
+    if (var_Type(instance, "visualization-window-size") == 0)
+        var_Create(instance, "visualization-window-size", VLC_VAR_INTEGER);
+    var_SetInteger(instance, "visualization-window-size", 0);
     if (m_videoSurfaceProvider)
         disconnect(m_videoSurfaceProvider, &VideoSurfaceProvider::hasVideoEmbedChanged, this, &MainCtx::hasEmbededVideoChanged);
     m_videoSurfaceProvider = videoSurfaceProvider;
     if (m_videoSurfaceProvider)
+    {
+        m_releaseVideoMouseConnection = connect(DialogsProvider::getInstance(), &DialogsProvider::releaseMouseEvents,
+                m_videoSurfaceProvider, &VideoSurfaceProvider::releaseMouseButtons);
         connect(m_videoSurfaceProvider, &VideoSurfaceProvider::hasVideoEmbedChanged,
                 this, &MainCtx::hasEmbededVideoChanged,
                 Qt::QueuedConnection);
+        m_visualizationSizeConnection = connect(m_videoSurfaceProvider,
+            &VideoSurfaceProvider::surfacePropertiesChanged, this,
+            [instance](const std::optional<QSizeF>& size,
+                       const std::optional<QPointF>&,
+                       const std::optional<qreal>&) {
+                if (!size || !size->isValid() || size->isEmpty()) return;
+                const auto width = qBound(1, qRound(size->width()), INT_MAX);
+                const auto height = qBound(1, qRound(size->height()), INT_MAX);
+                var_SetInteger(instance, "visualization-window-size",
+                    (int64_t(width) << 32) | uint32_t(height));
+            }, Qt::QueuedConnection);
+    }
     emit hasEmbededVideoChanged(m_videoSurfaceProvider && m_videoSurfaceProvider->hasVideoEmbed());
 }
 
@@ -876,7 +1009,11 @@ void MainCtx::toggleToolbarMenu()
 
 void MainCtx::toggleInterfaceFullScreen()
 {
-    emit setInterfaceFullScreen( m_windowVisibility != QWindow::FullScreen );
+    const bool fs = m_windowVisibility != QWindow::FullScreen;
+    emit setInterfaceFullScreen( fs );
+    /* Keep the video's fullscreen state in step, so leaving from either side
+     * (this toggle, or double-click/F/Esc on the video) always works. */
+    THEMIM->setFullscreen( fs );
 }
 
 void MainCtx::emitBoss()
@@ -1163,7 +1300,7 @@ bool WindowStateHolder::holdFullscreen(QWindow *window, Source source, bool hold
 
     if( newflags != oldflags )
     {
-        window->setWindowStates( newflags );
+        setWindowStatesPreservingGeometry(window, newflags);
     }
 
     return fullscreenCounter != 0;

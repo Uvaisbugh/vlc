@@ -38,7 +38,7 @@ foreach ($vlcInterface in @('dummy', 'qt')) {
     $vlcOutputPath = Join-Path $vlcEvidencePath "$vlcInterface.stdout.txt"
     $vlcErrorPath = Join-Path $vlcEvidencePath "$vlcInterface.stderr.txt"
     $vlcArguments = @(
-        '--ignore-config', '--no-one-instance', '--no-media-library',
+        '--ignore-config', '--no-one-instance', '--no-media-library', '--no-metadata-network-access',
         '--no-qt-privacy-ask', '--no-qt-updates-notif', '--no-qt-error-dialogs',
         '--intf', $vlcInterface, '--aout', 'dummy', '--play-and-exit',
         '--verbose', '2', '--file-logging', '--logfile', ('"' + $vlcLogPath + '"'),
@@ -69,7 +69,7 @@ foreach ($vlcInterface in @('dummy', 'qt')) {
         throw "$vlcInterface could not initialize the application interface."
     }
     $vlcUiErrors = $vlcAllLogs -split "`n" | Where-Object {
-        $_ -match 'PlayButton.qml|VLCStyle.qml|qrc:/redesign/' -and
+        $_ -match 'PlayButton.qml|VLCStyle.qml|Redesign[^\s:]*\.qml|qrc:/redesign/' -and
         $_ -match 'ReferenceError|TypeError|Cannot open|is not a type|Unable to assign'
     }
     if ($vlcUiErrors) { throw "Redesign QML/resource errors: $($vlcUiErrors -join ' | ')" }

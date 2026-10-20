@@ -1,0 +1,47 @@
+FROM ubuntu:22.04
+ENV DEBIAN_FRONTEND=noninteractive
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential git ca-certificates curl python3 python3-pip pkg-config \
+    cmake ninja-build flex bison nasm gettext patch patchelf file \
+    libavcodec-dev libavformat-dev libswscale-dev libavutil-dev \
+    libasound2-dev libpulse-dev libpipewire-0.3-dev libwayland-dev \
+    wayland-protocols libxkbcommon-dev libxkbcommon-x11-dev libxcb-cursor-dev \
+    libxcb-keysyms1-dev libxcb-composite0-dev libxcb-xinerama0-dev \
+    libxcb-icccm4-dev libxcb-image0-dev libxcb-render-util0-dev \
+    libgl1-mesa-dev libegl1-mesa-dev libdbus-1-dev liblua5.4-dev \
+    libgnutls28-dev libgcrypt20-dev libxml2-dev libsqlite3-dev \
+    libpng-dev libfreetype-dev libharfbuzz-dev libfribidi-dev libass-dev \
+    libdav1d-dev libopus-dev libvorbis-dev libflac-dev libmpg123-dev \
+    libmatroska-dev libebml-dev libtag1-dev libarchive-dev libdvbpsi-dev \
+    libgudev-1.0-dev libx11-xcb-dev xvfb ffmpeg \
+    && rm -rf /var/lib/apt/lists/*
+RUN pip3 install --no-cache-dir meson==1.12.1 aqtinstall==3.3.0 \
+    && aqt install-qt linux desktop 6.8.3 linux_gcc_64 \
+       -O /opt/qt -m qtshadertools qtwaylandcompositor
+ENV QT_ROOT_DIR=/opt/qt/6.8.3/gcc_64
+ENV PATH=/opt/qt/6.8.3/gcc_64/bin:$PATH
+ENV PKG_CONFIG_PATH=/opt/qt/6.8.3/gcc_64/lib/pkgconfig
+ENV LD_LIBRARY_PATH=/opt/qt/6.8.3/gcc_64/lib
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    lua5.4 squashfs-tools libexpat1-dev libffi-dev \
+    libxcb-damage0-dev libxcb-xfixes0-dev libxcb-randr0-dev \
+    libxcb-shm0-dev libxcb-xkb-dev \
+    && rm -rf /var/lib/apt/lists/*
+# VLC requires a newer scanner/protocol set than Ubuntu 22.04 supplies. Build
+# only the scanner and XML data, retaining Ubuntu's supported runtime libraries.
+ENV PATH=/opt/wayland-tools/bin:$PATH
+ENV PKG_CONFIG_PATH=/opt/wayland-tools/lib/pkgconfig:/opt/wayland-tools/share/pkgconfig:$PKG_CONFIG_PATH
+RUN cd /tmp \
+    && curl --fail --location --retry 3 https://gitlab.freedesktop.org/wayland/wayland/-/releases/1.24.0/downloads/wayland-1.24.0.tar.xz -o wayland-1.24.0.tar.xz \
+    && printf '82892487a01ad67b334eca83b54317a7c86a03a89cfadacfef5211f11a5d0536  wayland-1.24.0.tar.xz\n' | sha256sum -c - \
+    && tar -xf wayland-1.24.0.tar.xz \
+    && meson setup wayland-scanner-build wayland-1.24.0 --prefix=/opt/wayland-tools --libdir=lib -Dlibraries=false -Dtests=false -Ddocumentation=false \
+    && meson compile -C wayland-scanner-build -j4 \
+    && meson install -C wayland-scanner-build \
+    && curl --fail --location --retry 3 https://gitlab.freedesktop.org/wayland/wayland-protocols/-/releases/1.33/downloads/wayland-protocols-1.33.tar.xz -o wayland-protocols-1.33.tar.xz \
+    && printf '94f0c50b090d6e61a03f62048467b19abbe851be4e11ae7b36f65f8b98c3963a  wayland-protocols-1.33.tar.xz\n' | sha256sum -c - \
+    && tar -xf wayland-protocols-1.33.tar.xz \
+    && meson setup wayland-protocols-build wayland-protocols-1.33 --prefix=/opt/wayland-tools -Dtests=false \
+    && meson install -C wayland-protocols-build \
+    && rm -rf wayland-1.24.0 wayland-scanner-build wayland-protocols-1.33 wayland-protocols-build wayland-1.24.0.tar.xz wayland-protocols-1.33.tar.xz
+WORKDIR /src
