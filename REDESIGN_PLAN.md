@@ -1,6 +1,6 @@
 # VLC redesign implementation plan
 
-Status: native redesign integrated locally; full native validation in progress; no release delivered.
+Status: native redesign integrated and pushed; full native validation in progress; no release delivered.
 Updated: 2026-10-20.
 
 ## Outcome

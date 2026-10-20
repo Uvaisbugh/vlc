@@ -30,7 +30,12 @@ C.Dialog {
     padding: 0; spacing: 0
     modal: true; dim: true; focus: true
     closePolicy: busy ? C.Popup.NoAutoClose : C.Popup.CloseOnEscape
-    background: RedesignDialogSurface { theme: root.theme; videoBackdropContent: root.videoBackdropContent }
+    background: RedesignDialogSurface {
+        theme: root.theme
+        videoBackdropContent: root.videoBackdropContent
+        // Figma 6259:14954 uses Dark/BG/A3 Transparent at 95%.
+        fillOpacity: root.theme.transparencyEnabled && !root.lightTheme ? 0.95 : root.theme.floatingOpacity
+    }
     C.Overlay.modal: Rectangle { color: "#80000000" }
     ListModel { id: files }
     function displayName(url) {

@@ -34,6 +34,15 @@ validation in our builds, not a claim that all Figma variants are complete.
 - The native QML harness now loads bundled Inter and fails clearly if it is
   missing. Meson is allowed to build test targets before running them, including
   targets deliberately excluded from the default application build.
+- Signed-in Figma inspection measured the dark New Playlist and Global Settings
+  backgrounds at 95% opacity. Their previous 90% fills were corrected while
+  preserving opaque mode and the uninspected light-theme values. The dialog
+  surface suite passes 12 checks and settings card suite passes 5 checks.
+  A headless playlist component render verifies its layout/icons; this is not
+  evidence of the packaged VLC application running.
+- The hosted packaging job passed all 16 release-tool tests, then exposed a
+  missing FFmpeg executable. The workflow now installs it explicitly before
+  generating the runtime fixture. A fresh job must verify the fix.
 
 ## Required fresh native validation
 

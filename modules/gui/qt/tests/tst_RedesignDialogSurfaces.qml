@@ -32,7 +32,8 @@ TestCase {
             for (const spec of [{name: "network", component: network}, {name: "playlist", component: playlist},
                 {name: "add-to-playlist", component: addToPlaylist}, {name: "tracks", component: tracks, fill: "#0e0e0e"},
                 {name: "shortcuts", component: shortcuts}])
-                rows.push({tag: spec.name + "-" + light, light, component: spec.component, fill: spec.fill || "#191919"})
+                rows.push({tag: spec.name + "-" + light, light, component: spec.component,
+                    fill: spec.fill || "#191919", opacity: spec.name === "playlist" && !light ? 0.95 : 0.90})
         }
         return rows
     }
@@ -58,7 +59,7 @@ TestCase {
             verify(parent !== testCase, "Dialog surfaces must stay outside the captured interface.")
         for (const enabled of [true, false, true]) {
             redesignAppearance.backdropBlurEnabled = enabled
-            fuzzyCompare(surface.color.a, enabled ? 0.90 : 1, 0.001)
+            fuzzyCompare(surface.color.a, enabled ? data.opacity : 1, 0.001)
         }
         dialog.scaleFactor = 1.5
         compare(surface.radius, 21); compare(backdrop.cornerRadius, 21)

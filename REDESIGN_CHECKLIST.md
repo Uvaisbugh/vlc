@@ -2,6 +2,7 @@
 
 Updated: 2026-10-20. Checked items require evidence; unchecked items are pending.
 See `REDESIGN_PLAN.md` for sequencing and the source map.
+See `doc/redesign/FRAME_COVERAGE.md` for the observed screen-family/source map.
 
 ## Repository and preparation
 
@@ -63,9 +64,11 @@ their rows have passed.
 
 | Figma node ID / frame | Theme / size / state | Native files | Assets | Functional result | Visual evidence | Status |
 | --- | --- | --- | --- | --- | --- | --- |
-| `247:445` / Player | 1920 × 1080, dark, video playback | `player/qml/RedesignPlayer.qml`, `player/qml/redesign/RedesignPlayerView.qml`, `RedesignPlayerChrome.qml` (under `modules/gui/qt/`) | Play/pause SVGs exported; integrated assets require audit | Native runtime pending | Browser canvas inspected on 2026-10-20; detailed context still pending | Identified |
+| `247:445` / Player | 1920 × 1080, dark, video playback | `player/qml/redesign/RedesignPlayer.qml`, `player/qml/redesign/RedesignPlayerView.qml`, `RedesignPlayerChrome.qml` (under `modules/gui/qt/`) | Play/pause SVGs exported; integrated assets require audit | Native runtime pending | Browser canvas inspected on 2026-10-20; detailed context still pending | Identified |
 | `970:3091` / Miniplayer | Component; variants not yet inspected | `modules/gui/qt/player/qml/MiniPlayer.qml` | Not exported | Not run | Browser search selection on 2026-10-20 | Identified |
 | `6259:14954` / new playlist | Dark; 713 × 589; radius 14; background #191919 at 95%; blur 50; shadow y 8 / blur 15 / black 46% | `player/qml/redesign/RedesignPlaylistDialog.qml`, `RedesignDialogSurface.qml` | Integrated | Geometry and interaction tests pass with Inter; native runtime pending | Signed-in Figma Properties and canvas inspected 2026-10-20 | Reference measured; rendered parity pending |
+| `2425:13624` / Player - Light | 1920 × 1080; vertical layout; V opens subtitle overlay | `player/qml/redesign/RedesignPlayerView.qml`, `RedesignTheme.qml` | Integrated; audit pending | Native runtime pending | Signed-in canvas and Properties inspected 2026-10-20 | Identified |
+| `3046:9282`, `999:5047` / Settings - global | 1048 × 865; radius 14; #0e0e0e at 95%; blur 50; shadow y 8 / blur 15 / black 46% | `player/qml/redesign/RedesignSettingsDialog.qml`, `RedesignSettings.qml` | Integrated | 5 surface/modal/resize tests pass | Signed-in Properties inspected 2026-10-20 | Reference measured; native content/frame audit pending |
 
 ## Verification
 

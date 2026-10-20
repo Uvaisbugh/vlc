@@ -6,7 +6,8 @@ Rectangle {
     property RedesignTheme theme: RedesignTheme { }
     property Component videoBackdropContent
     property color fill: theme.lightTheme ? theme.panel : "#191919"
-    color: Qt.rgba(fill.r, fill.g, fill.b, theme.floatingOpacity)
+    property real fillOpacity: theme.floatingOpacity
+    color: Qt.rgba(fill.r, fill.g, fill.b, fillOpacity)
     radius: theme.dp(14)
     Loader {
         objectName: "dialogBackdropLoader"

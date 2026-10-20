@@ -24,6 +24,8 @@ C.Popup {
         objectName: "preferencesWindowSurface"
         theme: root.theme
         fill: root.lightTheme ? root.theme.panel : "#0e0e0e"
+        // Figma's dark Settings card (3046:9282 / 999:5047).
+        fillOpacity: root.theme.transparencyEnabled && !root.lightTheme ? 0.95 : root.theme.floatingOpacity
         videoBackdropContent: root.videoBackdropContent
     }
     contentItem: Item { Keys.onEscapePressed: root.dismissRequested() }

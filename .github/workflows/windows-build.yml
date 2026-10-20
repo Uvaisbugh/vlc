@@ -31,6 +31,8 @@ jobs:
       - name: Test release tooling and generate playback fixture
         run: |
           python3 -m unittest discover -s extras/package/release/tests
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends ffmpeg
           mkdir -p smoke-media
           ffmpeg -nostdin -v error -f lavfi -i testsrc2=size=320x180:rate=24 -f lavfi -i sine=frequency=440:sample_rate=48000 -t 4 -c:v ffv1 -c:a pcm_s16le smoke-media/sample.mkv
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
@@ -86,6 +88,12 @@ jobs:
           # Keep the downloadable app small; upstream moves debug info aside.
           make -C win64 package-win-strip 2>&1 | tee build-evidence/package.log
           cp COPYING COPYING.LIB artifacts/vlc-win64/
+          # The Vulkan loader is redistributable, not a Windows system DLL.
+          cp contrib/x86_64-w64-mingw32/bin/vulkan-1.dll artifacts/vlc-win64/
+          mkdir -p artifacts/vlc-win64/licenses/{vulkan-loader,Inter,design}
+          cp contrib/contrib-win64/vulkan-loader/LICENSE.txt contrib/contrib-win64/vulkan-loader/LICENSES/*.txt artifacts/vlc-win64/licenses/vulkan-loader/
+          cp modules/gui/qt/fonts/LICENSE.txt artifacts/vlc-win64/licenses/Inter/
+          cp modules/gui/qt/pixmaps/redesign/CREDITS.md artifacts/vlc-win64/licenses/design/
           tar -C artifacts --exclude='vlc-win64/sdk' -czf artifacts/vlc-windows-x64.tar.gz vlc-win64
           sha256sum artifacts/vlc-windows-x64.tar.gz > artifacts/SHA256SUMS
 
@@ -188,7 +196,18 @@ jobs:
 
       - name: Run native Qt and QML tests
         # Some test executables are build_by_default:false; let Meson build them.
-        run: meson test -C build-redesign --suite qt --print-errorlogs --timeout-multiplier 2
+        run: |
+          meson introspect --tests build-redesign > build-redesign/meson-logs/test-inventory.json
+          python3 - <<'PY'
+          import json, pathlib
+          registered = {test['name'] for test in json.loads(pathlib.Path('build-redesign/meson-logs/test-inventory.json').read_text())}
+          expected = {path.stem for path in pathlib.Path('modules/gui/qt/tests').glob('tst_Redesign*.qml')}
+          missing = expected - registered
+          if missing:
+              raise SystemExit('Redesign tests missing from native build: ' + ', '.join(sorted(missing)))
+          print(f'All {len(expected)} redesign QML suites are registered.')
+          PY
+          meson test -C build-redesign --suite qt --print-errorlogs --timeout-multiplier 2
 
       - name: Preserve native test diagnostics
         if: always()

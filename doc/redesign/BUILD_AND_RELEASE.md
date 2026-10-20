@@ -1,100 +1,88 @@
-# Build and release preparation
+# Build and release validation
 
-This document records a proposed route, not a successful build. Use the
-checked-out upstream scripts as the authoritative source when commands change.
+Updated 2026-10-20. The baseline and first player component compiled on Windows;
+the full native redesign still needs passing native tests and packaged runtime QA.
+See REDESIGN_CHECKLIST.md for release gates and doc/redesign/INTEGRATION.md for
+source provenance and current test results.
 
-As of 2026-10-20, `.github/workflows/windows-build.yml` implements a first
-Windows baseline build on GitHub-hosted Linux using the upstream container.
-It compiles with extra checks and stages the native Windows runtime using
-`-a x86_64 -x -o <artifact-directory>`. It preserves build logs, source/toolchain
-identifiers, and SHA-256 checksums. A successful cross-compilation will still
-require a separate Windows launch/playback test. The first run is
-https://github.com/Uvaisbugh/vlc/actions/runs/39382291096.
-That run verified the image pull but exposed a container UID mismatch during
-checkout. After adding `options: --user 0`, the restarted run is
-https://github.com/Uvaisbugh/vlc/actions/runs/39382578278.
-The first runner reported the image digest:
+## Reproducible validation
+
+The branch workflow `.github/workflows/windows-build.yml` runs four jobs:
+
+1. `packaging-tests`: release-tool unit tests and locally generated FFV1/PCM
+   media for runtime testing. FFmpeg is installed explicitly on the hosted runner.
+2. `windows-x64`: official VideoLAN cross-compilation container, matching contrib
+   dependencies, native VLC compilation, stripped runtime archive, SHA-256 checksum,
+   licenses, and build evidence.
+3. `windows-smoke`: a fresh Windows 2022 runner verifies/extracts the matching
+   archive, launches the packaged dummy and Qt interfaces, plays generated audio
+   and video, and rejects missing decoders, dummy video output, QML/resource errors,
+   and graphics initialization failures. Logs are retained as artifacts.
+4. `native-qt-tests`: Linux builds the patched media library and native VLC with
+   Qt enabled, then builds/runs the actual C++ and QML `qt` Meson suite with the
+   compiled VLC.Util module. The test harness uses the app's bundled Inter font.
+
+The containers are versioned from upstream `extras/ci/gitlab-ci.yml`:
+
+```text
+registry.videolan.org/vlc-debian-win64-posix:20260611225331
+registry.videolan.org/vlc-debian-unstable:20260611225331
+```
+
+The Windows container's observed digest is:
 
 ```text
 sha256:8e83e800036f8f4a6da1031a6b80c2b5bad8337259c072ffa22398baaeaad880
 ```
 
-## Baseline
+Both jobs request complete source history and configure the workspace as a Git
+safe directory inside their root-owned container. The local Windows checkout
+has no configured native MinGW/Qt toolchain, Docker, or WSL distribution.
 
-- Upstream revision: `429df92c508f98038ac992772fea1fec1322c9f9`.
-- Windows packaging entrypoint: `extras/package/win32/build.sh`.
-- Upstream CI configuration: `extras/ci/gitlab-ci.yml`.
-- Qt tests: `modules/gui/qt/tests/`, `qtest.pro`, and `quicktest.pro`.
-- macOS packaging entrypoint: `extras/package/macosx/build.sh`.
+## Source and dependency identity
 
-## Windows x64
+- VideoLAN baseline: `429df92c508f98038ac992772fea1fec1322c9f9`.
+- Community native implementation: `b876f75f43130249162796fd3057e1327e2b1d2b`.
+- Windows entrypoint: `extras/package/win32/build.sh`.
+- Cross-build arguments: `-a x86_64 -x -o <runtime-directory>`.
+- Native test setup: `meson setup build-redesign -Dqt=enabled
+  -Dmedialibrary=enabled -Dtests=enabled -Dextra_checks=true`.
+- Native test command: `meson test -C build-redesign --suite qt
+  --print-errorlogs --timeout-multiplier 2`.
 
-Upstream's `win64` job uses this versioned Linux cross-compilation image:
+The redesign requires its patched media-library and network-enabled Qt sources.
+The workflow calculates the contrib identity and uses a prebuilt archive only
+when that exact archive exists. Do not substitute the baseline's upstream
+archive for the integrated dependencies. Native Linux validation builds the
+patched media library with `extras/package/release/build-medialibrary.sh`.
 
-```text
-registry.videolan.org/vlc-debian-win64-posix:20260611225331
-```
+## Evidence and results
 
-The image was identified from source; registry access and execution are not
-yet verified. Use a compatible Linux runner or Linux containers. The installed
-Windows VLC runtime alone cannot compile this source tree.
+- Baseline build passed: https://github.com/Uvaisbugh/vlc/actions/runs/39383363475
+- First player component build passed: https://github.com/Uvaisbugh/vlc/actions/runs/39386507328
+- Current runs: https://github.com/Uvaisbugh/vlc/actions/workflows/windows-build.yml
+- Public implementation PR: https://github.com/Uvaisbugh/vlc/pull/1
 
-Inside the build environment, start with upstream's compile/check invocation:
+Each runtime artifact contains the matching source SHA in its name. Keep the
+archive, SHA256SUMS, environment/contrib/build logs, native test diagnostics, and
+Windows smoke logs together when assessing a candidate. A cancelled run provides
+partial diagnostic evidence only. A successful compile alone is not a tested
+Windows application or a completed design audit.
 
-```sh
-extras/package/win32/build.sh -a x86_64 -x
-```
+## Public release gates
 
-For an unsigned release archive, the script exposes:
+1. Record all Figma frames/states and pass their visual/behavior comparisons.
+2. Pass compilation, relevant C++/QML tests, and packaged runtime audio/video tests.
+3. Verify seeking, pause/resume, queue advance, subtitles/audio tracks, fullscreen,
+   resize/high DPI, opening files/URLs, and settings persistence on Windows.
+4. Verify dependencies and installation from the candidate on a clean environment.
+5. Include upstream notices, design attribution, matching source and dependency
+   information, checksums, supported platforms, limitations, and signing status.
+6. Publish source and tested binaries together and verify the public downloads.
 
-```sh
-extras/package/win32/build.sh -a x86_64 -r -i u
-```
+`beta-release.yml` also supplies the community implementation's multi-platform
+packaging pipeline. It is separate from this branch's validation and must not be
+presented as completed Linux/macOS testing in this fork.
 
-Confirm packaging behavior against the script and actual output before
-publishing. Do not label these commands as verified until they succeed.
-`-p` is an optional prebuilt-contrib path; upstream CI first computes the
-contrib hash and checks availability. Preserve that check rather than assuming
-that prebuilt dependencies exist for every revision.
-
-The local checkout is shallow. Obtain needed history before running
-`extras/ci/get-contrib-sha.sh`, which participates in upstream dependency
-selection. Record the exact dependency source and image digest in build evidence.
-
-## Linux
-
-Upstream's Debian jobs use:
-
-```text
-registry.videolan.org/vlc-debian-unstable:20260611225331
-```
-
-Follow `extras/ci/gitlab-ci.yml` for build tools, configure flags, Meson/Ninja,
-and tests. Keep Qt enabled: a successful engine-only build cannot validate the
-redesigned application. Do not claim host-independent UI verification from a
-cross-compile alone.
-
-## Evidence required for each build
-
-Record source commit, host/target architecture, image digest, tool versions,
-dependency revisions, configure/build commands, logs, executable/package paths,
-and SHA-256 checksums. Record tests as pass/fail/not-run with concrete details.
-Keep baseline and redesigned build evidence distinguishable.
-
-## Release gates
-
-1. Complete frame inventory and behavior checklist.
-2. Pass compilation and relevant tests.
-3. Launch the packaged application and play real local video and audio.
-4. Validate seeking, queue transitions, tracks, subtitles, fullscreen, scaling,
-   opening media, and settings persistence.
-5. Compare rendered UI against the reference frames; save evidence.
-6. Verify runtime/plugin dependencies on a clean Windows environment.
-7. Include upstream notices, design credit, matching source and dependency
-   information, checksums, platform limitations, and signing status.
-8. Publish source and binaries together; verify public download links.
-
-The Figma community page identifies Juxtopposed as the author and lists
-CC BY 4.0. Preserve the source link and record adaptations when implementing
-the design. Retain VLC's existing licenses and notices. Do not imply that the
-fork is an official VideoLAN release or endorsed by the design author.
+Juxtopposed's community design is credited under CC BY 4.0. Preserve its source
+link and VLC's existing licenses. This is an unofficial community fork.
