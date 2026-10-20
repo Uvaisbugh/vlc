@@ -222,7 +222,9 @@ else
 fi
 HOST="$(cc -dumpmachine)"
 HOST_ARCH="${HOST%%-*}"
-if [ "$HOST_ARCH" = "$ARCH" ]; then
+if [ -n "${VLC_NO_EXE_WRAPPER:-}" ]; then
+    VLC_EXE_WRAPPER=""
+elif [ "$HOST_ARCH" = "$ARCH" ]; then
     VLC_EXE_WRAPPER="wine"
 elif [ "$HOST_ARCH" = "x86_64" ] && [ "$ARCH" = "i686" ]; then
     VLC_EXE_WRAPPER="wine"

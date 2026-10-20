@@ -904,10 +904,13 @@ int main(void) {
     return 0;
 }
 '''
-        # Check if linker supports -lssp
-        if cc.links(ssp_test, args: ['-fstack-protector-strong', '-lssp'],
+        # Match contrib's linkage: mixing the DLL import library with a static
+        # libssp pulled in by FLAC defines __stack_chk_fail twice.
+        ssp_dep = cc.find_library('ssp', static: get_option('prefer_static'), required: false)
+        if ssp_dep.found() and cc.links(ssp_test, args: ['-fstack-protector-strong'],
+                    dependencies: ssp_dep,
                     name: 'linker supports stack protectors')
-            add_project_link_arguments('-lssp', language: ['c', 'cpp'])
+            add_project_dependencies(ssp_dep, language: ['c', 'cpp'])
         endif
     endif
 endif

@@ -16,7 +16,11 @@ qt_extra_flags = ['-DQT_STRICT_ITERATORS','-DQT_USE_QSTRINGBUILDER','-DQT_NO_CAS
 qt_cppargs = []
 qt_link_args = [gc_sections_linkargs]
 
+qt_dependency_method = host_machine.system() == 'darwin' ? 'config-tool' : 'auto'
 qt6_dep = dependency('qt6',
+    # Official macOS SDKs omit .pc files. Prefer qmake so a selected SDK is not
+    # silently replaced by a different Qt version from Homebrew's pkg-config.
+    method: qt_dependency_method,
     # Note that Qt < 6.2.5 does not provide pc files!
     version: '>=6.2',
     modules: [
@@ -29,8 +33,13 @@ qt6_dep = dependency('qt6',
 # Qt module doesn't provide the framework path to moc executable, so we
 # need to help moc find them. It's needed for QtQml/ module registration.
 if host_machine.system() == 'darwin' and qt6_dep.found()
-    qt_libdir = qt6_dep.get_variable(pkgconfig: 'libdir', configtool: '-query QT_INSTALL_LIBS')
+    qt_libdir = qt6_dep.get_variable(pkgconfig: 'libdir', configtool: 'QT_INSTALL_LIBS')
     qt_extra_flags += '-F' + qt_libdir
+    if host_machine.cpu_family() == 'aarch64' and qt6_dep.version().version_compare('<6.9')
+        # Qt 6.8's qyieldcpu.h calls __yield without its ARM ACLE declaration
+        # when newer Apple Clang recognizes it as a builtin.
+        qt_extra_flags += ['-include', 'arm_acle.h']
+    endif
     # The platform compositor messages the native video view directly.
     qt_link_args += '-lobjc'
 endif
@@ -1202,6 +1211,7 @@ if qt6_dep.found()
         )
         module_qrc = qt6.preprocess(
             module['target'] + '_assets',
+            method: qt_dependency_method,
             qresources: files(
                 meson.current_build_dir() / module['outdir'] / 'res.qrc',
                 meson.current_build_dir() / module['outdir'] / 'qmldir.qrc',
@@ -1227,7 +1237,7 @@ if qt6_dep.found()
     '''
 
     if cpp.compiles(qt_static_check, dependencies: qt6_dep, name: 'Qt6 compiled with static libraries')
-        qt_install_bin_directory = qt6_dep.get_variable(pkgconfig: 'bindir', configtool: '-query QT_INSTALL_BINS')
+        qt_install_bin_directory = qt6_dep.get_variable(pkgconfig: 'bindir', configtool: 'QT_INSTALL_BINS')
         qmake6 = find_program(qt_install_bin_directory + '/qmake6', required: true)
         if qmake6.found()
             qmake_additional_params = []
@@ -1281,6 +1291,7 @@ if qt6_dep.found()
     endif
 
     qt6pre_qrc = qt6.preprocess(
+        method: qt_dependency_method,
         qresources: qrc_files,
         include_directories: qt_include_dir,
         dependencies: qt6_dep,
@@ -1469,6 +1480,7 @@ if qt6_dep.found()
     }
 
     qt6pre_files = qt6.preprocess(ui_files: ui_sources,
+        method: qt_dependency_method,
         moc_headers: moc_headers,
         moc_extra_arguments: qt_extra_flags,
         include_directories: qt_include_dir,
@@ -1960,6 +1972,7 @@ if qt6_dep.found()
     quicktest_qt6_dep = dependency('qt6', version: '=' + qt6_dep.version(), modules: ['QuickTest'], required: false)
     if quicktest_qt6_dep.found() and  qtest_qt6_dep.found()
         qml_test_moc = qt6.compile_moc(
+            method: qt_dependency_method,
             headers : files('tests/qml_test.hpp'),
             dependencies : [quicktest_qt6_dep, qt6_dep]
         )
