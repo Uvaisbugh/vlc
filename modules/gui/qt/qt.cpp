@@ -1237,7 +1237,7 @@ static void *Thread( void *obj )
             //some part of the probing needs to be executed on the GUI thread and some part will be ran in a background thread,
             //so we defer the execution of this once the app is started. We can't start the task directly as qApp isn't set yet
             //and there are scenarios where the main loop will never be run.
-            QMetaObject::invokeMethod(&app, [&](){
+            QMetaObject::invokeMethod(&app, [p_intf, graphicsApiValue, enableRhiSoftwareRenderer](){
                 // A cached (by then) valid graphics api is found, use it:
                 QQuickWindow::setGraphicsApi(static_cast<QSGRendererInterface::GraphicsApi>(graphicsApiValue.value<int>()));
                 if (p_intf->mainSettings->value(graphicsApiRhiSoftwareKey).value<bool>())
@@ -1316,6 +1316,7 @@ static void *Thread( void *obj )
             const QSGRendererInterface::GraphicsApi graphicsApi = rhiResult.first;
             QQuickWindow::setGraphicsApi(graphicsApi);
             p_intf->mainSettings->setValue(graphicsApiKey, static_cast<int>(graphicsApi));
+            p_intf->mainSettings->setValue(graphicsApiRhiSoftwareKey, rhiResult.second);
             p_intf->mainSettings->sync();
         }
     }
@@ -1435,7 +1436,7 @@ static void *Thread( void *obj )
                              [&app, mainCtx, settings](QQuickWindow::SceneGraphError error, const QString &message) {
                                  qCritical() << "Compositor: Scene Graph Error: " << error << ", Message: " << message;
                                  assert(mainCtx);
-#ifdef _WIN32
+#if defined(_WIN32) && defined(RHI_HEADER_AVAILABLE)
                                 // This is not really important, as with graceful exit the events in the queue should
                                 // be cleared first. This means that in the worst case the application should wait
                                 // until asynchronous probing is completed before exiting.
