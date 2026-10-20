@@ -46,6 +46,14 @@ validation in our builds, not a claim that all Figma variants are complete.
 
 ## Required fresh native validation
 
+Run 39402484983 compiled the integrated native Linux application at `0d38edc1`
+and executed 82 Qt suites: 72 passed and 10 failed. Nine failed suites reported
+SVG image decoding errors because the container lacks Qt's SVG image-format
+plugin. The remaining suite's read-only storage fixture was writable because
+the job ran as root. The workflow now installs the SVG plugin matching the
+image's Qt version and runs tests as an unprivileged user. These fixes require
+a fresh passing run; the failed result is retained as evidence, not waived.
+
 The integrated media-library patch set and network-enabled Qt change the
 dependency requirements. Do not reuse the baseline's dependency archive as if
 it were equivalent. The fork workflow builds matching sources when no matching

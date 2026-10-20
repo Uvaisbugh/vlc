@@ -161,3 +161,9 @@ Windows smoke validation now includes generated FFV1 video and PCM audio,
 requires actual decoders and a Qt video window/display, rejects dummy video
 output and graphics initialization failures, and retains runtime logs. This
 test is defined but must pass on the freshly built integrated package.
+
+Native Linux compilation passed at `0d38edc1` in run 39402484983. Its Qt suite
+result was 72 passing suites / 10 failing suites: nine SVG decoding failures
+from the missing runtime image plugin, and one read-only storage test invalidated
+by root permissions. The workflow now provisions the matching SVG plugin and
+runs tests without root privileges. A passing rerun remains required.

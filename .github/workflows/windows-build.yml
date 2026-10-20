@@ -186,6 +186,13 @@ jobs:
         run: |
           set -euo pipefail
           git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          # QML's data: SVG images require the runtime image-format plugin.
+          # Keep it on the image's Qt version instead of mixing private Qt ABIs.
+          apt-get update
+          qt_version=$(pkg-config --modversion Qt6Core)
+          svg_version=$(apt-cache madison qt6-svg-plugins | awk -v version="$qt_version" '$3 ~ "^" version "[+~-]" {print $3; exit}')
+          test -n "$svg_version" || { echo "No SVG plugin matching Qt $qt_version" >&2; exit 1; }
+          apt-get install -y --no-install-recommends "qt6-svg-plugins=$svg_version"
           export JOBS=4
           extras/package/release/build-medialibrary.sh
           export PKG_CONFIG_PATH="$PWD/build-release-deps/prefix/lib/pkgconfig:${PKG_CONFIG_PATH:-}"
@@ -207,7 +214,10 @@ jobs:
               raise SystemExit('Redesign tests missing from native build: ' + ', '.join(sorted(missing)))
           print(f'All {len(expected)} redesign QML suites are registered.')
           PY
-          meson test -C build-redesign --suite qt --print-errorlogs --timeout-multiplier 2
+          # Root bypasses read-only fixtures, invalidating storage-failure tests.
+          useradd --create-home vlctest
+          chown -R vlctest:vlctest "$GITHUB_WORKSPACE"
+          runuser -u vlctest -- meson test -C build-redesign --suite qt --print-errorlogs --timeout-multiplier 2
 
       - name: Preserve native test diagnostics
         if: always()
