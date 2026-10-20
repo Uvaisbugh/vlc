@@ -167,14 +167,14 @@ Item {
                 id: footerCenter
                 objectName: "customFooterCenter"
                 x: root.hasStretch("footerCenter") ? footerLeft.x + footerLeft.width + root.theme.dp(10) : (parent.width - width) / 2
-                width: root.hasStretch("footerCenter") ? Math.max(0, parent.width - footerLeft.width - footerRight.width - root.theme.dp(56)) : root.preferredWidth("footerCenter")
+                width: root.hasStretch("footerCenter") ? Math.max(0, parent.width - footerLeft.width - footerRight.width - root.theme.dp(root.audioRight ? 57 : 56)) : root.preferredWidth("footerCenter")
                 anchors.verticalCenter: parent.verticalCenter
                 spacing: root.theme.dp(root.gap("footerCenter"))
             }
             RowLayout {
                 id: footerRight
                 objectName: "customFooterRight"
-                anchors.right: parent.right; anchors.rightMargin: root.theme.dp(root.standardRight && !root.renderedLayout.zones.footerRight.includes("fullscreen") ? 17 : 18)
+                anchors.right: parent.right; anchors.rightMargin: root.theme.dp(root.standardRight && !root.audioRight && !root.renderedLayout.zones.footerRight.includes("fullscreen") ? 17 : 18)
                 width: root.hasSpacer("footerRight") && !root.hasStretch("footerCenter")
                     ? Math.max(implicitWidth, (parent.width - root.preferredWidth("footerCenter")) / 2 - root.theme.dp(28)) : implicitWidth
                 anchors.verticalCenter: parent.verticalCenter

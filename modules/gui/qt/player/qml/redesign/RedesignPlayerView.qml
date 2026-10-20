@@ -741,7 +741,7 @@ FocusScope {
                 Text {
                     objectName: "elapsedTimeLabel"
                     visible: root.width > theme.dp(650)
-                    Layout.preferredWidth: Math.max(theme.dp(chrome.hasTimeline("above") ? 74 : 82), implicitWidth)
+                    Layout.preferredWidth: Math.max(theme.dp(chrome.hasTimeline("above") ? 74 : chrome.audioRight ? 84 : 82), implicitWidth)
                     leftPadding: chrome.hasTimeline("above") ? 0 : theme.dp(8)
                     horizontalAlignment: Text.AlignHCenter
                     text: root.timeText
