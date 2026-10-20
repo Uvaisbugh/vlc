@@ -1,7 +1,9 @@
 # Build and release validation
 
-Updated 2026-10-20. The baseline and first player component compiled on Windows;
-the full native redesign still needs passing native tests and packaged runtime QA.
+Updated 2026-10-20. The integrated native redesign built on Windows and Linux.
+The Windows runtime passed fresh-runner and local portable-folder audio/video
+tests, and all 82 native Qt suites passed. Full per-frame visual parity and the
+remaining behavior combinations still require an audit.
 See REDESIGN_CHECKLIST.md for release gates and doc/redesign/INTEGRATION.md for
 source provenance and current test results.
 
@@ -21,6 +23,9 @@ The branch workflow `.github/workflows/windows-build.yml` runs four jobs:
 4. `native-qt-tests`: Linux builds the patched media library and native VLC with
    Qt enabled, then builds/runs the actual C++ and QML `qt` Meson suite with the
    compiled VLC.Util module. The test harness uses the app's bundled Inter font.
+   This job calls `.github/workflows/native-qt-tests.yml`, which also runs
+   independently when its own configuration changes. Checksummed Debian snapshot
+   packages provide the SVG plugin matching the pinned image's Qt 6.10.2 ABI.
 
 The containers are versioned from upstream `extras/ci/gitlab-ci.yml`:
 
@@ -60,6 +65,8 @@ patched media library with `extras/package/release/build-medialibrary.sh`.
 
 - Baseline build passed: https://github.com/Uvaisbugh/vlc/actions/runs/39383363475
 - First player component build passed: https://github.com/Uvaisbugh/vlc/actions/runs/39386507328
+- Integrated Windows build and smoke jobs passed: https://github.com/Uvaisbugh/vlc/actions/runs/39404250425
+- All 82 native Qt suites passed: https://github.com/Uvaisbugh/vlc/actions/runs/39418826419
 - Current runs: https://github.com/Uvaisbugh/vlc/actions/workflows/windows-build.yml
 - Public implementation PR: https://github.com/Uvaisbugh/vlc/pull/1
 

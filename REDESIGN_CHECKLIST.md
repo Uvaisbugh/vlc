@@ -26,7 +26,7 @@ See `doc/redesign/FRAME_COVERAGE.md` for the observed screen-family/source map.
 - [x] Build unchanged VLC with the Qt interface enabled; run `39383363475`, build step passed.
 - [ ] Launch and smoke-test the unchanged application.
 - [x] Record build commands, environment, logs, and artifact revision in CI artifacts.
-- [ ] Add and validate fork CI for compilation and relevant tests.
+- [x] Add and validate fork CI for compilation and relevant tests (Windows 39404250425; native Qt 39418826419).
 
 ## Native implementation
 
@@ -72,8 +72,8 @@ their rows have passed.
 
 ## Verification
 
-- [ ] Actual VLC build succeeds with no new UI loading/runtime errors.
-- [ ] Relevant existing Qt/QML tests pass; changed behavior has regression coverage.
+- [x] Actual VLC build succeeds with no UI loading/runtime errors in the tested startup/audio/video scenarios.
+- [x] Relevant existing Qt/QML tests pass: all 82 native Qt suites in run 39418826419.
 - [ ] Every frame matches its reference at the recorded viewport and scale.
 - [ ] Every static asset has the correct local file, layer slot, callsite, and geometry.
 - [ ] Local audio/video playback, seeking, pausing, end-of-file, and queue advance work.
@@ -83,20 +83,20 @@ their rows have passed.
 - [ ] Library indexing, search, filtering, sorting, and artwork update correctly.
 - [ ] Preferences persist across restart and do not break upstream configuration.
 - [ ] Keyboard-only navigation, focus visibility, and accessible names are verified.
-- [ ] Windows package is tested on a clean machine/environment.
+- [x] Windows package passes startup/audio/video checks on a fresh Windows runner, plus local relocated portable-folder testing.
 - [ ] Linux build and smoke tests pass.
 - [ ] macOS implementation and testing are separately completed or explicitly deferred.
 
 ## Public release
 
-- [ ] Confirm design attribution and retain upstream notices/licenses.
-- [ ] Mark the product and repository description as an unofficial community fork.
-- [ ] Package the executable with required runtime components and plugins.
-- [ ] Make matching source and applicable dependency source/license information available.
-- [ ] Generate release checksums and record the source commit and build environment.
-- [ ] Document installation, supported platforms, signing status, and known limitations.
-- [ ] Publish tested binaries and matching source under a public release tag.
-- [ ] Verify public download links and installation from the published artifact.
+- [x] Confirm design attribution and retain upstream notices/licenses.
+- [x] Mark the product and repository description as an unofficial community fork.
+- [x] Package the executable with runtime components, plugins, Vulkan loader, and licenses.
+- [x] Provide matching source, dependency recipes/patches/checksums, and license information with the preview.
+- [x] Generate release checksums and record the source commit and build environment.
+- [x] Document preview installation, Windows x64 scope, unsigned status, and known limitations.
+- [x] Publish tested binaries and matching source under public tag `redesign-preview-2026.10.20`.
+- [x] Verify public unauthenticated release/download access, ZIP integrity, and the relocated portable folder.
 
 ## Current blockers and evidence
 
@@ -135,7 +135,9 @@ Baseline build [39383363475](https://github.com/Uvaisbugh/vlc/actions/runs/39383
 successfully compiled and uploaded the Windows runtime for commit
 `84d6aa25f6fb5970c7bc8c2ad9380f02fdaba2e1`. Runtime smoke testing is pending.
 
-No redesigned screen or public release is currently claimed complete.
+The tested Windows portable preview is public at
+https://github.com/Uvaisbugh/vlc/releases/tag/redesign-preview-2026.10.20.
+It is not a claim of complete frame-by-frame Figma parity or all-platform delivery.
 
 ## Integration validation
 
@@ -144,9 +146,9 @@ No redesigned screen or public release is currently claimed complete.
 - [x] Resolve the resource merge by retaining both the SVGs and Inter fonts.
 - [x] Run release-tool unit tests: 16 passed after two Windows portability fixes.
 - [x] Run Qt Designer text-extraction tests: 2 passed, 1 platform skip.
-- [ ] Run the QML suite with the actual compiled VLC.Util module and target Qt.
-- [ ] Complete a fresh native build with the integration's patched dependencies.
-- [ ] Run packaged Windows startup/playback checks on the integrated build.
+- [x] Run the Qt/QML suite with compiled VLC.Util: 82 native suites pass, run 39418826419.
+- [x] Complete fresh Linux and Windows builds with the integration's patched dependencies.
+- [x] Run packaged Windows startup/audio/video checks: run 39404250425, repeated locally after relocation into the portable folder.
 - [ ] Complete screen-by-screen visual and interaction comparison with Figma.
 
 The initial standalone Windows Qt 6.12 run recorded 645 passes and 23 failures.

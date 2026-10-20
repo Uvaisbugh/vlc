@@ -44,15 +44,31 @@ validation in our builds, not a claim that all Figma variants are complete.
   missing FFmpeg executable. The workflow now installs it explicitly before
   generating the runtime fixture. A fresh job must verify the fix.
 
-## Required fresh native validation
+## Native validation results
+
+- Windows source `0279317bbd0e26bfaec7e6cc3b854d2b92801de8` built and passed
+  fresh-runner native startup, audio decoding, video decoding, and Qt video output
+  in run 39404250425. Its stripped runtime artifact is approximately 96 MB.
+- Native Qt run 39418826419 passed **all 82 suites**, using the actual compiled
+  VLC modules, bundled Inter font, matching archived SVG runtime, and ordinary
+  user permissions. Its application source is identical to the tested Windows
+  source; the intervening commit adds the corrected native validation workflow.
+- The downloaded Windows archive's SHA-256 matched. Its relocated portable
+  folder also passed dummy/Qt audio playback and Qt video playback locally.
+- Native UI checks confirmed subtitle rendering, play/pause, pointer seeking,
+  seek preview, queue display, settings opening/dismissal, fullscreen, and return
+  to the normal window. Full per-frame parity and all interaction combinations
+  remain outside this preview's verification claims.
+
+### Earlier failures and fixes
 
 Run 39402484983 compiled the integrated native Linux application at `0d38edc1`
 and executed 82 Qt suites: 72 passed and 10 failed. Nine failed suites reported
 SVG image decoding errors because the container lacks Qt's SVG image-format
 plugin. The remaining suite's read-only storage fixture was writable because
 the job ran as root. The workflow now installs the SVG plugin matching the
-image's Qt version and runs tests as an unprivileged user. These fixes require
-a fresh passing run; the failed result is retained as evidence, not waived.
+image's Qt version and runs tests as an unprivileged user. The passing rerun above
+supersedes this failure; its diagnostics remain available as evidence.
 
 The integrated media-library patch set and network-enabled Qt change the
 dependency requirements. Do not reuse the baseline's dependency archive as if

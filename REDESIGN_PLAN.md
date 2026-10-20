@@ -1,6 +1,7 @@
 # VLC redesign implementation plan
 
-Status: native redesign integrated and pushed; full native validation in progress; no release delivered.
+Status: native redesign integrated and tested; Windows portable preview published;
+complete per-frame Figma parity audit remains open.
 Updated: 2026-10-20.
 
 ## Outcome

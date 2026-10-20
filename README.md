@@ -8,6 +8,13 @@ Fork-specific planning and validation are tracked in [REDESIGN_PLAN.md](REDESIGN
 and [REDESIGN_CHECKLIST.md](REDESIGN_CHECKLIST.md). Builds from this fork remain
 previews until their own runtime and visual checks have passed.
 
+Download this fork's **Windows x64 portable preview** from
+[Releases](https://github.com/Uvaisbugh/vlc/releases). Extract the whole ZIP and
+open `vlc.exe`; its portable profile stays separate from installed VLC.
+The Windows build passed startup/audio/video checks, and all 82 native Qt test
+suites pass. Full frame-by-frame Figma parity remains under audit; this is an
+unsigned community preview, not an official VideoLAN release.
+
 This fork adapts [Juxtopposed’s VLC redesign](https://www.figma.com/community/file/1691465999134370980/vlc-redesign)
 for VLC’s native interface. The interface and settings workflow are in active development.
 Existing community reference builds are on
@@ -17,6 +24,8 @@ This fork's preview builds and validation are tracked in
 Release tooling and the `4.0.0-beta.N` version scheme are documented in [doc/RELEASING.md](doc/RELEASING.md).
 For building on Linux from source, see [doc/BUILD-linux.md](doc/BUILD-linux.md).
 For building on macOS from source, see [doc/BUILD-macos.md](doc/BUILD-macos.md).
+
+Reference screenshots preserved from the integrated community implementation:
 
 ![Simple player with the pixel-cat video](doc/images/redesign/player.png)
 
@@ -51,7 +60,7 @@ This allows embedding the engine in 3rd party applications, while letting them t
 
 ## Redesign attribution
 
-The redesigned interface on `master` is adapted from **VLC Redesign**
+The redesigned interface is adapted from **VLC Redesign**
 by [Juxtopposed](https://www.juxtopposed.com/), licensed under
 [Creative Commons Attribution 4.0 International (CC BY 4.0)](https://creativecommons.org/licenses/by/4.0/).
 The original design is available on
