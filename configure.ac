@@ -5071,12 +5071,10 @@ dnl update checking system
 dnl
 AC_ARG_ENABLE([update-check],
   AS_HELP_STRING([--enable-update-check], [update checking system (default disabled)]))
-if test "${enable_update_check}" = "yes"
-then
- AS_IF([test "${have_gcrypt}" != "yes"],[
-    AC_MSG_ERROR([libgcrypt is required for update checking system]) ])
-fi
-AM_CONDITIONAL([UPDATE_CHECK], [test "${enable_update_check}" = "yes"])
+dnl GitHub notifications need Qt Network only. Retain the signed core updater
+dnl when libgcrypt is available for a future authenticated install mechanism.
+AM_CONDITIONAL([UPDATE_CHECK], [test "${enable_update_check}" = "yes" -a "${have_gcrypt}" = "yes"])
+AM_CONDITIONAL([QT_UPDATE_CHECK], [test "${enable_update_check}" = "yes"])
 
 dnl
 dnl OS X notification plugin

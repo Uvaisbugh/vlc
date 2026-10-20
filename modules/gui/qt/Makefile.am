@@ -95,7 +95,7 @@ if HAVE_WIN32
 libqt_plugin_la_CXXFLAGS += $(LIBCOMCXXFLAGS)
 libqt_plugin_la_LIBADD += $(LIBCOM) -lcomctl32 -luuid -ldwmapi
 endif
-if UPDATE_CHECK
+if QT_UPDATE_CHECK
 libqt_plugin_la_CPPFLAGS += -DUPDATE_CHECK
 endif
 if QT_QML_DEBUG
@@ -313,6 +313,8 @@ libqt_plugin_la_SOURCES = \
 	player/player_controller.cpp player/player_controller.hpp player/player_controller_p.hpp \
 	util/seek_preview_cache.hpp util/seek_preview_image_provider.hpp \
 	util/subtitle_source_service.hpp util/subtitle_source_service.cpp \
+	util/github_release_service.hpp util/github_release_service.cpp \
+	util/release_info.hpp util/release_info.cpp \
 	player/subtitle_timeline_scanner.cpp player/subtitle_timeline_scanner.hpp \
 	player/audio_waveform_scanner.cpp player/audio_waveform_scanner.hpp \
 	player/player_controlbar_model.cpp player/player_controlbar_model.hpp \
@@ -539,6 +541,7 @@ nodist_libqt_plugin_la_SOURCES = \
 	player/delay_estimator.moc.cpp \
 	player/input_models.moc.cpp \
 	util/subtitle_source_service.moc.cpp \
+	util/github_release_service.moc.cpp \
 	player/player_controller.moc.cpp \
 	player/player_controlbar_model.moc.cpp \
 	player/control_list_model.moc.cpp \
@@ -1140,7 +1143,7 @@ libqml_module_maininterface_a_QML = \
 	maininterface/qml/NoMedialibHome.qml \
 	maininterface/qml/OpenFileSplitButton.qml
 
-if UPDATE_CHECK
+if QT_UPDATE_CHECK
 libqml_module_maininterface_a_QML += maininterface/qml/UpdatePane.qml
 endif
 
@@ -2377,6 +2380,19 @@ test_qt_track_folder_rules_LDADD = $(QT_QTEST_COMMON_ldadd)
 test_qt_track_folder_rules_LDFLAGS = $(QT_QTEST_COMMON_ldflags)
 check_PROGRAMS += test_qt_track_folder_rules
 TESTS += test_qt_track_folder_rules
+
+test_qt_github_releases_SOURCES = \
+	tests/test_github_releases.cpp util/release_info.cpp util/release_info.hpp \
+	util/github_release_service.cpp util/github_release_service.hpp
+nodist_test_qt_github_releases_SOURCES = tests/test_github_releases.moc util/github_release_service.moc.cpp
+BUILT_SOURCES += tests/test_github_releases.moc
+CLEANFILES += tests/test_github_releases.moc
+test_qt_github_releases_CPPFLAGS = $(QT_QTEST_COMMON_cppflags)
+test_qt_github_releases_CXXFLAGS = $(QT_QTEST_COMMON_cxxflags)
+test_qt_github_releases_LDADD = $(QT_QTEST_COMMON_ldadd)
+test_qt_github_releases_LDFLAGS = $(QT_QTEST_COMMON_ldflags)
+check_PROGRAMS += test_qt_github_releases
+TESTS += test_qt_github_releases
 
 test_qt_subtitle_sources_SOURCES = \
 	tests/test_subtitle_sources.cpp util/subtitle_source_service.cpp util/subtitle_source_service.hpp

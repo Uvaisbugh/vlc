@@ -831,6 +831,7 @@ FocusScope {
                     case UpdateModel.Unchecked:
                     case UpdateModel.Checking:
                     case UpdateModel.UpToDate:
+                    case UpdateModel.CheckFailed:
                         return false
                     default:
                         return true

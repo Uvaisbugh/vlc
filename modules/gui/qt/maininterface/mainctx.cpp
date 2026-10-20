@@ -300,8 +300,8 @@ MainCtx::MainCtx(qt_intf_t *_p_intf)
         !var_InheritBool( p_intf, "qt-privacy-ask" ) )
     {
         int interval = var_InheritInteger( p_intf, "qt-updates-days" );
-        if( QDate::currentDate() >
-            getSettings()->value( "updatedate" ).toDate().addDays( interval ) )
+        const auto lastCheck = getSettings()->value("updatedate").toDate();
+        if (!lastCheck.isValid() || QDate::currentDate() >= lastCheck.addDays(interval))
         {
             /* check for update at startup */
             getUpdateModel()->checkUpdate();

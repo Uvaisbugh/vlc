@@ -418,7 +418,7 @@ vlc_module_begin ()
 #ifdef UPDATE_CHECK
     add_bool( "qt-updates-notif", true, UPDATER_TEXT,
               UPDATER_LONGTEXT )
-    add_integer_with_range( "qt-updates-days", 3, 0, 180,
+    add_integer_with_range( "qt-updates-days", 1, 0, 180,
               UPDATER_DAYS_TEXT, nullptr )
 #endif
 

@@ -477,10 +477,9 @@ else
     endif
 endif
 
-if get_option('update-check').allowed()
-    if not gcrypt_dep.found()
-        error('libgcrypt is required for update checking system')
-    endif
+# GitHub notifications live in Qt. Keep the optional signed download backend
+# available when libgcrypt is present.
+if get_option('update-check').allowed() and gcrypt_dep.found()
     libvlccore_sources += [ 'misc/update.c', 'misc/update_crypto.c' ]
     vlccore_cargs += '-DUPDATE_CHECK'
     libvlccore_deps += gcrypt_dep

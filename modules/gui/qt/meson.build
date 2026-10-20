@@ -149,6 +149,7 @@ moc_headers = files(
     'playlist/playlist_item.hpp',
     'playlist/playlist_model.hpp',
     'playlist/playlist_tree_model.hpp',
+    'util/github_release_service.hpp',
     'util/subtitle_source_service.hpp',
     'util/asynctask.hpp',
     'util/accessible_compat_attached.hpp',
@@ -464,6 +465,9 @@ qt_plugin_sources = files(
     'util/seek_preview_image_provider.hpp',
     'util/subtitle_source_service.hpp',
     'util/subtitle_source_service.cpp',
+    'util/github_release_service.cpp',
+    'util/release_info.cpp',
+    'util/release_info.hpp',
     'player/player_controlbar_model.cpp',
     'player/player_controlbar_model.hpp',
     'player/control_list_model.cpp',
@@ -696,7 +700,7 @@ qml_modules += {
 
 qml_maininterface_extra_files = []
 
-if get_option('update-check').allowed() and gcrypt_dep.found()
+if get_option('update-check').allowed()
     qt_extra_flags += '-DUPDATE_CHECK'
     qml_maininterface_extra_files += 'maininterface/qml/UpdatePane.qml'
 endif
@@ -1584,6 +1588,16 @@ if qt6_dep.found()
             'include_directories': qt_include_dir,
             'link_with': [libvlccore],
             'dependencies': [qt6_dep, qt_extra_deps, qtest_qt6_dep],
+        }
+        vlc_tests += {
+            'name': 'test_qt_github_releases',
+            'sources': files('tests/test_github_releases.cpp', 'util/release_info.cpp', 'util/github_release_service.cpp'),
+            'moc_sources': files('tests/test_github_releases.cpp'),
+            'moc_headers': files('util/github_release_service.hpp'),
+            'suite': ['qt'],
+            'include_directories': qt_include_dir,
+            'dependencies': [qt6_dep, qt_extra_deps, qtest_qt6_dep],
+            'link_args': qt_link_args,
         }
         vlc_tests += {
             'name': 'test_qt_subtitle_sources',
