@@ -193,8 +193,8 @@ jobs:
         run: |
           Expand-Archive downloads/vlc-juxtopposed-${{ needs.prepare.outputs.version }}-win64.zip "$env:RUNNER_TEMP/relocated"
           $vlc = "$env:RUNNER_TEMP/relocated/vlc-win64/vlc.exe"
-          $version = (& $vlc --version 2>&1 | Out-String)
-          if ($version -notmatch [regex]::Escape("VLC media player $env:RELEASE_TAG ")) { throw 'Compiled version does not match release tag' }
+          python extras/package/release/version.py "$env:RELEASE_TAG" --executable $vlc
+          if ($LASTEXITCODE -ne 0) { throw 'Compiled version does not match release tag' }
           python -c "import wave; w=wave.open('sample.wav','wb'); w.setparams((1,2,48000,0,'NONE','not compressed')); w.writeframes(b'\0\0'*96000); w.close()"
           $sample = (Resolve-Path sample.wav).Path
           # Reuse the portable profile to exercise the cached graphics probe.

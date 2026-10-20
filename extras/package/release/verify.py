@@ -5,6 +5,7 @@ import os
 from pathlib import Path
 import subprocess
 import tempfile
+from version import verify_binary_version
 
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('executable', type=Path)
@@ -21,11 +22,10 @@ with tempfile.TemporaryDirectory(prefix='vlc-release-smoke-') as temp:
                XDG_DATA_HOME=str(state / 'data'), XDG_CACHE_HOME=str(state / 'cache'),
                VLC_USERDATA_PATH=str(state / 'userdata'))
     executable = str(args.executable.resolve())
-    version = subprocess.run([executable, '--version'], env=env, timeout=30, check=True,
-                             stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
-    print(version.stdout)
-    if args.expected_version and f"VLC media player {args.expected_version} " not in version.stdout:
-        raise SystemExit("Installed application version does not match the release tag")
+    try:
+        print(verify_binary_version(executable, args.expected_version, env))
+    except (ValueError, OSError, subprocess.SubprocessError) as error:
+        raise SystemExit(str(error))
     modules = subprocess.run([executable, '--ignore-config', '--list'], env=env, timeout=60,
                              check=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
     for required in ('qt', 'avcodec', 'medialibrary'):

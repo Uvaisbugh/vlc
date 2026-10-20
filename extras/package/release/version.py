@@ -4,6 +4,7 @@ import argparse
 import os
 from pathlib import Path
 import re
+import subprocess
 
 ROOT = Path(__file__).resolve().parents[3]
 PATTERN = re.compile(r'(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(?:-(alpha|beta|rc)\.([1-9][0-9]*))?')
@@ -52,13 +53,44 @@ def bundle_version(tag):
     return core + {'alpha': 'a', 'beta': 'b', 'rc': 'fc'}[info['channel']] + str(info['number'])
 
 
+def reported_version(output):
+    # The CLI uses "VLC version"; accept the familiar product-name banner too.
+    # Match the application token, never a version in the parenthesized changeset.
+    banner = re.search(r'^VLC (?:version|media player) (\S+)(?=\s|$)', output, re.MULTILINE)
+    if not banner:
+        raise ValueError('Could not read the application version from VLC --version output')
+    return banner[1]
+
+
+def verify_binary_version(executable, expected=None, env=None):
+    # VLC translates the CLI banner. Force its language only for this probe.
+    probe_env = dict(os.environ if env is None else env, LC_ALL='C', LANGUAGE='C')
+    if os.name == 'nt':
+        # VLC's CLI checks PWD before opening a console, redirecting stdout to
+        # vlc-help.txt, and waiting for RETURN. Keep this subprocess capturable.
+        probe_env.setdefault('PWD', os.getcwd())
+    result = subprocess.run([str(executable), '--version'], env=probe_env,
+                            timeout=30, check=True, stdout=subprocess.PIPE,
+                            stderr=subprocess.STDOUT, text=True)
+    actual = reported_version(result.stdout)
+    if expected is not None and actual != expected:
+        raise ValueError(f'Installed application version does not match the release tag '
+                         f'(expected {expected}; got {actual})')
+    return result.stdout
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('tag', nargs='?', default=os.environ.get('RELEASE_TAG') or None)
+    parser.add_argument('--executable', type=Path, help='Also verify the installed VLC executable')
     args = parser.parse_args()
     try:
-        print(validate_tag(args.tag)['version'])
-    except ValueError as error:
+        expected = validate_tag(args.tag)['version']
+        if args.executable:
+            print(verify_binary_version(args.executable, expected), end='')
+        else:
+            print(expected)
+    except (ValueError, OSError, subprocess.SubprocessError) as error:
         parser.error(str(error))
 
 

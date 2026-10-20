@@ -1,8 +1,12 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 import importlib.util
+import io
 from pathlib import Path
+import subprocess
+import sys
 import tempfile
 import unittest
+from unittest import mock
 
 SCRIPT = Path(__file__).resolve().parents[1] / 'version.py'
 spec = importlib.util.spec_from_file_location('release_version', SCRIPT)
@@ -11,6 +15,64 @@ spec.loader.exec_module(version)
 
 
 class VersionTests(unittest.TestCase):
+    def test_reported_cli_version(self):
+        output = ('VLC version 4.0.0-beta.4 Otto Chriek (4.0.0-dev-40063-ge93a0c3478)\n'
+                  'Compiled by [not implemented with meson] on [not implemented with meson]\n'
+                  'Compiler: gcc 11.4.0\n')
+        self.assertEqual(version.reported_version(output), '4.0.0-beta.4')
+
+    def test_other_banners_and_line_endings(self):
+        for output, expected in (
+                ('VLC media player 4.0.0-beta.4 Otto Chriek (abcdef)\r\n', '4.0.0-beta.4'),
+                ('VLC version 4.0.0 Otto Chriek\n', '4.0.0'),
+                ('VLC version 4.0.0-beta.10', '4.0.0-beta.10'),
+                ('startup notice\nVLC version 4.1.0-rc.1 Otto Chriek\n', '4.1.0-rc.1')):
+            with self.subTest(output=output):
+                self.assertEqual(version.reported_version(output), expected)
+
+    def test_reject_unrecognized_banner(self):
+        for output in ('', 'Build metadata: 4.0.0-beta.4', 'Application failed to start'):
+            with self.subTest(output=output), self.assertRaises(ValueError):
+                version.reported_version(output)
+
+    def test_probe_matches_application_version(self):
+        output = 'VLC version 4.0.0-beta.4 Otto Chriek (4.0.0-dev-40063-ge93a0c3478)\n'
+        result = subprocess.CompletedProcess([], 0, stdout=output)
+        executable = Path('/path with spaces/VLC.app/Contents/MacOS/vlc')
+        with mock.patch.object(version.subprocess, 'run', return_value=result) as run:
+            self.assertEqual(version.verify_binary_version(executable, '4.0.0-beta.4',
+                             {'LC_ALL': 'fr_FR.UTF-8', 'LANGUAGE': 'fr', 'TEST_MARKER': 'kept'}), output)
+        self.assertEqual(run.call_args.args[0], [str(executable), '--version'])
+        self.assertEqual(run.call_args.kwargs['env'],
+                         {'LC_ALL': 'C', 'LANGUAGE': 'C', 'TEST_MARKER': 'kept'})
+        self.assertTrue(run.call_args.kwargs['check'])
+
+    def test_probe_rejects_wrong_version_and_changeset_matches(self):
+        for actual in ('4.0.0-beta.3', '4.0.0-beta.40', '4.0.0', '3.0.99'):
+            with self.subTest(actual=actual):
+                result = subprocess.CompletedProcess([], 0, stdout=
+                    f'VLC version {actual} Otto Chriek (4.0.0-beta.4-123-gabcdef)\n')
+                with mock.patch.object(version.subprocess, 'run', return_value=result), self.assertRaises(ValueError):
+                    version.verify_binary_version('vlc', '4.0.0-beta.4')
+
+    def test_windows_probe_skips_interactive_help_console(self):
+        result = subprocess.CompletedProcess([], 0, stdout='VLC version 4.0.0-beta.4 Otto Chriek\n')
+        with mock.patch.object(version.os, 'name', 'nt'), \
+             mock.patch.object(version.subprocess, 'run', return_value=result) as run:
+            version.verify_binary_version('vlc.exe', '4.0.0-beta.4', {})
+        self.assertTrue(run.call_args.kwargs['env']['PWD'])
+
+    def test_executable_cli_uses_shared_probe(self):
+        current = version.source_version()['version']
+        argv = ['version.py', current, '--executable', '/path with spaces/vlc']
+        banner = f'VLC version {current} Otto Chriek\n'
+        with mock.patch.object(sys, 'argv', argv), \
+             mock.patch.object(version, 'verify_binary_version', return_value=banner) as probe, \
+             mock.patch('sys.stdout', new_callable=io.StringIO) as output:
+            version.main()
+        probe.assert_called_once_with(Path('/path with spaces/vlc'), current)
+        self.assertEqual(output.getvalue(), banner)
+
     def test_source_matches_next_release(self):
         current = version.source_version()['version']
         self.assertEqual(version.validate_tag(current)['version'], current)

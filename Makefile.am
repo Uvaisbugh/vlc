@@ -28,6 +28,7 @@ EXTRA_DIST = \
 	extras/package/release/verify.py \
 	extras/package/release/Dockerfile.linux \
 	extras/package/release/tests/test_version.py \
+	extras/package/release/tests/test_verify.py \
 	extras/package/release/tests/test_package.py \
 	doc/RELEASING.md \
 	extras/package/npapi.am
