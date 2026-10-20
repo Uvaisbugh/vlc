@@ -30,7 +30,7 @@ See `REDESIGN_PLAN.md` for sequencing and the source map.
 ## Native implementation
 
 The native implementation from `dsojevic/juxtopposed-vlc` at
-`b876f75f43130249162796fd3057e1327e2b1d2b` is integrated locally with its history
+`b876f75f43130249162796fd3057e1327e2b1d2b` is integrated and pushed with its history
 and attribution. The areas below have source implementations available, but
 remain unchecked until audited against Figma and validated in this fork.
 
@@ -63,9 +63,9 @@ their rows have passed.
 
 | Figma node ID / frame | Theme / size / state | Native files | Assets | Functional result | Visual evidence | Status |
 | --- | --- | --- | --- | --- | --- | --- |
-| Pending Figma tool access | Unknown | Unassigned | Unexported | Not run | None | Blocked |
-| `247:445` / Player | 1920 × 1080, dark, video playback | `player/qml/Player.qml`, `ControlBar.qml`, `TopBar.qml` (under `modules/gui/qt/`) | Not exported | Not run | Browser canvas inspected on 2026-10-20; detailed context still pending | Identified |
+| `247:445` / Player | 1920 × 1080, dark, video playback | `player/qml/RedesignPlayer.qml`, `player/qml/redesign/RedesignPlayerView.qml`, `RedesignPlayerChrome.qml` (under `modules/gui/qt/`) | Play/pause SVGs exported; integrated assets require audit | Native runtime pending | Browser canvas inspected on 2026-10-20; detailed context still pending | Identified |
 | `970:3091` / Miniplayer | Component; variants not yet inspected | `modules/gui/qt/player/qml/MiniPlayer.qml` | Not exported | Not run | Browser search selection on 2026-10-20 | Identified |
+| `6259:14954` / new playlist | Dark; 713 × 589; radius 14; background #191919 at 95%; blur 50; shadow y 8 / blur 15 / black 46% | `player/qml/redesign/RedesignPlaylistDialog.qml`, `RedesignDialogSurface.qml` | Integrated | Geometry and interaction tests pass with Inter; native runtime pending | Signed-in Figma Properties and canvas inspected 2026-10-20 | Reference measured; rendered parity pending |
 
 ## Verification
 
@@ -102,7 +102,7 @@ their rows have passed.
 | Figma tools unavailable to this chat | Callable tool inventory contains no Figma tools; signed-in browser inspection now exposes Properties and SVG exports | Continue inspecting layers through the browser; full inventory remains pending |
 | Local native compiler environment unavailable | Qt/MinGW/Docker not found in inspected locations/PATH; no WSL distributions listed | GitHub cross-compilation now works; use the produced runtime for Windows smoke testing |
 
-## Build attempts
+## Build history
 
 - 2026-10-20: Added `.github/workflows/windows-build.yml` and started the first
   Windows x64 baseline build using the versioned VideoLAN cross-compilation
@@ -113,7 +113,13 @@ their rows have passed.
   and runtime verification are not yet marked complete.
 - Restarted run after the checkout fix:
   [39382578278](https://github.com/Uvaisbugh/vlc/actions/runs/39382578278).
-  Observed in progress on 2026-10-20.
+  It failed the Git ownership check, subsequently fixed using the scoped
+  workspace safe-directory setting. The next baseline and first UI patch built
+  successfully (runs 39383363475 and 39386507328).
+
+- Full native integration validation first started in run 39397790039 after
+  cancelling obsolete partial-component run 39396050384. Subsequent validation
+  fixes require a new run; consult the branch's latest Actions run for status.
 
 ## First UI patch
 
@@ -140,7 +146,15 @@ No redesigned screen or public release is currently claimed complete.
 - [ ] Run packaged Windows startup/playback checks on the integrated build.
 - [ ] Complete screen-by-screen visual and interaction comparison with Figma.
 
-A standalone Windows Qt 6.12 run recorded 645 passes and 23 failures. Several
-views could not compile because the standalone environment lacks VLC.Util;
-remaining failures include platform/font/layout behavior. This result is not
-treated as a passing full suite. Native CI must resolve the actual result.
+The initial standalone Windows Qt 6.12 run recorded 645 passes and 23 failures.
+After loading the same bundled Inter font as the app, fixing live add-on URL
+refresh, measuring breadcrumbs with matching text-rendering metrics, and waiting
+for the breadcrumb button to render before clicking, the result is **659 passed,
+9 failed**. All nine failures are import/compile failures from the missing native
+VLC.Util module. The isolated library suite passes all 85 checks. These results
+do not replace the native suite or establish full visual parity.
+
+Windows smoke validation now includes generated FFV1 video and PCM audio,
+requires actual decoders and a Qt video window/display, rejects dummy video
+output and graphics initialization failures, and retains runtime logs. This
+test is defined but must pass on the freshly built integrated package.

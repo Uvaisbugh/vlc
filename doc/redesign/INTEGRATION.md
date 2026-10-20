@@ -23,10 +23,17 @@ validation in our builds, not a claim that all Figma variants are complete.
   omitted the required Windows PWD environment field. The metadata now writes
   LF explicitly and the test checks the correct platform-specific environment.
 - Qt Designer text extraction: 2 tests pass, 1 platform skip.
-- Standalone QML tests using Windows Qt 6.12: 645 pass, 23 fail. The standalone
-  environment does not contain compiled VLC.Util, so several complete views
-  cannot instantiate there. Other failures require validation with the target
-  toolkit/platform; no application behavior has been changed to hide them.
+- Initial standalone QML tests using Windows Qt 6.12: 645 pass, 23 fail.
+  Correcting the test font to match the app's bundled Inter exposed two fixes:
+  add-on website bindings must observe backend metadata revisions, and
+  breadcrumb widths must use the same Qt text-rendering metrics as their labels.
+  The breadcrumb test also waits for rendering before sending its pointer event.
+  The latest result is **659 pass, 9 fail**; all remaining failures report the
+  missing compiled VLC.Util module. The isolated library suite passes all 85
+  checks. This standalone result is not a passing native suite.
+- The native QML harness now loads bundled Inter and fails clearly if it is
+  missing. Meson is allowed to build test targets before running them, including
+  targets deliberately excluded from the default application build.
 
 ## Required fresh native validation
 
@@ -37,7 +44,8 @@ prebuilt archive exists. Its native Linux test job builds the patched media
 library and actual VLC Qt modules before running the `qt` Meson test suite.
 
 Windows smoke testing verifies archive checksums, launches native dummy and Qt
-interfaces with ignored user configuration, plays a generated PCM fixture, and
-checks startup/resource errors. Pointer/keyboard interactions, video rendering,
+interfaces with ignored user configuration, plays generated PCM and FFV1 video
+fixtures, requires real audio/video decoders and Qt video output, and checks
+startup/resource/graphics errors. Pointer/keyboard interactions, rendered output,
 visual parity, clean-machine installation, Linux/macOS distribution, and a
 public release remain separate checklist gates.

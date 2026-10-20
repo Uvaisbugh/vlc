@@ -7,6 +7,10 @@ on:
       - '.github/workflows/windows-build.yml'
       - 'modules/gui/qt/**'
       - 'extras/package/win32/test-runtime.ps1'
+      - 'extras/package/release/**'
+      - 'contrib/**'
+      - '**/meson.build'
+      - 'meson_options.txt'
   workflow_dispatch:
 
 permissions:
@@ -17,6 +21,25 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  packaging-tests:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Test release tooling and generate playback fixture
+        run: |
+          python3 -m unittest discover -s extras/package/release/tests
+          mkdir -p smoke-media
+          ffmpeg -nostdin -v error -f lavfi -i testsrc2=size=320x180:rate=24 -f lavfi -i sine=frequency=440:sample_rate=48000 -t 4 -c:v ffv1 -c:a pcm_s16le smoke-media/sample.mkv
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: smoke-media-${{ github.sha }}
+          path: smoke-media/sample.mkv
+          if-no-files-found: error
+          retention-days: 14
+
   windows-x64:
     runs-on: ubuntu-24.04
     timeout-minutes: 360
@@ -87,7 +110,7 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
   windows-smoke:
-    needs: windows-x64
+    needs: [windows-x64, packaging-tests]
     runs-on: windows-2022
     timeout-minutes: 10
     steps:
@@ -111,10 +134,16 @@ jobs:
           tar -xzf runtime/vlc-windows-x64.tar.gz -C runtime
           if ($LASTEXITCODE -ne 0) { throw 'Runtime extraction failed.' }
 
-      - name: Launch native interfaces and play generated audio
+      - name: Download generated video and audio
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: smoke-media-${{ github.sha }}
+          path: smoke-media
+
+      - name: Launch native interfaces and play generated audio and video
         shell: pwsh
         run: |
-          ./extras/package/win32/test-runtime.ps1 -RuntimeDirectory runtime/vlc-win64 -EvidenceDirectory smoke-evidence
+          ./extras/package/win32/test-runtime.ps1 -RuntimeDirectory runtime/vlc-win64 -EvidenceDirectory smoke-evidence -VideoFixture smoke-media/sample.mkv
 
       - name: Preserve Windows runtime evidence
         if: always()
@@ -158,7 +187,8 @@ jobs:
           meson compile -C build-redesign -j 4
 
       - name: Run native Qt and QML tests
-        run: meson test -C build-redesign --suite qt --no-rebuild --print-errorlogs --timeout-multiplier 2
+        # Some test executables are build_by_default:false; let Meson build them.
+        run: meson test -C build-redesign --suite qt --print-errorlogs --timeout-multiplier 2
 
       - name: Preserve native test diagnostics
         if: always()

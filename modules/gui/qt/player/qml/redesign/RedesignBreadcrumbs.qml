@@ -14,12 +14,13 @@ C.Control {
     readonly property RedesignTheme theme: RedesignTheme { scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor }
     readonly property real separatorWidth: theme.dp(14)
     readonly property real overflowWidth: theme.dp(20)
+    property int measurementRevision: 0
     readonly property var widths: {
-        // Measurement methods do not establish a dependency on their font.
-        const normalFont = metrics.font
-        const boldFont = currentMetrics.font
-        return entries.map((entry, index) => Math.ceil(index === entries.length - 1 && boldCurrent
-            ? currentMetrics.advanceWidth(entry.label) : metrics.advanceWidth(entry.label)))
+        measurementRevision
+        return entries.map((entry, index) => {
+            const measurement = measurements.objectAt(index)
+            return measurement ? Math.ceil(measurement.advanceWidth) : 0
+        })
     }
     readonly property int firstVisible: {
         let total = widths.reduce((sum, value) => sum + value, 0) + Math.max(0, widths.length - 1) * separatorWidth
@@ -38,8 +39,23 @@ C.Control {
     font.pixelSize: theme.dp(16)
     font.weight: Font.Normal
     clip: true
-    FontMetrics { id: metrics; font.family: root.font.family; font.pixelSize: root.font.pixelSize; font.weight: Font.Normal }
-    FontMetrics { id: currentMetrics; font.family: root.font.family; font.pixelSize: root.font.pixelSize; font.weight: Font.DemiBold }
+    Instantiator {
+        id: measurements
+        model: root.entries
+        delegate: TextMetrics {
+            required property int index
+            required property var modelData
+            font.family: root.font.family
+            font.pixelSize: root.font.pixelSize
+            font.weight: root.boldCurrent && index === root.entries.length - 1 ? Font.DemiBold : Font.Normal
+            text: modelData.label
+            // Match Text's distance-field metrics rather than native font hinting.
+            renderType: Text.QtRendering
+            onAdvanceWidthChanged: root.measurementRevision++
+        }
+        onObjectAdded: root.measurementRevision++
+        onObjectRemoved: root.measurementRevision++
+    }
     onEntriesChanged: ancestors.close()
     RedesignActionMenu {
         id: ancestors

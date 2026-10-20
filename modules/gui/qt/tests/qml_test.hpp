@@ -29,6 +29,7 @@ public:
     using QObject::QObject;
 
 public slots:
+    void applicationAvailable();
     void qmlEngineAvailable(QQmlEngine *engine);
 };
 

@@ -516,6 +516,7 @@ TestCase {
         verify(current.width > 0)
         verify(!current.contentItem.truncated)
         const overflow = findChild(location, "libraryPathOverflow")
+        verify(waitForRendering(overflow))
         mouseClick(overflow)
         const menu = findChild(location, "libraryAncestorMenu")
         tryCompare(menu, "opened", true)

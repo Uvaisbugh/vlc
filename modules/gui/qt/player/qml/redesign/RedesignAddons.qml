@@ -17,7 +17,7 @@ ColumnLayout {
     readonly property var selectedAddon: { backend.revision; return selectedId.length ? backend.addonById(selectedId) : ({}) }
     readonly property bool canAdd: !backend.loading && selectedAddon.state === 0 && selectedAddon.manageable && !selectedAddon.broken && !selectedAddon.pending
     readonly property bool canRemove: !backend.loading && selectedAddon.state === 2 && selectedAddon.manageable && !selectedAddon.pending
-    readonly property string website: String(selectedAddon.website || "").trim()
+    readonly property string website: { backend.revision; return String(selectedAddon.website || "").trim() }
     readonly property bool canOpenWebsite: /^https?:\/\/[^/\s]+(?:[/?#]|$)/i.test(website)
     spacing: theme.dp(8)
     function addSelected() {

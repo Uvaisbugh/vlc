@@ -1,6 +1,7 @@
 param(
     [Parameter(Mandatory = $true)][string]$RuntimeDirectory,
-    [Parameter(Mandatory = $true)][string]$EvidenceDirectory
+    [Parameter(Mandatory = $true)][string]$EvidenceDirectory,
+    [string]$VideoFixture
 )
 
 $ErrorActionPreference = 'Stop'
@@ -33,16 +34,26 @@ try {
     $vlcWriter.Dispose()
 }
 
-foreach ($vlcInterface in @('dummy', 'qt')) {
-    $vlcLogPath = Join-Path $vlcEvidencePath "$vlcInterface.log"
-    $vlcOutputPath = Join-Path $vlcEvidencePath "$vlcInterface.stdout.txt"
-    $vlcErrorPath = Join-Path $vlcEvidencePath "$vlcInterface.stderr.txt"
+$vlcCases = @(
+    @{ Name = 'dummy'; Interface = 'dummy'; Media = $vlcFixture; Video = $false },
+    @{ Name = 'qt'; Interface = 'qt'; Media = $vlcFixture; Video = $false }
+)
+if ($VideoFixture) {
+    $vlcVideoPath = (Resolve-Path -LiteralPath $VideoFixture).Path
+    $vlcCases += @{ Name = 'qt-video'; Interface = 'qt'; Media = $vlcVideoPath; Video = $true }
+}
+foreach ($vlcCase in $vlcCases) {
+    $vlcInterface = $vlcCase.Interface
+    $vlcCaseName = $vlcCase.Name
+    $vlcLogPath = Join-Path $vlcEvidencePath "$vlcCaseName.log"
+    $vlcOutputPath = Join-Path $vlcEvidencePath "$vlcCaseName.stdout.txt"
+    $vlcErrorPath = Join-Path $vlcEvidencePath "$vlcCaseName.stderr.txt"
     $vlcArguments = @(
         '--ignore-config', '--no-one-instance', '--no-media-library', '--no-metadata-network-access',
         '--no-qt-privacy-ask', '--no-qt-updates-notif', '--no-qt-error-dialogs',
         '--intf', $vlcInterface, '--aout', 'dummy', '--play-and-exit',
         '--verbose', '2', '--file-logging', '--logfile', ('"' + $vlcLogPath + '"'),
-        ('"' + $vlcFixture + '"')
+        ('"' + $vlcCase.Media + '"')
     )
     $vlcProcess = Start-Process -FilePath $vlcExecutable -WorkingDirectory $vlcRuntimePath `
         -ArgumentList $vlcArguments -PassThru -WindowStyle Hidden `
@@ -61,11 +72,12 @@ foreach ($vlcInterface in @('dummy', 'qt')) {
     if (-not (Test-Path -LiteralPath $vlcLogPath)) { throw "$vlcInterface did not produce a runtime log." }
     $vlcLog = Get-Content -LiteralPath $vlcLogPath -Raw
     if ($vlcLog -notmatch 'EOF reached') { throw "$vlcInterface did not reach the end of the audio fixture." }
+    if ($vlcLog -notmatch 'using audio decoder module') { throw "$vlcCaseName did not decode audio." }
     if ($vlcInterface -eq 'qt' -and $vlcLog -notmatch 'using interface module "qt"') {
         throw 'The native Qt interface was not loaded.'
     }
     $vlcAllLogs = $vlcLog + (Get-Content -LiteralPath $vlcErrorPath -Raw)
-    if ($vlcAllLogs -match 'failed to load component|Component is not ready|no suitable interface module') {
+    if ($vlcAllLogs -match 'failed to load component|Component is not ready|no suitable interface module|QQmlApplicationEngine failed|Cannot load the VLC interface|Scene Graph Error|Failed to create RHI|Failed to initialize graphics backend') {
         throw "$vlcInterface could not initialize the application interface."
     }
     $vlcUiErrors = $vlcAllLogs -split "`n" | Where-Object {
@@ -73,8 +85,16 @@ foreach ($vlcInterface in @('dummy', 'qt')) {
         $_ -match 'ReferenceError|TypeError|Cannot open|is not a type|Unable to assign'
     }
     if ($vlcUiErrors) { throw "Redesign QML/resource errors: $($vlcUiErrors -join ' | ')" }
-    Write-Output "${vlcInterface}: native startup and PCM playback passed."
+    if ($vlcCase.Video) {
+        foreach ($vlcRequired in @('using video decoder module', 'using vout window module "qt"', 'using vout display module')) {
+            if ($vlcLog -notmatch [regex]::Escape($vlcRequired)) { throw "Video playback missing: $vlcRequired" }
+        }
+        if ($vlcLog -match 'using vout display module "vdummy"|video output display creation failed') {
+            throw 'Video playback did not create a working display.'
+        }
+    }
+    Write-Output "${vlcCaseName}: native startup and playback passed."
 }
 
-'Native startup, Qt loading, and PCM playback passed. Visual and interaction QA are separate.' |
+"Native startup, Qt loading, and PCM playback passed. Video tested: $([bool]$VideoFixture). Visual and interaction QA are separate." |
     Set-Content -LiteralPath (Join-Path $vlcEvidencePath 'result.txt')
