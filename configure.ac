@@ -2,15 +2,15 @@ dnl Autoconf settings for vlc
 
 AC_COPYRIGHT([Copyright 1999-2026 VLC authors and VideoLAN])
 
-AC_INIT([vlc], [4.0.0-dev])
+AC_INIT([vlc], [4.0.0-beta.4])
 VERSION_MAJOR=4
 VERSION_MINOR=0
 VERSION_REVISION=0
 VERSION_EXTRA=0
-VERSION_DEV=dev
+VERSION_DEV=beta.4
 
 VERSION_DATE=$(
-    VERSION_PATTERN='^v?([[0-9]]+\.?)+(-[[0-9]]+)?$'
+    VERSION_PATTERN='^v?([[0-9]]+\.?)+(-[[0-9A-Za-z]]+(\.[[0-9A-Za-z]]+)*)?$'
     VERSION_TAG=$(git tag --points-at HEAD --sort=-version:refname 2>/dev/null | grep -E "$VERSION_PATTERN" | head -n 1)
     if test -n "$VERSION_TAG"; then
         DATE=$(git for-each-ref --format='%(taggerdate:short)' "refs/tags/${VERSION_TAG}" 2>/dev/null)
