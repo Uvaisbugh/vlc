@@ -82,11 +82,19 @@ C.Popup {
                     RedesignButton {
                         required property var modelData
                         objectName: "trackTab_" + modelData.key
-                        Layout.fillWidth: true; Layout.fillHeight: true
+                        Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1
                         scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
-                        text: modelData.label; caption: theme.compactMenus || root.width > theme.dp(360) ? text : ""; iconName: theme.compactMenus ? "" : modelData.icon
-                        iconSize: theme.dp(20)
-                        foreground: root.page === modelData.key ? root.theme.foreground : Qt.darker(root.theme.foreground, 1.3)
+                        text: modelData.label; caption: theme.compactMenus || root.width > theme.dp(360) ? text : ""; iconName: theme.compactMenus ? "" : "nav-" + modelData.key
+                        iconSize: theme.dp(20); captionFontSize: 12; captionSpacing: 8
+                        topPadding: 0; bottomPadding: theme.dp(2)
+                        selected: root.page === modelData.key
+                        selectedIconName: modelData.key + "-two-tone"
+                        selectedForeground: theme.foreground
+                        selectedIconForeground: modelData.key === "video" ? theme.accent : theme.playerLabel
+                        iconForeground: root.lightTheme ? Qt.lighter(theme.foreground, 1.5) : "#404040"
+                        foreground: root.lightTheme ? Qt.lighter(theme.foreground, 1.5) : theme.playerLabel
+                        iconDetailColor: selected ? modelData.key === "video" ? theme.playerLabel : theme.menuAccent : iconForeground
+                        background: Rectangle { color: parent.hovered ? theme.hover : "transparent"; border.width: parent.visualFocus ? 1 : 0; border.color: theme.accent }
                         onClicked: root.page = modelData.key
                         Rectangle {
                             anchors.bottom: parent.bottom
@@ -124,7 +132,7 @@ C.Popup {
                     id: externalChoices
                     objectName: "externalTrackChoices"
                     Layout.fillWidth: true
-                    Layout.topMargin: root.theme.dp(16)
+                    Layout.topMargin: root.theme.dp(9)
                     visible: root.page === "subtitles" || count > 0
                     scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
                     menuMode: true

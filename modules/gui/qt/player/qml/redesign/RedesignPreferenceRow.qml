@@ -300,10 +300,10 @@ ColumnLayout {
                 anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter
                 scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
                 // Measure both labels so the width stays stable when the state changes.
-                implicitWidth: Math.max(theme.dp(64),
+                implicitWidth: Math.max(theme.dp(root.compact ? 68 : 64),
                     Math.ceil(onMetrics.advanceWidth) + theme.dp(40),
-                    Math.ceil(offMetrics.advanceWidth) + theme.dp(37))
-                width: implicitWidth; height: theme.dp(30)
+                    Math.ceil(offMetrics.advanceWidth) + theme.dp(root.compact ? 39 : 37))
+                width: implicitWidth; height: theme.dp(root.compact ? 32 : 30)
                 objectName: "preferenceToggleEditor"
                 checkable: true; checked: !!root.displayedValue && (root.editorEnabled || !root.presentation.hideDisabledValue)
                 text: root.label || root.description.title
@@ -311,21 +311,27 @@ ColumnLayout {
                 TextMetrics { id: onMetrics; font: stateText.font; text: qsTr("ON") }
                 TextMetrics { id: offMetrics; font: stateText.font; text: qsTr("OFF") }
                 background: Rectangle {
-                    radius: theme.dp(4); color: parent.checked ? theme.progress : theme.background
+                    radius: theme.dp(root.compact ? 6 : 4); color: parent.checked ? theme.progress : root.compact ? theme.field : theme.background
                     border.width: parent.visualFocus ? 1 : 0; border.color: theme.accent
                 }
                 contentItem: Item {
                     Rectangle {
+                        visible: root.compact && !parent.parent.checked
+                        x: theme.dp(32); y: theme.dp(3)
+                        width: parent.width - x - theme.dp(3); height: parent.height - theme.dp(6)
+                        radius: theme.dp(3); color: root.lightTheme ? theme.background : "#191919"
+                    }
+                    Rectangle {
                         x: parent.parent.checked ? parent.width - width - theme.dp(3) : theme.dp(3)
                         y: theme.dp(3); width: theme.dp(26); height: parent.height - theme.dp(6)
-                        radius: theme.dp(3); color: parent.parent.checked ? theme.accent : "#444444"
+                        radius: theme.dp(3); color: parent.parent.checked ? theme.accent : root.compact ? "#404040" : "#444444"
                     }
                     Text {
                         id: stateText
-                        x: parent.parent.checked ? theme.dp(8) : theme.dp(34)
+                        x: parent.parent.checked ? theme.dp(8) : theme.dp(root.compact ? 36 : 34)
                         anchors.verticalCenter: parent.verticalCenter
                         text: parent.parent.checked ? qsTr("ON") : qsTr("OFF")
-                        font.pixelSize: theme.dp(12); color: parent.parent.checked ? theme.accent : theme.foreground
+                        font.pixelSize: theme.dp(12); color: parent.parent.checked ? theme.accent : root.compact ? theme.playerLabel : theme.foreground
                     }
                 }
             }
@@ -591,14 +597,14 @@ ColumnLayout {
         id: colorEditor
         RedesignButton {
             implicitHeight: theme.dp(root.compact ? 36 : 34)
-            leftPadding: theme.dp(14); rightPadding: theme.dp(6)
+            leftPadding: theme.dp(14); rightPadding: theme.dp(root.compact ? 7 : 6)
             scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
             readonly property string chosenColor: "#" + Number(root.currentValue).toString(16).padStart(6, "0")
             caption: chosenColor.toUpperCase(); text: qsTr("Choose %1").arg(root.label)
             background: Rectangle { radius: theme.dp(root.compact ? 6 : 4); border.width: root.compact ? theme.dp(2) : 1; color: theme.field; border.color: root.compact && !root.lightTheme ? "#191919" : theme.border }
             contentItem: RowLayout {
                 Text { Layout.fillWidth: true; text: parent.parent.caption; color: theme.foreground; font.pixelSize: theme.dp(14) }
-                Rectangle { width: theme.dp(20); height: width; color: parent.parent.chosenColor; border.color: theme.border; radius: theme.dp(2) }
+                Rectangle { width: theme.dp(root.compact ? 22 : 20); height: width; color: parent.parent.chosenColor; border.width: root.compact ? theme.dp(1.5) : 1; border.color: root.compact ? Qt.rgba(1, 1, 1, .21) : theme.border; radius: theme.dp(2) }
             }
             onClicked: { const color = root.backend.chooseColor(chosenColor); if (color.length) root.commit(parseInt(color.slice(1), 16)) }
         }
@@ -665,7 +671,7 @@ ColumnLayout {
                 echoMode: root.description.kind === "password" ? TextInput.Password : TextInput.Normal
                 inputMethodHints: root.description.kind === "integer" || root.description.kind === "float" ? Qt.ImhFormattedNumbersOnly : Qt.ImhNone
                 Accessible.name: root.label || root.description.title
-                background: Rectangle { radius: theme.dp(root.compact ? 6 : 4); border.width: root.compact ? theme.dp(2) : 1; color: theme.field; border.color: field.invalid ? "#e56b6b" : field.activeFocus ? theme.accent : theme.border }
+                background: Rectangle { radius: theme.dp(root.compact ? 6 : 4); border.width: root.compact ? theme.dp(2) : 1; color: theme.field; border.color: field.invalid ? "#e56b6b" : field.activeFocus ? theme.accent : root.compact && !root.lightTheme ? "#191919" : theme.border }
                 onEditingFinished: {
                     if (!root.editorEnabled) return
                     const number = Number(text)

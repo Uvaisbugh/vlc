@@ -47,6 +47,7 @@ ColumnLayout {
     readonly property RedesignTheme theme: RedesignTheme { scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor }
     signal moved(real value)
     function positionFor(value) { return valueToPosition ? valueToPosition(value) : (value - from) / (to - from) }
+    function visualPositionFor(value) { return slider.mirrored ? 1 - positionFor(value) : positionFor(value) }
     spacing: theme.dp(8)
     RowLayout {
         Layout.fillWidth: true
@@ -147,9 +148,12 @@ ColumnLayout {
                     const position = Math.max(0, Math.min(1, root.positionFor(root.fillOrigin)))
                     return slider.mirrored ? 1 - position : position
                 }
-                x: inset + Math.min(slider.visualPosition, origin) * span
+                readonly property real travel: Math.max(0, span - sliderHandle.width)
+                readonly property bool zeroDelay: root.fillOrigin === 0 && root.from < 0 && root.to > 0
+                    && slider.visualPosition === origin
+                x: inset + Math.min(slider.visualPosition, origin) * travel
                 y: inset
-                width: Math.abs(slider.visualPosition - origin) * span
+                width: zeroDelay ? 0 : Math.min(span, Math.abs(slider.visualPosition - origin) * travel + sliderHandle.width)
                 height: Math.max(0, parent.height - 2 * inset)
                 radius: Math.max(0, parent.radius - inset); color: root.fillColor
             }
@@ -158,7 +162,7 @@ ColumnLayout {
                 Rectangle {
                     required property real modelData
                     width: theme.dp(1); height: theme.dp(7)
-                    x: sliderHandle.width / 2 + root.positionFor(modelData) * (parent.width - sliderHandle.width)
+                    x: theme.dp(root.trackInset) + sliderHandle.width / 2 + root.visualPositionFor(modelData) * (parent.width - 2 * theme.dp(root.trackInset) - sliderHandle.width)
                     anchors.verticalCenter: parent.verticalCenter
                     color: theme.background
                 }
@@ -166,7 +170,7 @@ ColumnLayout {
         }
         handle: Rectangle {
             id: sliderHandle
-            x: slider.leftPadding + slider.visualPosition * (slider.availableWidth - width)
+            x: slider.leftPadding + theme.dp(root.trackInset) + slider.visualPosition * Math.max(0, slider.availableWidth - 2 * theme.dp(root.trackInset) - width)
             y: slider.topPadding + slider.availableHeight / 2 - height / 2
             width: theme.dp(8); height: theme.dp(24); radius: theme.dp(4); color: root.handleColor
             border.width: slider.visualFocus ? 1 : 0; border.color: theme.bright
@@ -192,7 +196,7 @@ ColumnLayout {
                 required property real modelData
                 objectName: "settingTick_" + index
                 x: Math.max(0, Math.min(parent.width - width, slider.leftPadding + sliderHandle.width / 2
-                    + root.positionFor(modelData) * (slider.availableWidth - sliderHandle.width) - width / 2))
+                    + theme.dp(root.trackInset) + root.visualPositionFor(modelData) * (slider.availableWidth - 2 * theme.dp(root.trackInset) - sliderHandle.width) - width / 2))
                 text: (root.positiveTickSign && modelData > 0 ? "+" : "") + Number(modelData).toLocaleString(Qt.locale(), 'f', Number.isInteger(modelData) ? 0 : String(modelData).split('.')[1].length) + root.tickSuffix
                 color: root.labelColor; font.pixelSize: theme.dp(11)
             }

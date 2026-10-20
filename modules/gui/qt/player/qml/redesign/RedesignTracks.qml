@@ -63,9 +63,9 @@ ColumnLayout {
         contentItem: Item {
             RedesignIcon {
                 objectName: "selectionMark"
-                name: "check"
+                name: "check-active"
                 visible: choice.chosen
-                width: root.theme.dp(20); height: width
+                width: root.theme.dp(root.compact ? 20 : 24); height: width
                 anchors.left: parent.left
                 anchors.leftMargin: root.theme.dp(root.compact ? 8 : 24)
                 anchors.verticalCenter: parent.verticalCenter
@@ -85,11 +85,11 @@ ColumnLayout {
     }
     RowLayout {
         Layout.fillWidth: true
-        Layout.leftMargin: theme.dp(root.compact ? 12 : 28); Layout.rightMargin: theme.dp(root.compact ? 12 : 24)
-        Layout.topMargin: theme.dp(root.compact ? 10 : 22); Layout.bottomMargin: theme.dp(root.compact ? 6 : 14)
-        spacing: theme.dp(12)
+        Layout.leftMargin: theme.dp(root.compact ? 12 : 28); Layout.rightMargin: theme.dp(root.compact ? 12 : 26)
+        Layout.topMargin: theme.dp(root.compact ? 10 : 22); Layout.bottomMargin: theme.dp(root.compact ? 6 : root.allowDisable ? 18 : 14)
+        spacing: theme.dp(root.compact ? 12 : 16)
         Text {
-            text: root.heading; color: root.theme.foreground; opacity: 0.75
+            text: root.heading; color: root.theme.playerLabel
             font.pixelSize: root.theme.dp(14)
             Layout.fillWidth: true
             elide: Text.ElideRight
@@ -101,7 +101,7 @@ ColumnLayout {
             Layout.preferredWidth: root.theme.dp(root.compact ? 54 : 28); Layout.preferredHeight: root.theme.dp(24)
             scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
             caption: root.compact ? qsTr("Edit") : ""
-            iconName: root.compact ? "" : "edit"; iconSize: root.theme.dp(20); text: qsTr("Edit external tracks")
+            iconName: root.compact ? "" : "edit"; iconSize: root.theme.dp(24); iconForeground: theme.playerLabel; text: qsTr("Edit external tracks")
             onClicked: root.editRequested()
         }
         RedesignButton {
@@ -111,7 +111,7 @@ ColumnLayout {
             Layout.preferredWidth: root.theme.dp(root.compact ? 54 : 28); Layout.preferredHeight: root.theme.dp(24)
             scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
             caption: root.compact ? qsTr("Add") : ""
-            iconName: root.compact ? "" : "add"; iconSize: root.theme.dp(20); text: qsTr("Add external tracks")
+            iconName: root.compact ? "" : "add"; iconSize: root.theme.dp(24); iconForeground: theme.playerLabel; text: qsTr("Add external tracks")
             onClicked: root.addRequested()
         }
         RedesignButton {
@@ -120,7 +120,7 @@ ColumnLayout {
             Layout.preferredWidth: root.theme.dp(root.compact ? 54 : 28); Layout.preferredHeight: root.theme.dp(24)
             scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
             caption: root.compact ? qsTr("Refresh") : ""
-            iconName: root.compact ? "" : "refresh-two-tone"; iconSize: root.theme.dp(20); text: qsTr("Refresh output devices")
+            iconName: root.compact ? "" : "refresh-two-tone"; iconSize: root.theme.dp(24); iconForeground: theme.playerLabel; text: qsTr("Refresh output devices")
             onClicked: root.refreshRequested()
         }
     }

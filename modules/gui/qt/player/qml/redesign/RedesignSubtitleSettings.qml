@@ -42,41 +42,41 @@ ColumnLayout {
         labelColor: theme.playerLabel
         label: qsTr("Subtitle Track Delay"); suffix: " s"; decimals: 3
         from: -10; to: 10; inputFrom: -2147483.648; inputTo: 2147483.647; stepSize: 0.05
-        ticks: [-10, 0, 10]; tickSuffix: " s"; positiveTickSign: true; sliderTopMargin: 10; sliderLeftMargin: -4
+        ticks: [-10, 0, 10]; tickSuffix: " s"; positiveTickSign: true; sliderTopMargin: 9; sliderLeftMargin: -4
         resetValue: 0; fillOrigin: 0; currentValue: root.subtitleDelaySeconds
         onMoved: value => root.delayRequested(value)
     }
     RedesignSettingSlider {
         objectName: "subtitleFPSControl"
-        Layout.fillWidth: true; Layout.topMargin: theme.dp(16)
+        Layout.fillWidth: true; Layout.topMargin: theme.dp(17)
         scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
         labelColor: theme.playerLabel
         label: qsTr("Subtitle Speed"); suffix: " fps"; decimals: 3
         from: 0; to: 60; inputTo: 2147483.647; stepSize: 0.001
         resetValue: 0; minimumValueText: qsTr("Automatic")
-        scaleLabelsVisible: false; sliderTopMargin: 10; sliderLeftMargin: -4
+        scaleLabelsVisible: false; sliderTopMargin: 8; sliderLeftMargin: -4
         currentValue: root.subtitleFPS
         onMoved: value => root.fpsRequested(value)
     }
     RedesignSettingSlider {
         objectName: "subtitleDurationSetting"
-        Layout.fillWidth: true; Layout.topMargin: theme.dp(14)
+        Layout.fillWidth: true; Layout.topMargin: theme.dp(16)
         visible: root.backend.describe("redesign-subtitle-duration").kind !== undefined
         scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
         labelColor: theme.playerLabel
         label: qsTr("Subtitle Duration Factor"); decimals: 3
         from: 0; to: 20; stepSize: 0.001; resetValue: 0
-        scaleLabelsVisible: false; sliderTopMargin: 10; sliderLeftMargin: -4
+        scaleLabelsVisible: false; sliderTopMargin: 8; sliderLeftMargin: -4
         currentValue: { root.backend.revision; return Number(root.backend.value("redesign-subtitle-duration")) }
         onMoved: value => root.backend.stage("redesign-subtitle-duration", value)
     }
-    Rectangle { Layout.fillWidth: true; Layout.leftMargin: -theme.dp(24); Layout.rightMargin: -theme.dp(20); Layout.topMargin: theme.dp(18); height: theme.dp(1); color: theme.border }
-    Text { objectName: "subtitleAppearanceHeading"; Layout.topMargin: theme.dp(20); Layout.bottomMargin: theme.dp(8); text: qsTr("Appearance"); color: theme.playerHeading; font.pixelSize: theme.dp(16) }
+    Rectangle { Layout.fillWidth: true; Layout.leftMargin: -theme.dp(24); Layout.rightMargin: -theme.dp(20); Layout.topMargin: theme.dp(20); height: theme.dp(1); color: theme.border }
+    Text { objectName: "subtitleAppearanceHeading"; Layout.topMargin: theme.dp(20); Layout.bottomMargin: theme.dp(6); text: qsTr("Appearance"); color: theme.playerHeading; font.pixelSize: theme.dp(16) }
     RedesignPreferenceRow {
         objectName: "subtitleAppearance_sub-text-use-embedded-style"
         Layout.fillWidth: true
         backend: root.backend; optionName: "sub-text-use-embedded-style"; label: qsTr("Embedded Sub Format")
-        presentation: ({compact: true})
+        presentation: ({compact: true, rowHeight: 53})
         scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
     }
     Text {
@@ -98,13 +98,13 @@ ColumnLayout {
             objectName: "subtitleAppearance_" + modelData.name
             Layout.fillWidth: true
             backend: root.backend; optionName: modelData.name; label: modelData.label
-            presentation: ({compact: true, suffix: modelData.suffix || "", placeholder: modelData.placeholder || ""})
+            presentation: ({compact: true, rowHeight: 53, suffix: modelData.suffix || "", placeholder: modelData.placeholder || ""})
             scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
         }
     }
     RowLayout {
         objectName: "subtitleSizeModeSetting"
-        Layout.fillWidth: true; Layout.preferredHeight: theme.dp(60)
+        Layout.fillWidth: true; Layout.topMargin: theme.dp(1); Layout.preferredHeight: theme.dp(52)
         Text { Layout.fillWidth: true; text: qsTr("Size Values"); color: theme.playerLabel; font.pixelSize: theme.dp(14) }
         Rectangle {
             Layout.preferredWidth: theme.dp(180); Layout.preferredHeight: theme.dp(38)
@@ -117,7 +117,7 @@ ColumnLayout {
                         required property string modelData
                         required property int index
                         objectName: index === 0 ? "subtitleSizeRelative" : "subtitleSizePixels"
-                        Layout.fillWidth: true; Layout.fillHeight: true
+                        Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1
                         scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
                         caption: modelData; text: modelData
                         foreground: theme.playerLabel
@@ -132,7 +132,7 @@ ColumnLayout {
     RedesignSettingSlider {
         id: fontSizeSlider
         objectName: "subtitleFontSizeSetting"
-        Layout.fillWidth: true; Layout.topMargin: theme.dp(22)
+        Layout.fillWidth: true; Layout.topMargin: theme.dp(25)
         scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
         labelColor: theme.playerLabel
         label: qsTr("Font Size"); displayValueAsText: true
@@ -154,9 +154,9 @@ ColumnLayout {
         valueLabel: currentValue === 0 ? qsTr("None") : currentValue === 1 ? qsTr("Thin") : currentValue === 4 ? qsTr("Normal") : currentValue === 8 ? qsTr("Thick") : Math.round(currentValue) + " %"
         from: 0; to: 50; stepSize: 1; scaleLabelsVisible: false; sliderTopMargin: 6; sliderLeftMargin: -4
         currentValue: { root.backend.revision; return Number(root.backend.value("freetype-outline-thickness")) }
-        valueToPosition: value => root.sliderPosition(value, 0, 4, 50, 0.65)
-        positionToValue: position => Math.round(root.sliderValue(position, 0, 4, 50, 0.65))
-        ticks: [0, .2, .4, .6, .8, 1].map(position => root.sliderValue(position, 0, 4, 50, 0.65))
+        valueToPosition: value => root.sliderPosition(value, 0, 4, 50, 2 / 3)
+        positionToValue: position => Math.round(root.sliderValue(position, 0, 4, 50, 2 / 3))
+        ticks: [0, .2, .4, .6, .8, 1].map(position => root.sliderValue(position, 0, 4, 50, 2 / 3))
         onMoved: value => root.backend.stage("freetype-outline-thickness", value)
     }
     RedesignSettingSlider {
