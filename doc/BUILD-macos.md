@@ -9,6 +9,9 @@ This is a development build, not a distributable `VLC.app`: it uses the
 Homebrew libraries on the machine that built it. On macOS the redesign is the
 Qt interface (`-I qt`), not the Cocoa `macosx` interface.
 
+For bundled release builds with Qt and non-system dependencies included, see
+[RELEASING.md](RELEASING.md).
+
 ## Prerequisites
 
 Install the Command Line Tools (`xcode-select --install`) and

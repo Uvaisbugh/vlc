@@ -18,6 +18,18 @@ EXTRA_DIST = \
 	extras/include/x86/x86util.asm \
 	extras/package/macosx/package.mak \
 	extras/package/win32/package.mak \
+	extras/package/release/version.py \
+	extras/package/release/package.py \
+	extras/package/release/build-native.sh \
+	extras/package/release/build-windows.sh \
+	extras/package/release/build-medialibrary.sh \
+	extras/package/release/package-linux.sh \
+	extras/package/release/bundle-linux-runtime.py \
+	extras/package/release/verify.py \
+	extras/package/release/Dockerfile.linux \
+	extras/package/release/tests/test_version.py \
+	extras/package/release/tests/test_package.py \
+	doc/RELEASING.md \
 	extras/package/npapi.am
 
 dist_noinst_SCRIPTS = bootstrap

@@ -5,11 +5,10 @@
 > install are validated (see "Validation" below). The Qt
 > suite stands at 41 pass / 1 fail with one explicit
 > remaining failure; no live installation has been
-> performed. There is no installable Linux release; Linux
-> users build the native VLC 4.0.0-dev tree from source. The Windows beta builds on the
-> [Releases page](https://github.com/dsojevic/juxtopposed-vlc/releases)
-> ship with the media library; the baseline below disables it,
-> so expect that feature difference.
+> performed. For portable release packaging with the media library, see
+> [RELEASING.md](RELEASING.md). The source build below disables the media library,
+> so expect that feature difference from release packages. Check the
+> [Releases page](https://github.com/dsojevic/juxtopposed-vlc/releases) for available builds.
 
 This guide uses **Meson** and the current build definitions
 (root `meson.build` requires Meson `>= 1.10.0`). Note that

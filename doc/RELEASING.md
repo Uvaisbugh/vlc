@@ -1,0 +1,234 @@
+# Cutting a release
+
+The release pipeline builds four native targets. The next release is `4.0.0-beta.4`:
+
+| Target | Download |
+| --- | --- |
+| Windows 10 (1809+) / 11, x86_64 | `vlc-juxtopposed-4.0.0-beta.4-win64.zip` (portable) |
+| macOS Apple Silicon | `vlc-juxtopposed-4.0.0-beta.4-macos-arm64.zip` |
+| macOS Intel | `vlc-juxtopposed-4.0.0-beta.4-macos-x86_64.zip` |
+| Linux x86_64, glibc >= 2.35 | `.tar.gz` portable directory bundle |
+
+The Mac packages are separate native apps, rather than a universal binary.
+Both include Qt, VLC plugins and their non-system dynamic libraries. Packaging
+checks every Mach-O dependency and architecture, rejects links outside the app,
+and signs the bundle ad-hoc. This supports execution on Apple Silicon but does
+not provide a trusted publisher signature or notarization. The maximum deployment
+version found across the included binaries becomes `LSMinimumSystemVersion` and
+is recorded in the build metadata. Homebrew dependencies determine that minimum;
+a build made on a newer Mac can require a newer macOS than the CI build.
+The Intel CI job permits Homebrew source builds because many current formulas
+no longer provide Intel macOS bottles. Its first build can take substantially
+longer than the ARM build.
+
+Linux packages include Qt/QML and VLC's plugin dependency closure using
+linuxdeploy. Host graphics drivers, glibc and desktop services remain system
+requirements. `AppDir/AppRun` sets VLC's relocated resource/helper paths and runs
+the Qt redesign. The archive requires no FUSE installation.
+The Linux build requires both X11 and Wayland backends. Its image provides
+checksum-pinned Wayland scanner/protocol tools while retaining Ubuntu 22.04's
+runtime libraries; missing backend prerequisites fail configuration.
+
+All targets enable translations and use this fork's five media-library patches.
+Windows builds the pinned contrib sources rather than using upstream prebuilt
+libraries, which would omit those patches. Windows has no publisher signature.
+Its portable ZIP includes imported MinGW runtime DLLs and the Vulkan loader,
+with their license notices. Windows build metadata lists the external imports.
+No signing credentials or OpenSubtitles app key are required.
+
+## Review before pushing
+
+Review [the 4.0.0-beta.4 notes](releases/4.0.0-beta.4.md), the packaging scripts in
+`extras/package/release`, and `.github/workflows/beta-release.yml`. Inspect the
+candidate release source before creating a tag:
+
+```sh
+git log --oneline beta-3..HEAD
+git diff beta-3..HEAD -- .github/workflows extras/package/release doc/RELEASING.md doc/releases README.md
+```
+
+Generated files go into ignored `build-release-*` and `contrib/contrib-*`
+directories, plus the shared `contrib/tarballs` download cache. No script pushes
+Git refs or publishes a release. Local builds can be reviewed before any push.
+
+Use **Run workflow** on the source branch to build and upload artifacts without
+creating a GitHub release. This is available once the workflow is on the default
+branch. Review the job logs and the `<version>-complete` artifact. The final job
+requires both Mac builds, Linux relocation/playback checks, and native Windows
+startup checks to pass.
+
+Before tagging, update `meson.build`'s project version and `configure.ac`'s
+`AC_INIT` / `VERSION_*` fields together. Add `doc/releases/<version>.md`, then run:
+
+```sh
+python3 extras/package/release/version.py 4.0.0-beta.4
+python3 -m unittest discover -s extras/package/release/tests
+```
+
+The validator rejects old `beta-N` tags and tags that disagree with the compiled
+version. Use `4.0.0-beta.N`, `4.0.0-rc.N`, or `4.0.0` (stable). Published historical
+`beta-1` through `beta-3` tags remain intact. Create the annotated tag only after
+committing the reviewed release source:
+
+```sh
+git tag -a 4.0.0-beta.4 -m 'VLC Juxtopposed 4.0.0-beta.4'
+git show 4.0.0-beta.4 --stat
+```
+
+Once the source/tag is acceptable, explicitly push the branch and tag:
+
+```sh
+git push origin HEAD
+git push origin refs/tags/4.0.0-beta.4
+```
+
+A pushed `4.0.0-beta.4` tag runs the same builds and creates a **draft prerelease** named
+`VLC Juxtopposed Redesign - 4.0.0-beta.4`. It attaches the downloads, source snapshot,
+source commit, Mac build metadata and `SHA256SUMS.txt`. The notes are taken from
+the tagged source and include its commit hash. Inspect and publish the draft
+manually only after downloading and trying the appropriate binaries.
+
+The manual workflow run is a preflight build. Pushing the tag starts a separate
+build of the tagged commit before creating the draft; it does not promote the
+manual run's artifacts. Keep the candidate source unchanged between a successful
+preflight and tagging, or repeat the preflight for the revised source.
+
+Do not move a tag that has already been pushed. If a release source change is
+needed after that point, increment the version and add new release notes. The
+workflow derives artifact names and prerelease status from the validated version.
+Stable tags create draft stable releases; prerelease tags create draft prereleases.
+
+## Local macOS build
+
+Install the media prerequisites from [BUILD-macos.md](BUILD-macos.md), plus
+`gettext` and `libgcrypt`. The release workflow installs Qt 6.8.3 separately, rather than
+Homebrew's aggregate Qt package. To use the same SDK locally:
+
+```sh
+python3 -m venv build-release-tools
+build-release-tools/bin/pip install aqtinstall==3.3.0
+build-release-tools/bin/aqt install-qt mac desktop 6.8.3 clang_64 -O build-release-qt -m qtshadertools
+export QT_ROOT_DIR="$PWD/build-release-qt/6.8.3/macos"
+```
+
+Use an Intel Mac for the Intel package or an Apple Silicon Mac for ARM. Optional
+modules are detected from the installed libraries; inspect Meson's summary.
+
+```sh
+RELEASE_TAG=4.0.0-beta.4 JOBS=4 bash extras/package/release/build-native.sh
+python3 extras/package/release/verify.py \
+    'build-release-output/macos-arm64/VLC Juxtopposed.app/Contents/MacOS/vlc'
+```
+
+For an Intel build, replace `macos-arm64` with `macos-x86_64`. `QT_ROOT_DIR` can
+select a Qt installation other than Homebrew. The script builds a private patched
+media library and stages the installation before bundling; it does not install
+VLC into `/usr` or Homebrew. Remove the specific output app directory before
+repackaging an existing build. To rebuild from clean dependency state, remove
+the corresponding `build-release-macos-deps` directory too.
+
+## Local Linux and Windows builds with Docker
+
+Linux (x86_64 Docker host recommended; emulation on ARM is much slower):
+
+```sh
+docker build --platform linux/amd64 -t vlc-release-linux \
+    -f extras/package/release/Dockerfile.linux .
+docker run --rm --user root --platform linux/amd64 -v "$PWD:/src" -w /src \
+    -e JOBS=4 -e RELEASE_TAG=4.0.0-beta.4 \
+    -e GIT_CONFIG_COUNT=1 -e GIT_CONFIG_KEY_0=safe.directory -e GIT_CONFIG_VALUE_0=/src \
+    vlc-release-linux \
+    bash extras/package/release/build-native.sh
+```
+
+Run the relocated `AppDir/AppRun` as a normal user, outside the build container.
+For example, extract the tarball in a new directory and run `verify.py` against
+that `AppRun`. The check needs Python and FFmpeg on the verification host.
+
+Windows (the image includes MinGW and the cross-build toolchain):
+
+```sh
+docker run --rm --user root --platform linux/amd64 -v "$PWD:/src" -w /src \
+    -e JOBS=4 -e RELEASE_TAG=4.0.0-beta.4 \
+    -e GIT_CONFIG_COUNT=1 -e GIT_CONFIG_KEY_0=safe.directory -e GIT_CONFIG_VALUE_0=/src \
+    registry.videolan.org/vlc-debian-win64-posix@sha256:8e83e800036f8f4a6da1031a6b80c2b5bad8337259c072ffa22398baaeaad880 \
+    bash extras/package/release/build-windows.sh
+```
+
+Initial Windows contrib compilation is substantial. Preserve the ignored
+`contrib/contrib-release-win64` build directory for repeat attempts. Check the
+resulting ZIP on an actual Windows machine, including playback, the library,
+settings and a path with spaces. The GUI targets the Windows versions supported
+by [Qt 6.8](https://doc.qt.io/qt-6.8/supported-platforms.html#windows).
+The release wrapper disables Wine execution of VLC configuration probes and
+disables installer generation. This also permits cross-compilation under ARM
+Docker emulation when Wine cannot run Windows programs. Native executable
+validation remains a separate Windows CI job.
+That job launches the same portable profile twice and requires both Qt startup
+and audio decoding, covering first launch and cached graphics startup.
+
+`verify.py` checks the installed version, required Qt/avcodec/media-library plugin
+registration, and generated audio playback with VLC preferences ignored and
+temporary XDG directories on Linux. `--gui` additionally checks Qt startup;
+macOS Qt settings still use Qt's native preferences domain. `--gui --video`
+also requires a Qt video window, video decoding and a working video output;
+both Mac CI jobs and the Linux X11/Wayland checks use this mode. This is a
+smoke check, not a complete codec, GUI, GPU, HDR or hardware-device certification.
+Mac packaging also verifies code signatures and all bundled dependency paths.
+
+## Dependency sources
+
+The release source snapshot includes the contrib recipes, patches, source URLs
+and SHA-512 sums. Retain build logs and exact dependency versions with release
+artifacts. For dependency modifications, distribute the corresponding patched
+source as required by each dependency's license; do not substitute an unrecorded
+local library build. The Linux deployment tool hashes are recorded alongside the
+artifact. VLC and design/font attribution remain in `README.md` and the bundle.
+
+## Update discovery and future installation
+
+The Qt interface checks this fork's public GitHub Releases API. Automatic checks
+are enabled by default in update-enabled builds and run at startup when the last
+check date is at least the configured number of days ago (default: one day).
+Existing `qt-updates-days` settings are preserved. Background failures are quiet;
+manual checks display errors. There is no GitHub token embedded in the app.
+
+The checker compares full semantic versions, ignores build metadata for ordering,
+and treats a stable release as newer than its prereleases. Stable builds accept
+only stable releases; prerelease builds accept both prereleases and stable releases
+that compare higher. It interprets old `beta-N` tags as `4.0.0-beta.N`. Release
+flags must agree with the tag. Drafts and unparseable tags are ignored.
+
+Release selection filters platform packages before selecting the highest version;
+publication order and GitHub's latest-release badge do not determine precedence.
+An asset must be uploaded, nonempty, and named exactly:
+
+- `vlc-juxtopposed-<tag>-win64.zip` (Windows x86_64)
+- `vlc-juxtopposed-<tag>-win32.zip` (Windows x86)
+- `vlc-juxtopposed-<tag>-winarm64.zip` (Windows ARM64)
+- `vlc-juxtopposed-<tag>-macos-<arm64|x86_64>.zip` (macOS native)
+- `vlc-juxtopposed-<tag>-macos-universal.zip` (either supported macOS architecture)
+- `vlc-juxtopposed-<tag>-linux-<x86_64|arm64>.tar.gz` (Linux portable directory)
+
+The current workflow produces Windows x86_64, both native macOS packages, and
+Linux x86_64. Recognizing other target names does not claim CI builds for them.
+Source archives, SDKs, symbols and checksums are not eligible packages. Architecture
+matching follows the running binary; automatic migration from emulated to native
+builds is not enabled. Minimum OS/glibc requirements remain in release notes and
+build metadata; filename matching does not certify all operating system versions.
+
+The primary action opens the selected release's page in the system browser. The
+model also retains the exact selected asset URL, size and digest for later use.
+Release packaging records asset names, sizes, SHA-256 hashes, versions and source
+commits in build metadata. These hashes are integrity metadata, not authenticated
+publisher signatures. A future automatic installer must define authenticated
+metadata/signing, platform installation, portable-profile handling and rollback.
+
+The core `update.c` / `update_crypto.c` signed download backend is retained and is
+built with `update-check` when libgcrypt is available. GitHub notifications need
+only Qt Network and do not pass unsigned GitHub assets into that backend. The
+release pipeline enables update checks explicitly. Other packagers can enable
+`-Dupdate-check=enabled` (Meson) or `--enable-update-check` (Autoconf). The separate
+native macOS Sparkle interface is unchanged; these release packages use Qt.
+
+Existing installations need a manual upgrade to acquire this GitHub checker.
