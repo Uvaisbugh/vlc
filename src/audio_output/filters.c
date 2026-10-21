@@ -37,6 +37,7 @@
 #include <vlc_modules.h>
 #include <vlc_aout.h>
 #include <vlc_filter.h>
+#include <vlc_vout_display.h>
 #include "../libvlc.h"
 #include "aout_internal.h"
 #include "../video_output/vout_internal.h" /* for vout_Request */
@@ -72,6 +73,30 @@ filter_t *aout_filter_Create(vlc_object_t *obj, const filter_owner_t *restrict o
     filter->fmt_in.i_codec = infmt->i_format;
     filter->fmt_out.audio = *outfmt;
     filter->fmt_out.i_codec = outfmt->i_format;
+
+    if (strcmp(type, "visualization") == 0)
+    {
+        /* A visualization uses the available surface. Video framing preferences
+         * must not crop it, move it off-center, or resize the interface window. */
+        var_Create(filter, "video-is-visualization", VLC_VAR_BOOL);
+        var_SetBool(filter, "video-is-visualization", true);
+        const char *dimensions[] = { "width", "height", "align" };
+        for (size_t i = 0; i < ARRAY_SIZE(dimensions); ++i)
+        {
+            var_Create(filter, dimensions[i], VLC_VAR_INTEGER);
+            var_SetInteger(filter, dimensions[i], 0);
+        }
+        var_Create(filter, "autoscale", VLC_VAR_BOOL);
+        var_SetBool(filter, "autoscale", true);
+        var_Create(filter, "zoom", VLC_VAR_FLOAT);
+        var_SetFloat(filter, "zoom", 1.f);
+        var_Create(filter, "fit", VLC_VAR_INTEGER);
+        var_SetInteger(filter, "fit", VLC_VIDEO_FIT_SMALLER);
+        var_Create(filter, "crop", VLC_VAR_STRING);
+        var_SetString(filter, "crop", "");
+        var_Create(filter, "aspect-ratio", VLC_VAR_STRING);
+        var_SetString(filter, "aspect-ratio", "");
+    }
 
 #ifndef NDEBUG
     /* Assure that infmt/oufmt are well prepared and that channels
@@ -375,36 +400,6 @@ struct aout_filters
         (e.g. equalization) and their conversions */
 };
 
-/** Callback for visualization selection */
-static int VisualizationCallback (vlc_object_t *obj, const char *var,
-                                  vlc_value_t oldval, vlc_value_t newval,
-                                  void *data)
-{
-    const char *mode = newval.psz_string;
-
-    if (!*mode)
-        mode = "none";
-    /* FIXME: This ugly hack enforced by visual effect-list, as is the need for
-     * separate "visual" (external) and "audio-visual" (internal) variables...
-     * The visual plugin should have one submodule per effect instead. */
-    static const char *const effects[] = {
-        "dummy", "scope", "spectrometer", "spectrum", "vuMeter",
-    };
-    for (size_t i = 0; i < ARRAY_SIZE(effects); i++)
-        if (!strcasecmp (mode, effects[i]))
-        {
-            var_Create (obj, "effect-list", VLC_VAR_STRING);
-            var_SetString (obj, "effect-list", mode);
-            mode = "visual";
-            break;
-        }
-
-    var_SetString (obj, "audio-visual", mode);
-    aout_InputRequestRestart ((audio_output_t *)obj);
-    (void) var; (void) oldval; (void) data;
-    return VLC_SUCCESS;
-}
-
 struct filter_owner_sys
 {
     vlc_clock_t *clock_source;
@@ -450,6 +445,22 @@ vout_thread_t *aout_filter_GetVout(filter_t *filter, const video_format_t *fmt)
     return vout;
 }
 
+int aout_filter_UpdateVoutFormat(filter_t *filter, const video_format_t *fmt)
+{
+    struct filter_owner_sys *owner_sys = filter->owner.sys;
+    assert(owner_sys->vout != NULL);
+    assert(owner_sys->clock != NULL);
+
+    video_format_t adjusted = *fmt;
+    video_format_AdjustColorSpace(&adjusted);
+    if (vout_ChangeVisualizationFormat(owner_sys->vout, &adjusted) == VLC_SUCCESS)
+        return VLC_SUCCESS;
+    const vout_configuration_t cfg = {
+        .vout = owner_sys->vout, .clock = owner_sys->clock, .fmt = &adjusted,
+    };
+    return vout_Request(&cfg, NULL, NULL);
+}
+
 static int AppendFilter(vlc_object_t *obj, const char *type, const char *name,
                         aout_filters_t *restrict filters,
                         audio_sample_format_t *restrict infmt,
@@ -477,17 +488,23 @@ static int AppendFilter(vlc_object_t *obj, const char *type, const char *name,
         return -1;
     }
 
+    if (owner_sys.vout != NULL)
+    {
+        // The probe uses the local owner. A visualization can also update its
+        // video format later, so retain that owner for the filter's lifetime.
+        struct filter_owner_sys *retained_owner = vlc_obj_malloc(filter, sizeof(*retained_owner));
+        if (retained_owner == NULL)
+            goto error;
+        *retained_owner = owner_sys;
+        filter->owner.sys = retained_owner;
+    }
+
     /* convert to the filter input format if necessary */
     if (aout_FiltersPipelineCreate (obj, filters->tab, &filters->count,
                                     max - 1, infmt, &filter->fmt_in.audio))
     {
         msg_Err (filter, "cannot add user %s \"%s\" (skipped)", type, name);
-        vlc_filter_Delete(filter);
-        if (owner_sys.vout != NULL)
-            vout_Close(owner_sys.vout);
-        if (owner_sys.clock != NULL)
-            vlc_clock_Delete(owner_sys.clock);
-        return -1;
+        goto error;
     }
 
     assert (filters->count < max);
@@ -497,6 +514,14 @@ static int AppendFilter(vlc_object_t *obj, const char *type, const char *name,
     filters->count++;
     *infmt = filter->fmt_out.audio;
     return 0;
+
+error:
+    vlc_filter_Delete(filter);
+    if (owner_sys.vout != NULL)
+        vout_Close(owner_sys.vout);
+    if (owner_sys.clock != NULL)
+        vlc_clock_Delete(owner_sys.clock);
+    return -1;
 }
 
 static int AppendRemapFilter(vlc_object_t *obj, aout_filters_t *restrict filters,
@@ -564,9 +589,6 @@ aout_filters_t *aout_FiltersNewWithClock(vlc_object_t *obj, vlc_clock_t *clock,
     aout_FormatPrint (obj, "input", infmt);
     audio_sample_format_t input_format = *infmt;
     audio_sample_format_t output_format = *outfmt;
-
-    /* Callbacks (before reading values and also before return statement) */
-    var_AddCallback (obj, "visual", VisualizationCallback, NULL);
 
     if (!AOUT_FMT_LINEAR(outfmt))
     {   /* Non-linear output: just convert formats, no filters/visu */
@@ -691,7 +713,6 @@ aout_filters_t *aout_FiltersNewWithClock(vlc_object_t *obj, vlc_clock_t *clock,
 
 error:
     aout_FiltersPipelineDestroy (filters->tab, filters->count);
-    var_DelCallback(obj, "visual", VisualizationCallback, NULL);
     free (filters);
     return NULL;
 }
@@ -763,10 +784,10 @@ aout_filters_t *aout_FiltersNew(vlc_object_t *obj,
  */
 void aout_FiltersDelete (vlc_object_t *obj, aout_filters_t *filters)
 {
+    (void) obj;
     if (filters->resampler.f != NULL)
         aout_FiltersPipelineDestroy(&filters->resampler, 1);
     aout_FiltersPipelineDestroy (filters->tab, filters->count);
-    var_DelCallback(obj, "visual", VisualizationCallback, NULL);
     free (filters);
 }
 

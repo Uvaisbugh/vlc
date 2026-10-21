@@ -26,6 +26,7 @@
 
 #include "qt.hpp"
 
+#include <QVariantMap>
 #include <QtQuick/QQuickView>
 #include <QApplication>
 #include <QQuickItem>
@@ -112,6 +113,10 @@ class MainCtx : public QObject
     Q_PROPERTY(bool gridView READ hasGridView WRITE setGridView NOTIFY gridViewChanged FINAL)
     Q_PROPERTY(bool hasGridListMode MEMBER m_hasGridListMode NOTIFY hasGridListModeChanged FINAL)
     Q_PROPERTY(Grouping grouping READ grouping WRITE setGrouping NOTIFY groupingChanged FINAL)
+    Q_PROPERTY(QVariantMap redesignPlayerPreferences READ redesignPlayerPreferences NOTIFY redesignPlayerPreferencesChanged FINAL)
+    Q_PROPERTY(QColor redesignAccent READ redesignAccent NOTIFY redesignAccentChanged FINAL)
+    Q_PROPERTY(bool backdropBlurEnabled READ backdropBlurRequested NOTIFY backdropBlurEnabledChanged FINAL)
+    Q_PROPERTY(bool compactMenus READ compactMenus NOTIFY compactMenusChanged FINAL)
     Q_PROPERTY(ColorSchemeModel* colorScheme READ getColorScheme CONSTANT FINAL)
     Q_PROPERTY(bool hasVLM READ hasVLM CONSTANT FINAL)
     Q_PROPERTY(bool clientSideDecoration READ useClientSideDecoration NOTIFY useClientSideDecorationChanged FINAL)
@@ -153,6 +158,7 @@ class MainCtx : public QObject
     Q_PROPERTY(bool preferHotkeys READ preferHotkeys WRITE setPreferHotkeys NOTIFY preferHotkeysChanged FINAL)
 
     //Property for Activating bgCone in player view
+    Q_PROPERTY(bool playlistTree READ playlistTree NOTIFY playlistTreeChanged FINAL)
     Q_PROPERTY(bool bgCone READ isbgCone WRITE setbgCone NOTIFY bgConeToggled FINAL)
     Q_PROPERTY(bool windowSuportExtendedFrame READ windowSuportExtendedFrame NOTIFY windowSuportExtendedFrameChanged)
     Q_PROPERTY(unsigned windowExtendedMargin READ windowExtendedMargin WRITE setWindowExtendedMargin NOTIFY windowExtendedMarginChanged)
@@ -179,6 +185,8 @@ public:
     bool smoothScroll() const { return m_smoothScroll; }
 
     VLCSystray* getSysTray() { return m_systray.get(); }
+    bool systrayRequested() const { return bool(m_systray); }
+    void refreshSystray();
 
     enum
     {
@@ -227,6 +235,11 @@ public:
     inline double getPlayerPlaylistWidth() const { return m_playerPlaylistWidth; }
     bool isInterfaceAlwaysOnTop() { return b_interfaceOnTop; }
     inline bool isHideAfterCreation() const { return b_hideAfterCreation; }
+    inline void clearStartupHide()
+    {
+        b_hideAfterCreation = false;
+        m_suppressStartupRaise = false;
+    }
     inline bool isShowRemainingTime() const  { return m_showRemainingTime; }
     inline double getIntfScaleFactor() const { return m_intfScaleFactor; }
     Q_INVOKABLE inline double getIntfUserScaleFactor() const { return m_intfUserScaleFactor; }
@@ -239,6 +252,9 @@ public:
     inline Grouping grouping() const { return m_grouping; }
     inline bool albumSections() const { return m_albumSections; }
     inline bool lyricsMode() const { return m_lyricsMode; }
+    QVariantMap redesignPlayerPreferences() const;
+    QColor redesignAccent() const { return m_redesignAccent; }
+    bool compactMenus() const { return m_compactMenus; }
     inline ColorSchemeModel* getColorScheme() const { return m_colorScheme; }
     bool hasVLM() const;
     bool useClientSideDecoration() const;
@@ -254,7 +270,8 @@ public:
     inline QUrl getDialogFilePath() const { return m_dialogFilepath; }
     inline void setDialogFilePath(const QUrl& filepath ){ m_dialogFilepath = filepath; }
     inline bool hasAcrylicSurface() const { return m_hasAcrylicSurface; }
-    inline void reloadFromSettings() { loadFromSettingsImpl(true); }
+    void reloadFromSettings();
+    QVariantMap profileSettings() const;
     inline bool getUseGlobalShortcuts() const { return m_useGlobalShortcuts; }
     void setUseGlobalShortcuts(bool useGlobalShortcuts );
     inline int maxVolume() const { return m_maxVolume; }
@@ -264,6 +281,7 @@ public:
     inline OsType getOSName() const {return m_osName;}
     inline int getOSVersion() const {return m_osVersion;}
 
+    bool playlistTree() const { return m_playlistTree; }
     inline bool isbgCone() const {return m_bgCone; }
     inline bool isMinimalView() const {return m_mainInterfaceModes & MAININTERFACE_MODE_MINIMAL; }
     inline bool isPlayerView() const {return m_mainInterfaceModes & MAININTERFACE_MODE_PLAYER; }
@@ -282,7 +300,7 @@ public:
 
     bool usingTouch() const { return m_usingTouch; }
 
-    Q_INVOKABLE bool backdropBlurRequested() const { return var_InheritBool(p_intf, "qt-backdrop-blur"); }
+    Q_INVOKABLE bool backdropBlurRequested() const { return m_backdropBlurEnabled; }
 
     Q_INVOKABLE static inline void setCursor(Qt::CursorShape cursor) { QApplication::setOverrideCursor(QCursor(cursor)); }
     Q_INVOKABLE static inline void restoreCursor(void) { QApplication::restoreOverrideCursor(); }
@@ -422,12 +440,15 @@ public:
 protected:
     /* Systray */
     void initSystray();
+    void setSystrayVisible(bool visible);
 
     qt_intf_t* p_intf = nullptr;
     vlc_preparser_t *m_network_preparser = nullptr;
 
     bool m_hasEmbededVideo = false;
     VideoSurfaceProvider* m_videoSurfaceProvider = nullptr;
+    QMetaObject::Connection m_releaseVideoMouseConnection;
+    QMetaObject::Connection m_visualizationSizeConnection;
     bool m_showRemainingTime = false;
 
     /* */
@@ -440,6 +461,8 @@ protected:
     double               m_intfScaleFactor = 1.;
     int                  i_notificationSetting = 0; /// Systray Notifications
     bool                 b_hideAfterCreation = false; /// --qt-start-minimized
+    bool                 m_suppressStartupRaise = false;
+    bool                 m_startupInputSeen = false;
     SidePanelCtx*   m_playqueuePanel = nullptr;
     SidePanelCtx*   m_navigationPanel = nullptr;
     QWindow::Visibility  m_windowVisibility = QWindow::Windowed;
@@ -450,6 +473,9 @@ protected:
     bool                 m_gridView = false;
     bool                 m_hasGridListMode = false;
     Grouping             m_grouping = GROUPING_NONE;
+    QColor m_redesignAccent = QColor(QStringLiteral("#d37918"));
+    bool m_backdropBlurEnabled = true;
+    bool m_compactMenus = false;
     ColorSchemeModel*    m_colorScheme = nullptr;
     bool                 m_windowTitlebar = true;
     // NOTE: Ideally this should be a QVLCBool.
@@ -496,6 +522,7 @@ protected:
     OsType m_osName;
     int m_osVersion;
 
+    bool m_playlistTree = true;
     bool m_bgCone = true;
     bool m_windowSuportExtendedFrame = false;
     unsigned m_windowExtendedMargin = 0;
@@ -574,6 +601,11 @@ signals:
     void albumSectionsChanged( bool );
     void lyricsModeChanged( bool );
     void colorSchemeChanged( QString );
+    void settingsReloaded();
+    void redesignAccentChanged();
+    void backdropBlurEnabledChanged();
+    void compactMenusChanged();
+    void redesignPlayerPreferencesChanged();
     void useClientSideDecorationChanged();
     void hasToolbarMenuChanged();
 
@@ -608,6 +640,7 @@ signals:
 
     void navBoxToggled();
 
+    void playlistTreeChanged();
     void bgConeToggled();
     void windowSuportExtendedFrameChanged();
     void windowExtendedMarginChanged(unsigned margin);

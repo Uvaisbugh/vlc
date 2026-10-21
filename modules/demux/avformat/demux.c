@@ -586,6 +586,8 @@ int avformat_OpenDemux( vlc_object_t *p_this )
                     es_fmt.i_extra = cp->extradata_size;
                 }
             }
+            if( cp->codec_id == AV_CODEC_ID_SUBRIP )
+                es_fmt.subs.psz_encoding = strdup( "UTF-8" );
             psz_type = "subtitle";
             break;
 
@@ -757,7 +759,7 @@ int avformat_OpenDemux( vlc_object_t *p_this )
     {
         seekpoint_t *s = vlc_seekpoint_New();
 
-        AVDictionaryEntry *title = av_dict_get( p_sys->ic->metadata, "title", NULL, 0);
+        AVDictionaryEntry *title = av_dict_get( p_sys->ic->chapters[i]->metadata, "title", NULL, 0);
         if( title && title->value )
         {
             s->psz_name = strdup( title->value );

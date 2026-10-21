@@ -122,6 +122,8 @@ struct vlc_player_input
         float pos;
         bool restore_states;
         bool delay_restore;
+        /* Natural completion must not depend on periodic position updates. */
+        bool completed;
         /* Keep a trace of tracks as they appear since they won't be available
          * for probing when the input gets stopped
          */
@@ -306,6 +308,8 @@ struct vlc_player_t
         struct vlc_list stop_inputs;
         struct vlc_list stopping_inputs;
         struct vlc_list joinable_inputs;
+        bool cleaning_resources;
+        bool notify_stopped;
     } mainloop;
 
     struct vlc_player_timer timer;

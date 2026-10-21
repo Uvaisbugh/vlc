@@ -318,7 +318,7 @@ FocusScope {
 
             color: theme.bg.primary
 
-            layer.enabled: MainCtx.backdropBlurRequested() &&
+            layer.enabled: MainCtx.backdropBlurEnabled &&
                            (GraphicsInfo.shaderType === GraphicsInfo.RhiShader) &&
                            (miniPlayer.visible || !!loaderUpdatePane.item?.visible)
 
@@ -831,6 +831,7 @@ FocusScope {
                     case UpdateModel.Unchecked:
                     case UpdateModel.Checking:
                     case UpdateModel.UpToDate:
+                    case UpdateModel.CheckFailed:
                         return false
                     default:
                         return true

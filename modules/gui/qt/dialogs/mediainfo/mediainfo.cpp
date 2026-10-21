@@ -27,6 +27,8 @@
 
 #include "mediainfo.hpp"
 #include "player/player_controller.hpp"
+#include "util/redesign_widget_theme.hpp"
+#include "util/interface_translator.hpp"
 
 #include <vlc_url.h>
 
@@ -35,6 +37,7 @@
 #include <QLineEdit>
 #include <QLabel>
 #include <QPushButton>
+#include <QScrollArea>
 
 /* This Dialog has two main modes:
     - General Mode that shows the current Played item, and the stats
@@ -52,6 +55,8 @@ MediaInfoDialog::MediaInfoDialog(qt_intf_t *_p_intf,
     else
         setWindowTitle( qtr( "Media Information" ) );
     setWindowRole( "vlc-media-info" );
+    setObjectName( "redesignMediaInfo" );
+    setAttribute( Qt::WA_StyledBackground );
 
     setWindowFlags( Qt::Window | Qt::CustomizeWindowHint |
                     Qt::WindowCloseButtonHint | Qt::WindowMinimizeButtonHint );
@@ -60,7 +65,11 @@ MediaInfoDialog::MediaInfoDialog(qt_intf_t *_p_intf,
     infoTabW = new QTabWidget;
 
     MP = new MetaPanel( infoTabW, p_intf );
-    infoTabW->insertTab( META_PANEL, MP, qtr( "&General" ) );
+    auto *metaScrollArea = new QScrollArea( infoTabW );
+    metaScrollArea->setWidgetResizable( true );
+    metaScrollArea->setFrameShape( QFrame::NoFrame );
+    metaScrollArea->setWidget( MP );
+    infoTabW->insertTab( META_PANEL, metaScrollArea, qtr( "&General" ) );
     EMP = new ExtraMetaPanel( infoTabW );
     infoTabW->insertTab( EXTRAMETA_PANEL, EMP, qtr( "&Metadata" ) );
     IP = new InfoPanel( infoTabW );
@@ -75,13 +84,14 @@ MediaInfoDialog::MediaInfoDialog(qt_intf_t *_p_intf,
 
     /* No need to use a QDialogButtonBox here */
     saveMetaButton = new QPushButton( qtr( "&Save Metadata" ) );
+    saveMetaButton->setObjectName( "saveMetadataButton" );
     saveMetaButton->hide();
     QPushButton *closeButton = new QPushButton( qtr( "&Close" ) );
     closeButton->setMaximumWidth(closeButton->minimumSizeHint().width());
     closeButton->setDefault( true );
 
     QLabel *uriLabel = new QLabel( qtr( "Location:" ) );
-    uriLabel->setMaximumWidth(uriLabel->minimumSizeHint().width());
+    uriLabel->setSizePolicy( QSizePolicy::Fixed, QSizePolicy::Preferred );
     uriLine = new QLineEdit;
     uriLine->setReadOnly( true );
 
@@ -131,7 +141,21 @@ MediaInfoDialog::MediaInfoDialog(qt_intf_t *_p_intf,
     if( p_item )
         updateAllTabs( p_item );
 
-    restoreWidgetPosition( "Mediainfo", QSize( 600 , 480 ) );
+    if (auto* translator = InterfaceTranslator::instance())
+        connect(translator, &InterfaceTranslator::languageChanged, this, [this, closeButton, uriLabel] {
+            setWindowTitle(isMainInputInfo ? qtr("Current Media Information") : qtr("Media Information"));
+            infoTabW->setTabText(META_PANEL, qtr("&General"));
+            infoTabW->setTabText(EXTRAMETA_PANEL, qtr("&Metadata"));
+            infoTabW->setTabText(INFO_PANEL, qtr("Co&dec"));
+            if (ISP) infoTabW->setTabText(INPUTSTATS_PANEL, qtr("S&tatistics"));
+            saveMetaButton->setText(qtr("&Save Metadata"));
+            closeButton->setText(qtr("&Close"));
+            closeButton->setMaximumWidth(closeButton->minimumSizeHint().width());
+            uriLabel->setText(qtr("Location:"));
+        });
+
+    applyRedesignWidgetTheme(this, p_intf->p_mi);
+    restoreWidgetPosition( "Mediainfo", QSize( 720 , 720 ) );
 }
 
 MediaInfoDialog::~MediaInfoDialog()
@@ -141,6 +165,14 @@ MediaInfoDialog::~MediaInfoDialog()
 
 void MediaInfoDialog::showTab( panel i_tab = META_PANEL )
 {
+    if( isMainInputInfo )
+    {
+        const SharedInputItem input { THEMIM->getInput() };
+        if( input )
+            updateAllTabs( input );
+        else
+            clearAllTabs();
+    }
     infoTabW->setCurrentIndex( i_tab );
     show();
 }
@@ -181,16 +213,15 @@ void MediaInfoDialog::clearAllTabs()
 void MediaInfoDialog::close()
 {
     hide();
-
-    /* if dialog is closed, revert editing if not saved */
-    if( MP->isInEditMode() )
-    {
-        MP->setEditMode( false );
-        updateButtons( 0 );
-    }
-
     if( !isMainInputInfo )
         deleteLater();
+}
+
+void MediaInfoDialog::hideEvent( QHideEvent *event )
+{
+    MP->discardEdits();
+    updateButtons( infoTabW->currentIndex() );
+    QVLCFrame::hideEvent( event );
 }
 
 void MediaInfoDialog::updateButtons( int i_tab )

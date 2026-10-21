@@ -71,10 +71,11 @@ enum {
 
 class QEvent;
 class QSignalMapper;
+class MLBookmarkModel;
+Q_MOC_INCLUDE("medialibrary/mlbookmarkmodel.hpp")
 class VLCMenuBar;
 
 class OpenDialog;
-class FirstRunWizard;
 class ExtendedDialog;
 class MessagesDialog;
 class GotoTimeDialog;
@@ -115,6 +116,7 @@ public:
     Q_PROPERTY(bool aboutDialogVisible READ aboutDialogVisible NOTIFY aboutDialogVisibleChanged FINAL)
     Q_PROPERTY(bool mediaInfoDialogVisible READ mediaInfoDialogVisible NOTIFY mediaInfoDialogVisibleChanged FINAL)
     Q_PROPERTY(bool bookmarkDialogVisible READ bookmarkDialogVisible NOTIFY bookmarkDialogVisibleChanged FINAL)
+    Q_PROPERTY(MLBookmarkModel* bookmarkModel READ bookmarkModel CONSTANT FINAL)
     Q_PROPERTY(bool podcastDialogVisible READ podcastDialogVisible NOTIFY podcastDialogVisibleChanged FINAL)
     Q_PROPERTY(bool pluginDialogVisible READ pluginDialogVisible NOTIFY pluginDialogVisibleChanged FINAL)
     Q_PROPERTY(bool egpDialogVisible READ egpDialogVisible NOTIFY egpDialogVisibleChanged FINAL)
@@ -138,6 +140,7 @@ public:
                                 EXT_FILTER_VIDEO | EXT_FILTER_AUDIO |
                                 EXT_FILTER_PLAYLIST,
                                 const QUrl& path = QUrl() );
+    MLBookmarkModel* bookmarkModel();
     bool isDying() { return b_isDying; }
     static QString getDirectoryDialog( qt_intf_t *p_intf);
 
@@ -173,7 +176,9 @@ private:
     QPointer<PrefsDialog> m_prefsDialog;
 
     std::unique_ptr<OpenDialog> m_openDialog;
-    std::unique_ptr<FirstRunWizard> m_firstRunDialog;
+    std::unique_ptr<OpenDialog> m_discOpenDialog;
+    std::unique_ptr<OpenDialog> m_captureOpenDialog;
+    bool m_firstRunDialogVisible = false;
     std::unique_ptr<ExtendedDialog> m_extendedDialog;
     std::unique_ptr<MessagesDialog> m_messagesDialog;
     std::unique_ptr<GotoTimeDialog> m_gotoTimeDialog;
@@ -182,6 +187,7 @@ private:
     std::unique_ptr<AboutDialog> m_aboutDialog;
     std::unique_ptr<MediaInfoDialog> m_mediaInfoDialog;
     std::unique_ptr<BookmarksDialog> m_bookmarkDialog;
+    std::unique_ptr<MLBookmarkModel> m_bookmarkModel;
     std::unique_ptr<PodcastConfigDialog> m_podcastDialog;
     std::unique_ptr<PluginDialog> m_pluginDialog;
     std::unique_ptr<EpgDialog> m_egpDialog;
@@ -196,14 +202,15 @@ private:
 
     void openDialog( OpenDialog::OpenTab );
 
-    template<typename T>
-    inline void ensureDialog(std::unique_ptr<T>& dialog);
+    template<typename T, typename... Args>
+    inline void ensureDialog(std::unique_ptr<T>& dialog, Args&&... args);
     template<typename T>
     void toggleDialogVisible(std::unique_ptr<T>& dialog);
 
 public slots:
     void playlistsDialog( const QVariantList & listMedia, MLPlaylistListModel::PlaylistType type = MLPlaylistListModel::PLAYLIST_TYPE_ALL);
     void bookmarksDialog();
+    void addBookmark();
     void mediaInfoDialog( void );
     void mediaInfoDialog( const SharedInputItem& inputItem );
     void mediaInfoDialog( const PlaylistItem& pItem );
@@ -216,7 +223,9 @@ public slots:
                                               const QMessageBox::StandardButton defaultButton = QMessageBox::NoButton,
                                               const QMessageBox::Icon icon = QMessageBox::NoIcon);
     void prefsDialog();
+    void prefsPageDialog(const QString& page);
     void firstRunDialog();
+    Q_INVOKABLE void dismissFirstRunDialog();
     void extendedDialog();
     void synchroDialog();
     void messagesDialog( int page = 0 );
@@ -234,6 +243,7 @@ public slots:
     void pluginDialog();
     void epgDialog();
     void setPopupMenu();
+    void popupPlayerMenu(const QPoint& position);
     void destroyPopupMenu();
 
     void openFileGenericDialog( intf_dialog_args_t * );
@@ -247,6 +257,12 @@ public slots:
     void openNetDialog();
     void openCaptureDialog();
 
+    // Returns a file URL without adding the directory to the play queue.
+    QUrl selectLibraryFolder(const QUrl& initial = QUrl());
+    QStringList selectLibraryFiles(const QUrl& initial = QUrl());
+    QStringList selectPlaylistFiles();
+    QUrl selectPlaylistCover();
+    QStringList mediaNameFilters(bool audio) const;
     void PLOpenDir();
     void PLAppendDir();
 
@@ -261,6 +277,12 @@ public slots:
     void loadSubtitlesFile();
     void loadAudioFile();
     void loadVideoFile();
+    void addMediaTracksDialog(const QUrl& media, bool subtitles);
+    void showTrackAssignments(const QVariantMap& target, bool subtitles);
+    QStringList selectTrackFiles(bool subtitles, const QUrl& folder);
+    QUrl selectTrackFolder(const QUrl& folder);
+    bool applySavedTrackAssignments(const QVariantList& saved, bool subtitles);
+    void exportLibraryPlaylistDialog(const MLItemId& playlist, const QString& name);
 
     void quit();
 
@@ -304,6 +326,12 @@ signals:
     void pluginDialogVisibleChanged();
     void egpDialogVisibleChanged();
     void prefsDialogVisibleChanged();
+    void showRedesignPreferences();
+    void showRedesignBookmarks();
+    void showRedesignPreferencesPage(const QString& page);
+    void showRedesignNetworkStreams();
+    void showRedesignAddToPlaylist(const QVariantList& media, int type);
+    void showRedesignTrackAssignments(const QVariantMap& target, bool subtitles);
 #ifdef UPDATE_CHECK
     void updateDialogVisibleChanged();
 #endif

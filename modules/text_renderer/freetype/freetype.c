@@ -76,6 +76,8 @@ static void Destroy( filter_t * );
 
 #define BG_OPACITY_TEXT N_("Background opacity")
 #define BG_COLOR_TEXT N_("Background color")
+#define BG_MODE_TEXT N_("Subtitle background")
+#define BG_MODE_LONGTEXT N_("Automatic uses the saved opacity. None hides the background. Box uses the saved color and opacity.")
 
 #define OUTLINE_OPACITY_TEXT N_("Outline opacity")
 #define OUTLINE_COLOR_TEXT N_("Outline color")
@@ -131,6 +133,9 @@ static const char *const ppsz_blending_mode[] = {
     N_("Overlay"), N_("Transparent"),
 };
 
+static const int background_modes[] = { -1, 0, 1 };
+static const char *const background_mode_names[] = { N_("Automatic"), N_("None"), N_("Box") };
+
 
 vlc_module_begin ()
     set_shortname( N_("Text renderer"))
@@ -138,8 +143,8 @@ vlc_module_begin ()
     set_subcategory( SUBCAT_VIDEO_SUBPIC )
 
 #ifdef HAVE_GET_FONT_BY_FAMILY_NAME
-    add_font("freetype-font", DEFAULT_FAMILY, FONT_TEXT, FAMILY_LONGTEXT)
-    add_font("freetype-monofont", DEFAULT_MONOSPACE_FAMILY,
+    add_font("freetype-font", "", FONT_TEXT, FAMILY_LONGTEXT)
+    add_font("freetype-monofont", "",
              MONOSPACE_FONT_TEXT, FAMILY_LONGTEXT)
 #else
     add_loadfile("freetype-font", DEFAULT_FONT_FILE, FONT_TEXT, FONT_LONGTEXT)
@@ -162,6 +167,10 @@ vlc_module_begin ()
 
     add_integer_with_range( "freetype-background-opacity", 0, 0, 255,
                             BG_OPACITY_TEXT, NULL )
+        change_safe()
+    add_integer_with_range( "freetype-background-mode", -1, -1, 1,
+                            BG_MODE_TEXT, BG_MODE_LONGTEXT )
+        change_integer_list( background_modes, background_mode_names )
         change_safe()
     add_rgb("freetype-background-color", 0x00000000, BG_COLOR_TEXT, NULL)
         change_integer_list( pi_color_values, ppsz_color_descriptions )
@@ -206,7 +215,7 @@ vlc_module_begin ()
         change_safe()
 
 #ifdef HAVE_FRIBIDI
-    add_integer_with_range( "freetype-text-direction", 0, 0, 2, TEXT_DIRECTION_TEXT,
+    add_integer_with_range( "freetype-text-direction", 2, 0, 2, TEXT_DIRECTION_TEXT,
                             TEXT_DIRECTION_LONGTEXT )
         change_integer_list( pi_text_direction, ppsz_text_direction )
         change_safe()
@@ -604,8 +613,12 @@ static void RenderCharAXYZ( filter_t *p_filter,
                             draw );
         }
 
+        /* A transparent fill is still a mask in knockout mode. */
+        const bool b_knockout_mask = g == 2 &&
+            ch->p_style->e_blending_mode == STYLE_BLENDING_TRANSPARENT;
         /* Don't render if invisible or not wanted */
         if(
+           (i_a == STYLE_ALPHA_TRANSPARENT && !b_knockout_mask) ||
            (g == 0 && 0 == (ch->p_style->i_style_flags & STYLE_SHADOW) ) ||
            (g == 1 && 0 == (ch->p_style->i_style_flags & STYLE_OUTLINE) )
           )
@@ -707,17 +720,52 @@ static inline void RenderAXYZ( filter_t *p_filter,
     }
 }
 
+#ifdef HAVE_GET_FONT_BY_FAMILY_NAME
+static void UpdateDefaultFamily(filter_t *filter, const char *option, char **family,
+                                const char *fallback)
+{
+    char *current = var_InheritString(filter, option);
+    if (current == NULL || *current == '\0') {
+        free(current);
+        current = strdup(fallback);
+    }
+    if (current != NULL && (*family == NULL || strcmp(*family, current) != 0)) {
+        free(*family);
+        *family = current;
+        ((filter_sys_t *)filter->p_sys)->p_faceid = NULL;
+    } else
+        free(current);
+}
+#endif
+
 static void UpdateDefaultLiveStyles( filter_t *p_filter )
 {
     filter_sys_t *p_sys = p_filter->p_sys;
     text_style_t *p_style = p_sys->p_default_style;
+#ifdef HAVE_GET_FONT_BY_FAMILY_NAME
+    UpdateDefaultFamily(p_filter, "freetype-font", &p_style->psz_fontname, DEFAULT_FAMILY);
+    UpdateDefaultFamily(p_filter, "freetype-monofont", &p_style->psz_monofontname, DEFAULT_MONOSPACE_FAMILY);
+#endif
+    p_sys->p_forced_style->i_style_flags &= ~STYLE_BOLD;
+    if (var_InheritBool(p_filter, "freetype-bold")) {
+        p_sys->p_forced_style->i_style_flags |= STYLE_BOLD;
+        p_sys->p_forced_style->i_features |= STYLE_HAS_FLAGS;
+    } else if (p_sys->p_forced_style->i_style_flags == 0)
+        p_sys->p_forced_style->i_features &= ~STYLE_HAS_FLAGS;
 
     p_style->i_font_color = var_InheritInteger( p_filter, "freetype-color" );
 
-    p_style->i_background_alpha = var_InheritInteger( p_filter, "freetype-background-opacity" );
+    p_style->i_background_alpha = var_InheritInteger(p_filter, "freetype-background-mode") == 0
+        ? 0 : var_InheritInteger(p_filter, "freetype-background-opacity");
     p_style->i_background_color = var_InheritInteger( p_filter, "freetype-background-color" );
 
     p_sys->i_outline_thickness = var_InheritInteger( p_filter, "freetype-outline-thickness" );
+
+    float f_shadow_angle       = var_InheritFloat( p_filter, "freetype-shadow-angle" );
+    float f_shadow_distance    = var_InheritFloat( p_filter, "freetype-shadow-distance" );
+    f_shadow_distance          = VLC_CLIP( f_shadow_distance, 0, 1 );
+    p_sys->f_shadow_vector_x   = f_shadow_distance * cosf((float)(2. * M_PI) * f_shadow_angle / 360);
+    p_sys->f_shadow_vector_y   = f_shadow_distance * sinf((float)(2. * M_PI) * f_shadow_angle / 360);
 }
 
 static void FillDefaultStyles( filter_t *p_filter )
@@ -1037,7 +1085,8 @@ static subpicture_region_t *Render( filter_t *p_filter,
     filter_sys_t *p_sys = p_filter->p_sys;
     subpicture_region_t *region = NULL;
     bool b_grid = (p_region_in->text_flags & VLC_SUBPIC_TEXT_FLAG_GRID_MODE) != 0;
-    p_sys->i_scale = ( b_grid ) ? 100 : var_InheritInteger( p_filter, "sub-text-scale");
+    p_sys->i_scale = ( b_grid || (p_region_in->text_flags & VLC_SUBPIC_TEXT_FLAG_PIXEL_SIZE) )
+        ? 100 : var_InheritInteger( p_filter, "sub-text-scale");
 
     UpdateDefaultLiveStyles( p_filter );
 
@@ -1310,16 +1359,11 @@ static int Create( filter_t *p_filter )
 
     /*
      * The following variables should not be cached, as they might be changed on-the-fly:
-     * freetype-rel-fontsize, freetype-background-opacity, freetype-background-color,
-     * freetype-outline-thickness, freetype-color, freetype-blending-style
+     * freetype-rel-fontsize, freetype-background-mode, freetype-background-opacity, freetype-background-color,
+     * freetype-outline-thickness, freetype-color, freetype-blending-style,
+     * freetype-shadow-angle, freetype-shadow-distance
      *
      */
-
-    float f_shadow_angle       = var_InheritFloat( p_filter, "freetype-shadow-angle" );
-    float f_shadow_distance    = var_InheritFloat( p_filter, "freetype-shadow-distance" );
-    f_shadow_distance          = VLC_CLIP( f_shadow_distance, 0, 1 );
-    p_sys->f_shadow_vector_x   = f_shadow_distance * cosf((float)(2. * M_PI) * f_shadow_angle / 360);
-    p_sys->f_shadow_vector_y   = f_shadow_distance * sinf((float)(2. * M_PI) * f_shadow_angle / 360);
 
     p_sys->fs = FontSelectNew( p_filter  );
     if( !p_sys->fs )

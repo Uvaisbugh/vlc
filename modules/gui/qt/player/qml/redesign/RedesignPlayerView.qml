@@ -1,0 +1,881 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+import QtQuick
+import QtQuick.Layouts
+
+// Presentation shared by the VLC integration and the standalone QML checks.
+FocusScope {
+    id: root
+    property real scaleFactor: 1
+    property color accentColor: "#d37918"
+    property bool lightTheme: false
+    property bool presentationOnly: false
+    property string playerLayout: ""
+    readonly property alias layoutModel: chromeLayout
+    readonly property real controlsHeight: chrome.controlsHeight
+    readonly property bool layoutReady: !chrome.applying && JSON.stringify(chrome.renderedLayout) === JSON.stringify(chromeLayout.layout)
+    readonly property var chromeItems: chrome.allControls
+    property var customControlStates: ({})
+    property bool customMenuOpen: false
+    signal customActionRequested(string action, Item anchor)
+    property bool playing: false
+    property bool started: false
+    property bool hasVideo: false
+    property bool seekable: false
+    property bool pausable: true
+    property bool hasPrevious: false
+    property bool hasNext: false
+    property bool muted: false
+    property bool fullscreen: false
+    property int autoHideMode: 1
+    property int controlsHideTimeout: 1800
+    property int cursorHideTimeout: 1000
+    readonly property bool videoCursorVisible: !fullscreen || cursorHideTimer.running
+    property bool showFullscreenControls: true
+    property real fullscreenControlsOpacity: 1
+    property int fullscreenControlsSensitivity: 3
+    readonly property color chromeBackground: Qt.rgba(theme.background.r, theme.background.g, theme.background.b,
+        fullscreen ? Math.max(0.1, Math.min(1, fullscreenControlsOpacity)) : 1)
+    property point _lastControlMotion: Qt.point(-1, -1)
+    property bool _headerRevealed: false
+    property bool _toolbarRevealed: false
+    property bool showStatistics: false
+    property bool audioWaveformEnabled: false
+    property var audioWaveformPeaks: []
+    property bool showSubtitleTimeline: false
+    property bool showSeekPreview: true
+    property var subtitleTimelineCues: []
+    property string subtitleTimelineState: "off"
+    property real durationSeconds: 0
+    property int subtitleDelayMS: 0
+    signal subtitleDelayRequested(int milliseconds)
+    property var statistics: ({})
+    readonly property bool autoHideActive: started && hasVideo && (autoHideMode === 2 || (fullscreen && autoHideMode === 1))
+    property bool maximized: false
+    property bool minimalView: false
+    onMinimalViewChanged: {
+        if (minimalView) {
+            libraryOpen = false
+            queueOpen = false
+            settingsPage = ""
+            forceActiveFocus()
+        }
+    }
+    property bool showWindowButtons: true
+    property bool libraryOpen: false
+    property bool libraryExpanded: false
+    property bool miniPlayerVisible: true
+    property string mediaFolderTitle: ""
+    property bool canBrowseMedia: true
+    onLibraryExpandedChanged: if (libraryExpanded) miniPlayerVisible = true
+    property bool libraryInitialized: false
+    onLibraryOpenChanged: if (!libraryOpen) libraryExpanded = false
+    property bool queueOpen: false
+    readonly property bool floatingQueue: queueOpen && miniPlayer.visible
+    property string settingsPage: ""
+    property real position: 0
+    property real volume: 1
+    property real maxVolume: 1.25
+    property real buffering: 1
+    property string mediaTitle: qsTr("VLC Media Player")
+    property string locationTitle: qsTr("Videos")
+    property string timeText: "00:00:00"
+    property string lengthText: "00:00:00"
+    property string artist: ""
+    property url artwork
+    property bool resumeAvailable: false
+    property var timeForPosition: function(position) { return "" }
+    property url seekPreviewImage
+    property Component seekThumbnailContent
+    property real seekPreviewImagePosition: -1
+    signal seekPreviewRequested(real position)
+    signal seekPreviewEnded()
+    function refreshSeekPreview() { if (libraryExpanded) miniPlayer.refreshPreview(); else seek.refreshPreview() }
+    property Component titleBarDragContent
+    property Component videoContent
+    property Component videoBackdropContent
+    readonly property alias backdropSource: backdropScene
+    property Component libraryContent
+    property Component queueContent
+    property Component settingsContent
+    property QtObject trackPopup
+    readonly property alias videoItem: videoLoader.item
+    readonly property alias libraryItem: libraryLoader.item
+    readonly property alias settingsItem: settingsLoader.item
+    readonly property alias queueItem: queueLoader.item
+    readonly property real positionSliderY: {
+        if (libraryExpanded) return miniPlayer.y + miniPlayer.seekY
+        let y = 0
+        for (let item = seek; item && item !== root; item = item.parent) y += item.y
+        return y
+    }
+    readonly property bool controlsLocked: chromeLayout.editing || customMenuOpen || queueOpen || libraryOpen || settingsPage.length > 0 || resumeAvailable || !!trackPopup && trackPopup.visible
+    readonly property alias topVisible: header.visible
+    readonly property alias bottomVisible: toolbar.visible
+    readonly property RedesignTheme theme: RedesignTheme { scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor }
+
+    signal togglePlayback()
+    signal previous()
+    signal next()
+    signal seekRequested(real value)
+    signal seekDragStarted()
+    signal seekDragFinished(real value, bool commit)
+    signal volumeRequested(real value)
+    signal volumeWheelRequested(var event)
+    signal muteRequested()
+    signal fullscreenRequested()
+    signal minimizeRequested()
+    signal maximizeRequested()
+    signal closeRequested()
+    signal audioTracksRequested(Item anchor)
+    signal subtitleTracksRequested(Item anchor)
+    signal menuRequested(Item anchor)
+    signal contextMenuRequested(point globalPosition)
+    signal openRequested()
+    signal preferencesRequested()
+    signal fullLibraryRequested()
+    signal mediaFolderRequested()
+    signal artistRequested()
+    signal resumeRequested(bool resume)
+    signal keyPressed(var event)
+
+    Component.onDestruction: if (seek.dragActive) root.seekDragFinished(seek.dragPosition, false)
+
+    component ChromeButton: RedesignButton {
+        focusPolicy: root.presentationOnly ? Qt.NoFocus : Qt.StrongFocus
+    }
+
+    // Preview the chrome without making its controls dim or focusable.
+    MouseArea {
+        anchors.fill: parent; z: 100
+        enabled: root.presentationOnly; visible: enabled
+        acceptedButtons: Qt.AllButtons
+        onClicked: mouse => {
+            if (mouse.button !== Qt.LeftButton) return
+            const point = closeButton.mapFromItem(root, mouse.x, mouse.y)
+            if (closeButton.visible && point.x >= 0 && point.y >= 0
+                && point.x < closeButton.width && point.y < closeButton.height)
+                root.closeRequested()
+        }
+        onWheel: wheel => wheel.accepted = true
+    }
+
+    // Panels consume right-clicks before they reach this background fallback.
+    // A passive handler on the player would also observe their context clicks.
+    MouseArea {
+        anchors.fill: parent
+        z: -1
+        enabled: !root.hasVideo
+        acceptedButtons: Qt.RightButton
+        onClicked: mouse => root.contextMenuRequested(mapToGlobal(mouse.x, mouse.y))
+    }
+
+    function revealControls() { revealTimer.restart() }
+    function revealCursor() { if (fullscreen) cursorHideTimer.restart() }
+    function toggleSettings(page: string) {
+        if (trackPopup) trackPopup.close()
+        queueOpen = false
+        settingsPage = settingsPage === page ? "" : page
+    }
+    function toggleTracks(anchor, page) {
+        if (!trackPopup) return
+        if (settingsPage === page) {
+            settingsPage = ""
+            trackPopup.close()
+            return
+        }
+        settingsPage = ""
+        queueOpen = false
+        trackPopup.toggleFrom(anchor, page)
+    }
+    function dismissPanels() {
+        settingsPage = ""
+        queueOpen = false
+        libraryOpen = false
+    }
+
+    Keys.onEscapePressed: event => {
+        if (queueOpen || libraryOpen || settingsPage.length > 0)
+            dismissPanels()
+        else if (fullscreen)
+            fullscreenRequested()
+        else
+            event.accepted = false
+    }
+    Keys.onPressed: event => {
+        if (event.key === Qt.Key_Tab || event.key === Qt.Key_Backtab)
+            revealControls()
+        keyPressed(event)
+    }
+    Timer { id: revealTimer; interval: root.controlsHideTimeout; running: root.fullscreen }
+    Timer { id: cursorHideTimer; interval: Math.max(0, root.cursorHideTimeout) }
+    onFullscreenChanged: {
+        _lastControlMotion = Qt.point(-1, -1)
+        _headerRevealed = false
+        _toolbarRevealed = false
+        revealControls()
+        if (fullscreen) revealCursor()
+        else cursorHideTimer.stop()
+    }
+    function observeControlMotion(position: point) {
+        const first = _lastControlMotion.x < 0
+        const distance = Math.max(Math.abs(position.x - _lastControlMotion.x), Math.abs(position.y - _lastControlMotion.y))
+        const moved = first || distance > Math.max(0, fullscreenControlsSensitivity)
+        const atTop = position.y >= 0 && position.y < headerEdge.height
+        const atBottom = position.y <= height && position.y >= height - bottomEdge.height
+        if (!atTop) _headerRevealed = false
+        else if (moved || header.visible) _headerRevealed = true
+        if (!atBottom) _toolbarRevealed = false
+        else if (moved || toolbar.visible) _toolbarRevealed = true
+        if (moved) _lastControlMotion = position
+    }
+    HoverHandler {
+        enabled: root.fullscreen
+        blocking: false
+        onPointChanged: if (hovered) {
+            root.revealCursor()
+            root.observeControlMotion(point.position)
+        }
+        onHoveredChanged: {
+            if (hovered) {
+                root.revealCursor()
+                root.observeControlMotion(point.position)
+            }
+            else {
+                root._lastControlMotion = Qt.point(-1, -1)
+                root._headerRevealed = false
+                root._toolbarRevealed = false
+            }
+        }
+    }
+    Item {
+        id: backdropScene
+        anchors.fill: parent
+        Rectangle { anchors.fill: parent; z: -1; color: theme.background }
+    }
+
+    // Side panels cover the picture. Their state must not change the video
+    // surface geometry or trigger a new video size/aspect ratio.
+    Item {
+        id: viewport
+        parent: root.libraryExpanded ? miniPlayer.videoArea : backdropScene
+        objectName: "redesignViewport"
+        visible: !root.libraryExpanded || (root.started && miniPlayer.visible)
+        z: 0
+        anchors {
+            top: parent.top
+            bottom: parent.bottom
+            left: parent.left
+            right: parent.right
+            topMargin: root.libraryExpanded || root.fullscreen ? 0 : root.minimalView ? theme.dp(10) : theme.dp(40)
+            bottomMargin: root.libraryExpanded || root.fullscreen ? 0 : root.minimalView ? theme.dp(10) : root.controlsHeight
+            leftMargin: root.libraryExpanded || root.fullscreen ? 0 : theme.dp(10)
+            rightMargin: root.libraryExpanded || root.fullscreen ? 0 : theme.dp(10)
+        }
+        Rectangle { anchors.fill: parent; color: audioArtwork.ready && audioArtwork.visible ? "transparent" : "black"; radius: theme.dp(10) }
+        Loader { id: videoLoader; anchors.fill: parent; sourceComponent: root.videoContent }
+        Rectangle {
+            // The outer border leaves a rounded opening over the native video layer.
+            anchors.fill: parent
+            anchors.margins: -theme.dp(root.libraryExpanded ? 5 : 10)
+            color: "transparent"
+            radius: theme.dp(root.libraryExpanded ? 10 : 19)
+            border.width: theme.dp(root.libraryExpanded ? 5 : 10)
+            border.color: theme.background
+            visible: (root.libraryExpanded || !root.fullscreen) && !(audioArtwork.ready && audioArtwork.visible)
+        }
+
+
+        // An honest empty state; the supplied cat is reference footage only.
+        Column {
+            anchors.centerIn: parent
+            width: Math.min(parent.width - theme.dp(40), theme.dp(420))
+            spacing: theme.dp(18)
+            visible: !root.started && !root.hasVideo
+            RedesignIcon {
+                anchors.horizontalCenter: parent.horizontalCenter
+                width: theme.dp(48); height: width
+                name: "cone"; color: theme.accent
+            }
+            Text {
+                anchors.horizontalCenter: parent.horizontalCenter
+                text: qsTr("Drop a file to start playing")
+                color: "#cccccc"
+                font.pixelSize: theme.dp(18)
+            }
+            ChromeButton {
+                objectName: "openFileButton"
+                anchors.horizontalCenter: parent.horizontalCenter
+                scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
+                iconName: "folder"; text: qsTr("Open file"); caption: text
+                accent: true
+                onClicked: root.openRequested()
+            }
+        }
+        RedesignAudioArtwork {
+            id: audioArtwork
+            objectName: "audioArtworkView"
+            anchors.fill: parent
+            scaleFactor: root.scaleFactor
+            source: visible ? root.artwork : ""
+            title: root.mediaTitle; artist: root.artist
+            showTitle: !root.libraryExpanded
+            visible: root.started && !root.hasVideo
+        }
+        Column {
+            anchors.centerIn: parent
+            spacing: theme.dp(14)
+            objectName: "audioArtworkFallback"
+            visible: root.started && !root.hasVideo && !audioArtwork.ready
+            RedesignIcon {
+                anchors.horizontalCenter: parent.horizontalCenter
+                width: theme.dp(96); height: width
+                name: "music"; color: theme.accent
+            }
+            Text {
+                anchors.horizontalCenter: parent.horizontalCenter
+                width: Math.max(0, viewport.width - theme.dp(40))
+                text: root.mediaTitle
+                visible: !root.libraryExpanded
+                horizontalAlignment: Text.AlignHCenter
+                elide: Text.ElideRight
+                color: "#e5e5e5"
+                font.pixelSize: theme.dp(22)
+            }
+            Text {
+                anchors.horizontalCenter: parent.horizontalCenter
+                text: root.artist; color: "#8f8f8f"; font.pixelSize: theme.dp(14)
+                visible: !root.libraryExpanded
+            }
+        }
+        Text {
+            anchors.centerIn: parent
+            visible: root.started && root.buffering < 1
+            text: qsTr("Buffering %1%").arg(Math.round(root.buffering * 100))
+            color: "white"
+            style: Text.Outline; styleColor: "black"
+            font.pixelSize: theme.dp(16)
+        }
+        RedesignStatistics {
+            objectName: "playbackStatisticsOverlay"
+            anchors.top: parent.top; anchors.left: parent.left
+            anchors.margins: theme.dp(12)
+            width: Math.max(0, Math.min(implicitWidth, parent.width - theme.dp(24)))
+            height: Math.max(0, Math.min(implicitHeight, parent.height - theme.dp(24)))
+            scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
+            statistics: root.statistics
+            visible: root.showStatistics && root.started && !root.minimalView
+        }
+        Rectangle {
+            objectName: "resumePlaybackPrompt"
+            anchors.horizontalCenter: parent.horizontalCenter
+            anchors.bottom: parent.bottom
+            anchors.bottomMargin: theme.dp(24)
+            width: Math.max(0, Math.min(parent.width - theme.dp(24), theme.dp(540)))
+            height: theme.dp(width < theme.dp(420) ? 80 : 64)
+            visible: root.resumeAvailable && !root.minimalView
+            color: theme.panel; radius: theme.dp(8); border.color: theme.border
+            RowLayout {
+                id: resumeRow
+                anchors.fill: parent; anchors.margins: theme.dp(12)
+                Text {
+                    Layout.fillWidth: true
+                    text: qsTr("Continue where you left off?")
+                    color: theme.bright; font.pixelSize: theme.dp(14)
+                    wrapMode: Text.WordWrap
+                }
+                ChromeButton {
+                    scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
+                    caption: qsTr("Continue"); text: caption; accent: true
+                    onClicked: root.resumeRequested(true)
+                }
+                ChromeButton {
+                    scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
+                    iconName: "close"; text: qsTr("Start from the beginning")
+                    onClicked: root.resumeRequested(false)
+                }
+            }
+        }
+    }
+
+    Rectangle {
+        id: library
+        parent: backdropScene
+        objectName: "redesignLibraryPanel"
+        z: 1
+        property real reveal: root.libraryOpen ? 1 : 0
+        Behavior on reveal { NumberAnimation { duration: 150; easing.type: Easing.OutExpo } }
+        visible: reveal > 0
+        width: root.libraryExpanded ? root.width : Math.min(theme.dp(427), root.width * (root.width < theme.dp(900) ? 0.48 : 0.38))
+        x: (reveal - 1) * width
+        anchors.top: parent.top; anchors.bottom: parent.bottom
+        anchors.topMargin: header.height; anchors.bottomMargin: root.libraryExpanded ? 0 : toolbar.height
+        color: root.libraryExpanded ? theme.libraryPanel : "transparent"
+        clip: true
+        Rectangle {
+            objectName: "redesignLibraryBody"
+            visible: !root.libraryExpanded
+            x: theme.dp(50)
+            width: Math.max(0, parent.width - x)
+            height: parent.height
+            color: theme.libraryOverlay
+        }
+        MouseArea { anchors.fill: parent; acceptedButtons: Qt.AllButtons; onWheel: wheel => wheel.accepted = true }
+        Loader {
+            id: libraryLoader
+            anchors.fill: parent
+            sourceComponent: root.libraryContent
+            active: root.libraryOpen || root.libraryInitialized
+            enabled: root.libraryOpen
+            onLoaded: root.libraryInitialized = true
+        }
+    }
+    RedesignMiniPlayer {
+        id: miniPlayer
+        parent: backdropScene
+        objectName: "redesignMiniPlayer"
+        z: 2
+        visible: root.libraryExpanded && root.libraryOpen && root.started && root.miniPlayerVisible
+        width: Math.max(theme.dp(160), Math.min(theme.dp(391), root.width - theme.dp(12), (root.height - theme.dp(182)) * 16 / 9 + theme.dp(20)))
+        scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
+        playing: root.playing; started: root.started; seekable: root.seekable; pausable: root.pausable
+        hasPrevious: root.hasPrevious; hasNext: root.hasNext; hasVideo: root.hasVideo
+        position: root.position; mediaTitle: root.mediaTitle; folderTitle: root.mediaFolderTitle; artist: root.artist
+        canBrowseMedia: root.canBrowseMedia
+        minimumY: Math.min(root.height - height - theme.dp(6), theme.dp(46) + (root.floatingQueue ? theme.dp(356) : 0))
+        previewEnabled: root.showSeekPreview && !root.presentationOnly
+        thumbnailContent: root.seekThumbnailContent
+        videoBackdropContent: root.videoBackdropContent
+        previewImage: root.seekPreviewImage; previewImagePosition: root.seekPreviewImagePosition
+        timeForPosition: root.timeForPosition
+        onTogglePlayback: root.togglePlayback()
+        onPrevious: root.previous()
+        onNext: root.next()
+        onSeekRequested: position => root.seekRequested(position)
+        onSeekDragStarted: root.seekDragStarted()
+        onSeekDragFinished: (position, commit) => root.seekDragFinished(position, commit)
+        onPreviewRequested: position => root.seekPreviewRequested(position)
+        onPreviewEnded: root.seekPreviewEnded()
+        onOpenPlayerRequested: { root.libraryExpanded = false; root.libraryOpen = false }
+        onCloseRequested: { root.queueOpen = false; root.miniPlayerVisible = false }
+        onQueueRequested: { root.settingsPage = ""; root.queueOpen = !root.queueOpen }
+        onFolderRequested: root.mediaFolderRequested()
+        onArtistRequested: root.artistRequested()
+    }
+    Rectangle {
+        id: floatingQueuePanel
+        objectName: "redesignFloatingQueue"
+        z: 1.5
+        visible: root.floatingQueue
+        x: miniPlayer.x
+        y: Math.max(theme.dp(46), miniPlayer.y - height)
+        width: miniPlayer.width
+        height: Math.min(theme.dp(356), Math.max(0, miniPlayer.y - theme.dp(46)))
+        radius: theme.dp(14)
+        color: theme.background
+        // Continue the card behind the mini player without moving its video.
+        Rectangle { y: parent.height - theme.dp(14); width: parent.width; height: theme.dp(28); color: parent.color }
+        MouseArea { anchors.fill: parent; acceptedButtons: Qt.AllButtons; onWheel: wheel => wheel.accepted = true }
+    }
+    Rectangle {
+        id: rightPanel
+        objectName: "redesignRightPanel"
+        z: 3
+        visible: (root.queueOpen && !root.floatingQueue) || root.settingsPage.length > 0
+        width: Math.min(theme.dp(400), root.width * 0.48)
+        anchors.top: parent.top; anchors.bottom: parent.bottom; anchors.right: parent.right
+        anchors.topMargin: header.height + theme.dp(20); anchors.bottomMargin: toolbar.height + theme.dp(20)
+        anchors.rightMargin: theme.dp(20)
+        color: theme.floatingPanel
+        radius: theme.dp(10)
+        border.width: 0
+        Loader {
+            anchors.fill: parent
+            z: -1
+            sourceComponent: root.videoBackdropContent
+            active: (root.queueOpen && !root.floatingQueue) || root.settingsPage.length > 0
+        }
+        MouseArea { anchors.fill: parent; acceptedButtons: Qt.AllButtons; onWheel: wheel => wheel.accepted = true }
+        Loader {
+            id: queueLoader
+            parent: root.floatingQueue ? floatingQueuePanel : rightPanel
+            anchors.fill: parent
+            sourceComponent: root.queueContent
+            active: root.queueOpen
+            visible: active
+            onLoaded: if (item && item.floating !== undefined) item.floating = Qt.binding(() => root.floatingQueue)
+        }
+        Loader {
+            id: settingsLoader
+            anchors.fill: parent
+            sourceComponent: root.settingsContent
+            active: root.settingsPage.length > 0
+            visible: active
+        }
+    }
+
+    // Fullscreen edges reveal independently; motion in the video stays unobtrusive.
+    // Each detector contains the chrome it reveals. Hover on a child control
+    // must not hide the toolbar and then expose the detector again.
+    Item {
+        id: headerEdge
+        parent: backdropScene
+        z: 4
+        anchors.top: parent.top; width: parent.width; height: theme.dp(48)
+        HoverHandler { id: headerHover; blocking: false }
+    }
+    Item {
+        id: bottomEdge
+        parent: backdropScene
+        z: 4
+        anchors.bottom: parent.bottom; width: parent.width; height: root.controlsHeight + theme.dp(10)
+        HoverHandler { id: bottomHover; blocking: false }
+    }
+
+    Rectangle {
+        id: header
+        parent: headerEdge
+        objectName: "redesignHeader"
+        anchors.top: parent.top; width: parent.width; height: theme.dp(40)
+        color: root.chromeBackground
+        visible: !root.minimalView && (!root.fullscreen || (headerHover.hovered && root._headerRevealed) || header.activeFocus || revealTimer.running || root.controlsLocked)
+        Loader { anchors.fill: parent; active: !chromeLayout.editing; sourceComponent: root.titleBarDragContent }
+        RowLayout {
+            id: headerLeft
+            anchors.left: parent.left
+            anchors.verticalCenter: parent.verticalCenter
+            spacing: 0
+            ChromeButton {
+                scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
+                implicitWidth: theme.dp(50)
+                iconName: "cone"; text: qsTr("Open file"); foreground: theme.accent
+                onClicked: root.openRequested()
+            }
+            ChromeButton {
+                implicitWidth: theme.dp(30)
+                id: mainMenuButton
+                objectName: "mainMenuButton"
+                visible: !root.presentationOnly
+                scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
+                iconName: "more"; text: qsTr("Menu")
+                onClicked: root.menuRequested(this)
+            }
+            ChromeButton {
+                implicitWidth: {
+                    const slot = chromeLayout.location("library")
+                    return theme.dp(!slot || slot.zone.startsWith("header") ? 46 : 30)
+                }
+                id: libraryToggleButton
+                objectName: "libraryToggleButton"
+                visible: !root.presentationOnly && !root.libraryExpanded
+                scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
+                iconName: "sidebar"; text: root.libraryOpen ? qsTr("Hide library") : qsTr("Show library")
+                iconReveal: library.reveal
+                Accessible.checkable: true; Accessible.checked: root.libraryOpen
+                onClicked: root.libraryOpen = !root.libraryOpen
+            }
+            Rectangle {
+                id: headerDivider
+                readonly property bool inFooter: !!parent && parent.objectName.startsWith("customFooter")
+                visible: !root.presentationOnly && !root.libraryExpanded
+                // The lower toolbar already adds spacing between controls.
+                // Retain the reference gap without the header's extra padding.
+                Layout.leftMargin: theme.dp(inFooter ? 1 : 2)
+                Layout.rightMargin: theme.dp(inFooter ? 0 : 6)
+                width: theme.dp(1); height: theme.dp(18); color: theme.border
+            }
+            ChromeButton {
+                id: mediaFolderButton
+                objectName: "mediaFolderButton"
+                property bool hasMediaFolder: root.started && root.canBrowseMedia && root.mediaFolderTitle.length > 0
+                visible: !root.presentationOnly && !root.libraryExpanded && root.width > theme.dp(700)
+                scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
+                iconName: "folder"
+                caption: hasMediaFolder ? root.mediaFolderTitle : root.locationTitle
+                captionMaximumWidth: {
+                    const slot = chromeLayout.location("folder")
+                    return theme.dp(!slot || slot.zone.startsWith("header") ? 220 : 100)
+                }
+                text: hasMediaFolder ? qsTr("Open media folder") : qsTr("Browse library")
+                onClicked: {
+                    if (hasMediaFolder) {
+                        root.libraryOpen = true
+                        root.mediaFolderRequested()
+                    } else root.libraryOpen = !root.libraryOpen
+                }
+            }
+        }
+        Item {
+            id: titleControl
+            objectName: "mediaTitleControl"
+            readonly property bool inHeader: parent === header || !!parent && parent.objectName.startsWith("customHeader")
+            visible: inHeader || root.width > theme.dp(1200)
+            anchors.centerIn: parent === header ? header : undefined
+            width: parent === header ? Math.max(0, header.width - Math.max(headerLeft.width,
+                windowControls.width - (closeButton.flushToCorner ? theme.dp(6) : 0)) * 2 - theme.dp(32)) : implicitWidth
+            implicitWidth: Math.min(theme.dp(220), titleLabel.implicitWidth + theme.dp(16))
+            implicitHeight: theme.dp(36)
+            Layout.fillWidth: true
+            Text {
+                id: titleLabel
+                anchors.fill: parent
+                horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter
+                text: root.mediaTitle
+                font.pixelSize: theme.dp(14)
+                elide: Text.ElideRight; color: theme.foreground
+            }
+        }
+        Instantiator {
+            model: [minimizeButton, maximizeButton, fullscreenButton, closeButton]
+            delegate: QtObject {
+                id: windowSize
+                required property var modelData
+                property Binding widthRule: Binding {
+                    target: windowSize.modelData; property: "width"
+                    value: windowSize.modelData.implicitWidth
+                    when: windowSize.modelData.parent === windowControls
+                    restoreMode: Binding.RestoreBindingOrValue
+                }
+                property Binding heightRule: Binding {
+                    target: windowSize.modelData; property: "height"
+                    value: windowSize.modelData.implicitHeight
+                    when: windowSize.modelData.parent === windowControls
+                    restoreMode: Binding.RestoreBindingOrValue
+                }
+            }
+        }
+        Row {
+            id: windowControls
+            anchors.right: parent.right; anchors.rightMargin: closeButton.flushToCorner ? 0 : theme.dp(6)
+            anchors.verticalCenter: parent.verticalCenter
+            ChromeButton {
+                id: minimizeButton
+                anchors.verticalCenter: parent === windowControls ? parent.verticalCenter : undefined
+                visible: root.showWindowButtons
+                scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
+                iconName: "minimize"; text: qsTr("Minimize")
+                onClicked: root.minimizeRequested()
+            }
+            ChromeButton {
+                id: maximizeButton
+                anchors.verticalCenter: parent === windowControls ? parent.verticalCenter : undefined
+                visible: root.showWindowButtons
+                scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
+                iconName: "maximize"; text: root.maximized ? qsTr("Restore window") : qsTr("Maximize")
+                onClicked: root.maximizeRequested()
+            }
+            ChromeButton {
+                id: fullscreenButton
+                anchors.verticalCenter: parent === windowControls ? parent.verticalCenter : undefined
+                objectName: "fullscreenButton"
+                scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
+                iconName: "fullscreen"; text: root.fullscreen ? qsTr("Exit fullscreen") : qsTr("Fullscreen")
+                onClicked: root.fullscreenRequested()
+            }
+            ChromeButton {
+                id: closeButton
+                objectName: "windowCloseButton"
+                readonly property bool flushToCorner: root.showWindowButtons && (root.maximized || root.fullscreen) && !chromeLayout.editing
+                    && (parent === windowControls || !!parent && parent.objectName === "customHeaderRight"
+                        && chrome.renderedLayout && chrome.renderedLayout.zones.headerRight.slice(-1)[0] === "close")
+                implicitWidth: theme.dp(flushToCorner ? 42 : 36)
+                implicitHeight: theme.dp(flushToCorner ? 40 : 36)
+                rightPadding: flushToCorner ? theme.dp(6) : 0
+                visible: root.showWindowButtons
+                scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
+                iconName: "close"; text: qsTr("Close")
+                onClicked: root.closeRequested()
+            }
+        }
+    }
+
+    Rectangle {
+        id: toolbar
+        parent: bottomEdge
+        objectName: "redesignToolbar"
+        anchors.bottom: parent.bottom; width: parent.width; height: root.controlsHeight
+        color: root.chromeBackground
+        visible: !root.minimalView && !root.libraryExpanded && (!root.fullscreen || root.showFullscreenControls || chromeLayout.editing)
+            && (!root.autoHideActive || (bottomHover.hovered && (!root.fullscreen || root._toolbarRevealed)) || toolbar.activeFocus || revealTimer.running || root.controlsLocked)
+        RowLayout {
+            id: originalToolbar
+            visible: !chrome.custom && !chrome.applying
+            anchors.fill: parent
+            anchors.topMargin: root.controlsHeight - theme.dp(54)
+            anchors.leftMargin: theme.dp(20); anchors.rightMargin: theme.dp(17)
+            spacing: theme.dp(6)
+            ChromeButton {
+                id: previousButton
+                Layout.rightMargin: parent === originalToolbar ? theme.dp(2) : 0
+                objectName: "previousButton"
+                scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
+                implicitWidth: theme.dp(30); implicitHeight: theme.dp(28)
+                iconName: "previous"; text: qsTr("Previous"); enabled: root.hasPrevious
+                onClicked: root.previous()
+            }
+            ChromeButton {
+                id: playButton
+                Layout.rightMargin: parent === originalToolbar ? theme.dp(2) : 0
+                objectName: "playButton"
+                scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
+                implicitWidth: theme.dp(54); implicitHeight: theme.dp(28)
+                iconName: root.playing ? "pause" : "play"
+                text: root.playing ? qsTr("Pause") : qsTr("Play")
+                accent: true; enabled: !root.started || root.pausable
+                onClicked: root.togglePlayback()
+            }
+            ChromeButton {
+                id: nextButton
+                objectName: "nextButton"
+                scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
+                implicitWidth: theme.dp(30); implicitHeight: theme.dp(28)
+                iconName: "next"; text: qsTr("Next"); enabled: root.hasNext
+                onClicked: root.next()
+            }
+            RowLayout {
+                id: timelineControl
+                Layout.leftMargin: parent === originalToolbar ? theme.dp(6) : 0
+                Layout.rightMargin: parent === originalToolbar ? theme.dp(4) : 0
+                objectName: "timelineControl"
+                Layout.fillWidth: true
+                spacing: theme.dp(10)
+                Text {
+                    objectName: "elapsedTimeLabel"
+                    visible: root.width > theme.dp(650)
+                    Layout.preferredWidth: Math.max(theme.dp(chrome.hasTimeline("above") ? 74 : chrome.audioRight ? 84 : 82), implicitWidth)
+                    leftPadding: chrome.hasTimeline("above") ? 0 : theme.dp(8)
+                    horizontalAlignment: Text.AlignHCenter
+                    text: root.timeText
+                    color: theme.foreground; font.pixelSize: theme.dp(14)
+                }
+                RedesignPlayerSeekBar {
+                    focusPolicy: root.presentationOnly ? Qt.NoFocus : Qt.StrongFocus
+                    id: seek
+                    objectName: "seekBar"
+                    mediaStarted: root.started
+                    playerPosition: root.position
+                    onDragStarted: root.seekDragStarted()
+                    onDragFinished: (position, commit) => root.seekDragFinished(position, commit)
+                    onSeekRequested: position => root.seekRequested(position)
+                    Layout.fillWidth: true
+                    Layout.minimumWidth: theme.dp(40)
+                    scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
+                    enabled: root.seekable
+                    timeForPosition: root.timeForPosition
+                    previewEnabled: root.showSeekPreview && root.started && root.hasVideo && !root.presentationOnly
+                    thumbnailContent: root.seekThumbnailContent
+                    videoBackdropContent: root.videoBackdropContent
+                    previewImage: root.seekPreviewImage
+                    previewImagePosition: root.seekPreviewImagePosition
+                    waveformEnabled: root.audioWaveformEnabled
+                    waveformPeaks: root.audioWaveformPeaks
+                    timelineEnabled: root.showSubtitleTimeline
+                    timelineCues: root.subtitleTimelineCues
+                    timelineState: root.subtitleTimelineState
+                    durationSeconds: root.durationSeconds
+                    subtitleDelayMS: root.subtitleDelayMS
+                    onSubtitleDelayRequested: milliseconds => root.subtitleDelayRequested(milliseconds)
+                    onPreviewRequested: position => root.seekPreviewRequested(position)
+                    onPreviewEnded: root.seekPreviewEnded()
+                }
+                Text {
+                    objectName: "durationTimeLabel"
+                    visible: root.width > theme.dp(800)
+                    Layout.preferredWidth: Math.max(theme.dp(chrome.hasTimeline("above") ? 74 : 78), implicitWidth)
+                    rightPadding: chrome.hasTimeline("above") ? 0 : theme.dp(6)
+                    horizontalAlignment: Text.AlignHCenter
+                    text: root.lengthText
+                    color: theme.foreground; font.pixelSize: theme.dp(14)
+                }
+            }
+            ChromeButton {
+                id: muteButton
+                Layout.rightMargin: parent === originalToolbar ? theme.dp(4) : 0
+                objectName: "muteButton"
+                scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
+                implicitWidth: theme.dp(28)
+                iconName: root.muted || root.volume === 0 ? "muted"
+                    : !Number.isFinite(root.volume) || root.volume < 0 ? "volume"
+                    : root.volume < 0.33 ? "volume-low"
+                    : root.volume <= 0.66 ? "volume-medium" : "volume"
+                text: root.muted ? qsTr("Unmute") : qsTr("Mute")
+                onClicked: root.muteRequested()
+                MouseArea {
+                    anchors.fill: parent
+                    acceptedButtons: Qt.NoButton
+                    onWheel: event => {
+                        root.volumeWheelRequested(event)
+                        event.accepted = true
+                    }
+                }
+            }
+            RedesignVolume {
+                focusPolicy: root.presentationOnly ? Qt.NoFocus : Qt.StrongFocus
+                id: volumeSlider
+                Layout.rightMargin: parent === originalToolbar ? theme.dp(9) : 0
+                objectName: "volumeSlider"
+                visible: root.width > theme.dp(750)
+                scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
+                muted: root.muted; to: root.maxVolume
+                currentVolume: root.volume
+                onWheelRequested: event => root.volumeWheelRequested(event)
+                Binding on value { when: !volumeSlider.pressed; value: root.volume; restoreMode: Binding.RestoreBindingOrValue }
+                onMoved: root.volumeRequested(value)
+            }
+            ChromeButton {
+                id: audioButton
+                objectName: "audioButton"
+                visible: root.width > theme.dp(900)
+                scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
+                iconName: "audio"; text: qsTr("Audio tracks and output")
+                selected: !!root.trackPopup && root.trackPopup.visible && root.trackPopup.page === "audio"
+                onClicked: { root.toggleTracks(this, "audio"); root.audioTracksRequested(this) }
+            }
+            ChromeButton {
+                id: subtitleButton
+                objectName: "subtitleButton"
+                scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
+                iconName: "subtitles"; text: qsTr("Subtitle tracks")
+                selectedIconName: "subtitles-active"
+                selected: !!root.trackPopup && root.trackPopup.visible && root.trackPopup.page === "subtitles"
+                onClicked: { root.toggleTracks(this, "subtitles"); root.subtitleTracksRequested(this) }
+            }
+            ChromeButton {
+                id: playbackSettingsButton
+                Layout.rightMargin: parent === originalToolbar ? theme.dp(8) : 0
+                objectName: "playbackSettingsButton"
+                scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
+                iconName: "playback-settings"; text: qsTr("Playback settings")
+                selectedIconName: "playback-settings-active"
+                selected: root.settingsPage.length > 0
+                onClicked: root.toggleSettings("playback")
+            }
+            ChromeButton {
+                id: queueButton
+                objectName: "queueButton"
+                scaleFactor: root.scaleFactor; lightTheme: root.lightTheme; accentColor: root.accentColor
+                iconName: "queue"; text: qsTr("Play queue"); selected: root.queueOpen
+                onClicked: { root.settingsPage = ""; root.queueOpen = !root.queueOpen }
+            }
+        }
+    }
+    RedesignPlayerLayout { id: chromeLayout; savedLayout: root.playerLayout }
+    RedesignCustomizationCatalog { id: customizationCatalog }
+    RedesignPlayerChrome {
+        id: chrome
+        theme: root.theme; model: chromeLayout
+        headerHost: header; footerHost: toolbar
+        extraControlComponent: Component {
+            RedesignExtraControl {
+                theme: root.theme
+                specification: customizationCatalog.definition(controlId)
+                controlState: root.customControlStates[controlId] || ({})
+                onTriggered: anchor => root.customActionRequested(controlId, anchor)
+            }
+        }
+        controls: ({menu: mainMenuButton, library: libraryToggleButton, "divider:1": headerDivider, folder: mediaFolderButton,
+            title: titleControl, minimize: minimizeButton, maximize: maximizeButton, fullscreen: fullscreenButton, close: closeButton,
+            previous: previousButton, play: playButton, next: nextButton, timeline: timelineControl,
+            mute: muteButton, volume: volumeSlider, audio: audioButton, subtitles: subtitleButton,
+            settings: playbackSettingsButton, queue: queueButton})
+    }
+}

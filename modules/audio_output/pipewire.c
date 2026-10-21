@@ -31,10 +31,13 @@
 #include <spa/param/audio/format-utils.h>
 #include <spa/param/props.h>
 #include <pipewire/pipewire.h>
+#include <pipewire/extensions/metadata.h>
+#include <spa/utils/json.h>
 #include <vlc_common.h>
 #include <vlc_plugin.h>
 #include <vlc_aout.h>
 #include <vlc_tick.h>
+#include <vlc_list.h>
 #include "vlc_pipewire.h"
 
 struct vlc_pw_stream {
@@ -422,20 +425,6 @@ static void vlc_pw_stream_set_mute(struct vlc_pw_stream *s, bool mute)
     vlc_pw_unlock(s->context);
 }
 
-static void vlc_pw_stream_select_device(struct vlc_pw_stream *s,
-                                        const char *name)
-{
-    struct spa_dict_item items[] = {
-        SPA_DICT_ITEM_INIT(PW_KEY_OBJECT_SERIAL, name),
-    };
-    struct spa_dict dict = SPA_DICT_INIT(items, ARRAY_SIZE(items));
-
-    vlc_pw_debug(s->context, "setting object serial: %s", name);
-    vlc_pw_lock(s->context);
-    pw_stream_update_properties(s->stream, &dict);
-    vlc_pw_unlock(s->context);
-}
-
 static void vlc_pw_stream_destroy(struct vlc_pw_stream *s)
 {
     vlc_pw_stream_flush(s);
@@ -451,6 +440,14 @@ struct vlc_pw_aout {
     struct vlc_pw_stream *stream;
     struct spa_hook listener;
     void *nodes;
+    struct vlc_list node_list;
+    /* "default" metadata: lets the device list show where a default-following
+     * stream actually plays (upstream reported no current device at all). */
+    struct pw_metadata *metadata;
+    uint32_t metadata_id;
+    bool metadata_seen;
+    struct spa_hook metadata_listener;
+    char default_sink[256];
     struct {
         uint64_t target;
         float volume;
@@ -680,8 +677,9 @@ static struct vlc_pw_stream *vlc_pw_stream_create(audio_output_t *aout,
             return NULL;
     }
 
-    /* Apply initial controls */
-    sys->initial.target = SPA_ID_INVALID;
+    /* Apply initial controls. The target is kept: one restart can create several
+     * streams (failed passthrough, then PCM, then again after a filter restart),
+     * and each must go to the selected device, not to the default. */
 
     if (sys->initial.mute >= 0) {
         vlc_pw_stream_set_mute(s, sys->initial.mute);
@@ -718,19 +716,38 @@ static void Drain(audio_output_t *aout)
     vlc_pw_stream_drain(sys->stream);
 }
 
+/* The PipeWire loop lock must be held when clearing an obsolete target. */
+static void clear_stream_target(struct vlc_pw_stream *stream)
+{
+    const struct spa_dict_item item = SPA_DICT_ITEM_INIT(PW_KEY_TARGET_OBJECT, NULL);
+    const struct spa_dict dict = SPA_DICT_INIT(&item, 1);
+    pw_stream_update_properties(stream->stream, &dict);
+}
+
 static void Stop(audio_output_t *aout)
 {
     struct vlc_pw_aout *sys = aout->sys;
-    vlc_pw_stream_destroy(sys->stream);
+    vlc_pw_lock(sys->context);
+    struct vlc_pw_stream *stream = sys->stream;
     sys->stream = NULL;
+    vlc_pw_unlock(sys->context);
+    vlc_pw_stream_destroy(stream);
 }
 
 static int Start(audio_output_t *aout, audio_sample_format_t *restrict fmt)
 {
     struct vlc_pw_aout *sys = aout->sys;
 
-    sys->stream = vlc_pw_stream_create(aout, fmt);
-    return (sys->stream != NULL) ? VLC_SUCCESS : -errno;
+    struct vlc_pw_stream *stream = vlc_pw_stream_create(aout, fmt);
+    if (stream == NULL)
+        return -errno;
+    vlc_pw_lock(sys->context);
+    sys->stream = stream;
+    if (sys->initial.target == SPA_ID_INVALID
+     && pw_properties_get(pw_stream_get_properties(stream->stream), PW_KEY_TARGET_OBJECT) != NULL)
+        clear_stream_target(stream);
+    vlc_pw_unlock(sys->context);
+    return VLC_SUCCESS;
 }
 
 static int VolumeSet(audio_output_t *aout, float volume)
@@ -764,6 +781,77 @@ static int MuteSet(audio_output_t *aout, bool mute)
 struct vlc_pw_node {
     uint32_t id;
     uint64_t serial;
+    char *name; /* node.name, to match the default sink */
+    struct vlc_list entry;
+};
+
+static void node_free(void *p)
+{
+    struct vlc_pw_node *node = p;
+    vlc_list_remove(&node->entry);
+    free(node->name);
+    free(node);
+}
+
+/* While following the system default, report the default sink as the current device. */
+static void report_default(audio_output_t *aout)
+{
+    struct vlc_pw_aout *sys = aout->sys;
+
+    if (sys->initial.target != SPA_ID_INVALID)
+        return;
+
+    struct vlc_pw_node *node;
+    vlc_list_foreach(node, &sys->node_list, entry) {
+        if (node->name != NULL && strcmp(node->name, sys->default_sink) == 0) {
+            char serialstr[21];
+            snprintf(serialstr, sizeof (serialstr), "%"PRIu64, node->serial);
+            aout_DeviceReport(aout, serialstr);
+            return;
+        }
+    }
+    /* No default, or its node has disappeared: clear the previous device. */
+    aout_DeviceReport(aout, NULL);
+}
+
+static int metadata_property(void *data, uint32_t subject, const char *key,
+                             const char *type, const char *value)
+{
+    audio_output_t *aout = data;
+    struct vlc_pw_aout *sys = aout->sys;
+
+    if ((subject != PW_ID_CORE && subject != PW_ID_ANY)
+     || (key != NULL && strcmp(key, "default.audio.sink")))
+        return 0;
+
+    sys->default_sink[0] = '\0';
+    if (value != NULL) {
+        /* value is JSON: {"name":"alsa_output..."} */
+        struct spa_json it[2];
+        char k[16];
+
+        spa_json_init(&it[0], value, strlen(value));
+        if (spa_json_enter_object(&it[0], &it[1]) > 0)
+            while (spa_json_get_string(&it[1], k, sizeof (k)) > 0) {
+                if (strcmp(k, "name") == 0) {
+                    if (spa_json_get_string(&it[1], sys->default_sink,
+                                            sizeof (sys->default_sink)) <= 0)
+                        sys->default_sink[0] = '\0';
+                    break;
+                }
+                const char *skip;
+                if (spa_json_next(&it[1], &skip) <= 0)
+                    break;
+            }
+    }
+    report_default(aout);
+    (void) type;
+    return 0;
+}
+
+static const struct pw_metadata_events metadata_events = {
+    PW_VERSION_METADATA_EVENTS,
+    .property = metadata_property,
 };
 
 static int node_by_id(const void *a, const void *b)
@@ -781,13 +869,25 @@ static int DeviceSelect(audio_output_t *aout, const char *name)
 {
     struct vlc_pw_aout *sys = aout->sys;
 
-    if (sys->stream != NULL) {
-        vlc_pw_stream_select_device(sys->stream, name);
-        return 0;
-    }
+    /* A running stream cannot be retargeted through its own properties (the old code set
+     * object.serial, the stream's own id, which PipeWire ignores). Like alsa.c: remember the
+     * target, report it, and restart the output so the new stream is created with
+     * target.object set. */
+    uint64_t target = SPA_ID_INVALID;
+    if (name != NULL && name[0] != '\0'
+     && (name[0] == '-' || !spa_atou64(name, &target, 10)))
+        return VLC_EGENERIC;
 
-    sys->initial.target = strtoul(name, NULL, 10);
-    aout_DeviceReport(aout, name);
+    /* Registry and metadata callbacks also access the target and node list. */
+    vlc_pw_lock(sys->context);
+    sys->initial.target = target;
+    if (target != SPA_ID_INVALID)
+        aout_DeviceReport(aout, name);
+    else
+        report_default(aout);
+    vlc_pw_unlock(sys->context);
+    if (sys->stream != NULL)
+        aout_RestartRequest(aout, true);
     return 0;
 }
 
@@ -817,21 +917,27 @@ static void registry_node(audio_output_t *aout, uint32_t id, uint32_t perms,
     if (unlikely(node == NULL))
         return;
 
+    vlc_list_init(&node->entry);
     node->id = id;
     node->serial = serial;
+    const char *nodename = spa_dict_lookup(props, PW_KEY_NODE_NAME);
+    node->name = nodename != NULL ? strdup(nodename) : NULL;
 
     struct vlc_pw_node **pp = tsearch(node, &sys->nodes, node_by_id);
     if (unlikely(pp == NULL)) { /* Memory allocation error in the tree */
-        free(node);
+        node_free(node);
         return;
     }
     if (*pp != node) { /* Existing node, update it */
-        free(*pp);
+        node_free(*pp);
         *pp = node;
     }
 
+    vlc_list_append(&node->entry, &sys->node_list);
     snprintf(serialstr, sizeof (serialstr), "%"PRIu64, serial);
     aout_HotplugReport(aout, serialstr, desc);
+    if (node->name != NULL && strcmp(node->name, sys->default_sink) == 0)
+        report_default(aout);
     (void) perms; (void) version;
 }
 
@@ -849,6 +955,28 @@ static void registry_global(void *data, uint32_t id, uint32_t perms,
 
     if (strcmp(name, PW_TYPE_INTERFACE_Node) == 0)
         registry_node(aout, id, perms, version, props);
+    else if (strcmp(name, PW_TYPE_INTERFACE_Metadata) == 0 && props != NULL) {
+        struct vlc_pw_aout *sys = aout->sys;
+        const char *mname = spa_dict_lookup(props, PW_KEY_METADATA_NAME);
+
+        if (sys->metadata == NULL && mname != NULL && strcmp(mname, "default") == 0) {
+            sys->metadata = vlc_pw_registry_bind(sys->context, id,
+                                                 PW_TYPE_INTERFACE_Metadata,
+                                                 PW_VERSION_METADATA);
+            if (sys->metadata != NULL) {
+                const bool recreated = sys->metadata_seen;
+                sys->metadata_seen = true;
+                sys->metadata_id = id;
+                pw_metadata_add_listener(sys->metadata, &sys->metadata_listener,
+                                         &metadata_events, aout);
+                /* A new policy manager can leave the old stream unlinked.
+                 * sys->stream is protected by the loop lock, so its presence
+                 * also guarantees the core audio stream is still alive. */
+                if (recreated && sys->stream != NULL)
+                    aout_RestartRequest(aout, true);
+            }
+        }
+    }
 }
 
 /**
@@ -861,17 +989,33 @@ static void registry_global_remove(void *data, uint32_t id)
 {
     audio_output_t *aout = data;
     struct vlc_pw_aout *sys = aout->sys;
+    if (sys->metadata != NULL && sys->metadata_id == id) {
+        spa_hook_remove(&sys->metadata_listener);
+        pw_proxy_destroy((struct pw_proxy *)sys->metadata);
+        sys->metadata = NULL;
+        sys->default_sink[0] = '\0';
+        report_default(aout);
+    }
     struct vlc_pw_node key = { .id = id };
     struct vlc_pw_node **pp = tfind(&key, &sys->nodes, node_by_id);
 
     if (pp != NULL) { /* A known device has been removed */
         struct vlc_pw_node *node = *pp;
-        char serialstr[11];
+        char serialstr[21];
+        bool was_target = node->serial == sys->initial.target;
 
         snprintf(serialstr, sizeof (serialstr), "%"PRIu64, node->serial);
         aout_HotplugReport(aout, serialstr, NULL);
         tdelete(node, &sys->nodes, node_by_id);
-        free(node);
+        node_free(node);
+
+        /* The selected device is gone: follow the system default again. */
+        if (was_target) {
+            sys->initial.target = SPA_ID_INVALID;
+            if (sys->stream != NULL)
+                clear_stream_target(sys->stream);
+        }
+        report_default(aout);
     }
 }
 
@@ -886,8 +1030,14 @@ static void Close(vlc_object_t *obj)
     audio_output_t *aout = (audio_output_t *)obj;
     struct vlc_pw_aout *sys = aout->sys;
 
+    vlc_pw_lock(sys->context);
+    if (sys->metadata != NULL) {
+        spa_hook_remove(&sys->metadata_listener);
+        pw_proxy_destroy((struct pw_proxy *)sys->metadata);
+    }
+    vlc_pw_unlock(sys->context);
     vlc_pw_disconnect(sys->context);
-    tdestroy(sys->nodes, free);
+    tdestroy(sys->nodes, node_free);
     free(sys);
 }
 
@@ -909,7 +1059,12 @@ static int Open(vlc_object_t *obj)
     sys->initial.volume = NAN;
     sys->initial.mute = -1;
     sys->nodes = NULL;
+    vlc_list_init(&sys->node_list);
     sys->stream = NULL;
+    sys->metadata = NULL;
+    sys->metadata_id = PW_ID_ANY;
+    sys->metadata_seen = false;
+    sys->default_sink[0] = '\0';
 
     aout->sys = sys;
     aout->start = Start;

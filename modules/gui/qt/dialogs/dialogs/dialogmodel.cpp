@@ -22,6 +22,8 @@
 
 // VLC includes
 #include <vlc_dialog.h>
+#include <vlc_variables.h>
+#include <vlc_log_observer.h>
 #include "qt.hpp"
 #include <QThread>
 
@@ -36,10 +38,14 @@ DialogErrorModel::DialogErrorModel(qt_intf_t * intf, QObject * parent)
     , m_intf(intf)
 {
     vlc_dialog_provider_set_error_callback(intf, &DialogErrorModel::onError, this);
+    m_warningTimer.setInterval(250);
+    connect(&m_warningTimer, &QTimer::timeout, this, &DialogErrorModel::flushWarnings);
+    refreshNotificationPreference();
 }
 
 DialogErrorModel::~DialogErrorModel()
 {
+    stopWarningObserver();
     vlc_dialog_provider_set_error_callback(m_intf, nullptr, nullptr);
 
 #if QT_VERSION >= QT_VERSION_CHECK(6, 5, 0)
@@ -65,6 +71,8 @@ QVariant DialogErrorModel::data(const QModelIndex & index, int role) const /* ov
             return QVariant::fromValue(m_data.at(row).title);
         case DIALOG_TEXT:
             return QVariant::fromValue(m_data.at(row).text);
+        case DIALOG_WARNING:
+            return m_data.at(row).warning;
         default:
             return QVariant();
     }
@@ -84,7 +92,8 @@ QHash<int, QByteArray> DialogErrorModel::roleNames() const /* override */
     return
     {
         { DialogErrorModel::DIALOG_TITLE, QByteArrayLiteral("title") },
-        { DialogErrorModel::DIALOG_TEXT,  QByteArrayLiteral("text")  }
+        { DialogErrorModel::DIALOG_TEXT, QByteArrayLiteral("text") },
+        { DialogErrorModel::DIALOG_WARNING, QByteArrayLiteral("warning") }
     };
 }
 
@@ -115,20 +124,24 @@ void DialogErrorModel::pushError(const QString & title, const QString& message)
 
 void DialogErrorModel::pushError(const DialogError & error)
 {
-    int row = m_data.count();
+    appendHistory(error);
 
-    beginInsertRows(QModelIndex(), row, row);
+    if (!notificationsEnabled())
+    {
+        // Keep the error in history and in the log without showing a popup.
+        msg_Err(m_intf, "%s: %s", qtu(error.title), qtu(error.text));
+        emit countChanged();
+        return;
+    }
 
-    m_data.append(error);
-
-    endInsertRows();
-
-    if (lastNotificationText == error.title)
+    if (!m_notificationWarning && lastNotificationText == error.title)
         repeatedNotificationCount += 1;
     else{
         lastNotificationText = error.title;
         repeatedNotificationCount = 1;
     }
+
+    m_notificationWarning = false;
 
 #if QT_VERSION >= QT_VERSION_CHECK(6, 5, 0)
     assert(qGuiApp);
@@ -144,11 +157,102 @@ void DialogErrorModel::pushError(const DialogError & error)
 #endif
 
     emit countChanged();
+    emit notificationChanged();
+    emit notificationRequested();
+}
+
+void DialogErrorModel::appendHistory(const DialogError &error)
+{
+    // Bound optional warning history without discarding existing error details.
+    if (error.warning && m_warningHistoryCount >= 200)
+    {
+        for (int row = 0; row < m_data.size(); ++row)
+        {
+            if (!m_data.at(row).warning) continue;
+            beginRemoveRows({}, row, row);
+            m_data.removeAt(row);
+            endRemoveRows();
+            --m_warningHistoryCount;
+            break;
+        }
+    }
+    const int row = m_data.size();
+    beginInsertRows({}, row, row);
+    m_data.append(error);
+    endInsertRows();
+    if (error.warning) ++m_warningHistoryCount;
+}
+
+void DialogErrorModel::onLog(void *data, int level, const vlc_log_t *context,
+                             const char *format, va_list args)
+{
+    if (level != VLC_MSG_WARN) return;
+    static_cast<DialogErrorModel *>(data)->m_warnings.append(context->psz_module, format, args);
+}
+
+void DialogErrorModel::flushWarnings()
+{
+    auto batch = m_warnings.take();
+    if (!batch.count || !warningNotificationsEnabled()) return;
+    const QString title = batch.module.isEmpty() ? qtr("Warning")
+        : qtr("Warning: %1").arg(batch.module);
+    const QString text = batch.count == 1 ? batch.text
+        : qtr("%1\n%2 warnings. This entry shows the first warning.").arg(batch.text).arg(batch.count);
+    appendHistory({title, text, true});
+    emit countChanged();
+    // A minor warning must not replace an active error notice.
+    if (!m_notificationWarning && repeatedNotificationCount > 0) return;
+    lastNotificationText = title + QStringLiteral(": ") + batch.text;
+    repeatedNotificationCount = batch.count;
+    m_notificationWarning = true;
+    emit notificationChanged();
+    emit notificationRequested();
+}
+
+void DialogErrorModel::stopWarningObserver()
+{
+    // Unsubscribe before locking the buffer: an in-flight producer can hold it.
+    vlc_LogUnsubscribe(std::exchange(m_logSubscription, nullptr));
+    m_warningTimer.stop();
+    m_warnings.clear();
 }
 
 //-------------------------------------------------------------------------------------------------
 // Properties
 //-------------------------------------------------------------------------------------------------
+
+bool DialogErrorModel::notificationsEnabled() const
+{
+    return var_InheritBool(m_intf, "qt-error-dialogs");
+}
+
+bool DialogErrorModel::warningNotificationsEnabled() const
+{
+    return var_InheritBool(m_intf, "qt-minor-warnings");
+}
+
+bool DialogErrorModel::notificationAllowed() const
+{
+    return m_notificationWarning ? warningNotificationsEnabled() : notificationsEnabled();
+}
+
+void DialogErrorModel::refreshNotificationPreference()
+{
+    if (warningNotificationsEnabled())
+    {
+        if (!m_logSubscription)
+        {
+            static const vlc_logger_operations ops = {onLog, nullptr};
+            m_logSubscription = vlc_LogSubscribe(vlc_object_instance(m_intf), &ops, this);
+            if (m_logSubscription) m_warningTimer.start();
+            else msg_Err(m_intf, "Cannot read warning messages.");
+        }
+    }
+    else stopWarningObserver();
+    if (!notificationAllowed()) resetRepeatedMessageCount();
+    emit notificationChanged();
+    emit notificationsEnabledChanged();
+}
 
 int DialogErrorModel::count() const
 {
@@ -176,6 +280,7 @@ void DialogErrorModel::resetRepeatedMessageCount()
     qGuiApp->setProperty("badgeNumber", 0);
 #endif
 #endif
+   emit notificationChanged();
 }
 
 //=================================================================================================
@@ -203,6 +308,12 @@ void onDialogQuestion(void * p_data, vlc_dialog_id * dialogId,
                                           const char * psz_action2)
 {
     auto model = static_cast<VLCDialogModel *>(p_data);
+    if (!model->shouldShowQuestion(i_type))
+    {
+        // Suppression must never accept an action on the user's behalf.
+        vlc_dialog_id_dismiss(dialogId);
+        return;
+    }
     model->dialogCallback(dialogId, [=](VLCDialog* provider){
         emit provider->question(
             dialogId, psz_title, psz_text,
@@ -265,6 +376,11 @@ VLCDialogModel::~VLCDialogModel()
         while (m_pendingDialog > 0)
             m_pendingDialogCond.wait(&m_lock);
     }
+}
+
+bool VLCDialogModel::shouldShowQuestion(vlc_dialog_question_type type) const
+{
+    return type == VLC_DIALOG_QUESTION_CRITICAL || var_InheritBool(m_intf, "qt-error-dialogs");
 }
 
 VLCDialog* VLCDialogModel::getProvider() const

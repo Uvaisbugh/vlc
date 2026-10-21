@@ -27,14 +27,18 @@
 
 #include "qt.hpp"
 #include "help.hpp"
-#include "util/qt_dirs.hpp"
+#include "aboutmodel.hpp"
 #include "maininterface/mainctx.hpp"
+#include "util/color_scheme_model.hpp"
+#include "util/qt_dirs.hpp"
+#include "util/interface_translator.hpp"
 
-#include <vlc_about.h>
+
 #include <vlc_intf_strings.h>
 
 #ifdef UPDATE_CHECK
-# include <vlc_update.h>
+# include "util/github_release_service.hpp"
+# include <QDesktopServices>
 #endif
 
 #include <QTextBrowser>
@@ -43,14 +47,12 @@
 #include <QEvent>
 #include <QDate>
 #include <QPushButton>
+#include <QRegularExpression>
+#include <QApplication>
+#include <QStyleHints>
+#include <QScrollBar>
 
 #include <cassert>
-
-#ifndef NDEBUG
-// Uncomment the following line to make use a mock update for debugging purposes,
-// it is only applicable when there is no new release found:
-// #define UPDATE_MOCK
-#endif
 
 HelpDialog::HelpDialog( qt_intf_t *_p_intf ) : QVLCFrame( _p_intf )
 
@@ -66,14 +68,22 @@ HelpDialog::HelpDialog( qt_intf_t *_p_intf ) : QVLCFrame( _p_intf )
     helpBrowser->setHtml( qfut(I_LONGHELP) );
 
     QDialogButtonBox *closeButtonBox = new QDialogButtonBox( this );
-    closeButtonBox->addButton(
-        new QPushButton( qtr("&Close") ), QDialogButtonBox::RejectRole );
+    auto* closeButton = new QPushButton(qtr("&Close"));
+    closeButtonBox->addButton(closeButton, QDialogButtonBox::RejectRole);
     closeButtonBox->setFocus();
 
     layout->addWidget( helpBrowser );
     layout->addWidget( closeButtonBox );
 
     connect( closeButtonBox, &QDialogButtonBox::rejected, this, &HelpDialog::close );
+    if (auto* translator = InterfaceTranslator::instance())
+        connect(translator, &InterfaceTranslator::languageChanged, this, [this, helpBrowser, closeButton] {
+            const auto scroll = helpBrowser->verticalScrollBar()->value();
+            setWindowTitle(qtr("Help"));
+            helpBrowser->setHtml(qfut(I_LONGHELP));
+            helpBrowser->verticalScrollBar()->setValue(scroll);
+            closeButton->setText(qtr("&Close"));
+        });
     restoreWidgetPosition( "Help", QSize( 500, 450 ) );
 }
 
@@ -92,11 +102,20 @@ AboutDialog::AboutDialog( qt_intf_t *_p_intf)
     setWindowModality( Qt::WindowModal );
 
     ui.version->setText(qfu( " " VERSION_MESSAGE ) );
-    ui.title->setText("<html><head/><body><p><span style=\" font-size:26pt; color:#353535;\"> " + qtr( "VLC media player" ) + " </span></p></body></html>");
+    const auto updateText = [this] {
+        setWindowTitle(qtr("About"));
+        ui.title->setText("<html><head/><body><p><span style=\" font-size:26pt;\"> " + qtr( "VLC media player" ) + " </span></p></body></html>");
 
-    ui.MainBlabla->setText("<html><head/><body>" +
-    qtr( "<p>VLC media player is a free and open source media player, encoder, and streamer made by the volunteers of the <a href=\"https://www.videolan.org/\"><span style=\" text-decoration: underline; color:#0057ae;\">VideoLAN</span></a> community.</p><p>VLC uses its internal codecs, works on essentially every popular platform, and can read almost all files, CDs, DVDs, network streams, capture cards and other media formats!</p><p><a href=\"https://www.videolan.org/contribute/\"><span style=\" text-decoration: underline; color:#0057ae;\">Help and join us!</span></a>" ) +
-    "</p></body> </html>");
+        ui.MainBlabla->setText("<html><head/><body>" +
+        qtr( "<p>VLC media player is a free and open source media player, encoder, and streamer made by the volunteers of the <a href=\"https://www.videolan.org/\"><span style=\" text-decoration: underline; color:#0057ae;\">VideoLAN</span></a> community.</p><p>VLC uses its internal codecs, works on essentially every popular platform, and can read almost all files, CDs, DVDs, network streams, capture cards and other media formats!</p><p><a href=\"https://www.videolan.org/contribute/\"><span style=\" text-decoration: underline; color:#0057ae;\">Help and join us!</span></a>" ).remove(QStringLiteral("color:#0057ae;")) +
+        "</p>" + AboutModel::getDesignAttribution() + "</body> </html>");
+        ui.licenseButton->setText(qtr("License"));
+        ui.authorsButton->setText(qtr("Authors"));
+        ui.creditsButton->setText(qtr("Credits"));
+        ui.UpdateLabel->setText(qtr("Update"));
+        ui.checkUpdates->setText(qtr("Update"));
+    };
+    updateText();
 
     const QDate today = QDate::currentDate();
     if( today.month() == 4 && today.day() == 1
@@ -106,7 +125,7 @@ AboutDialog::AboutDialog( qt_intf_t *_p_intf)
     ui.update->hide();
 
     /* GPL License */
-    ui.licensePage->setText( qfu( psz_license ) );
+    ui.licensePage->setText( AboutModel::getLicense() );
 
     /* People who helped */
     ui.creditPage->setText( qfu( psz_thanks ) );
@@ -114,14 +133,31 @@ AboutDialog::AboutDialog( qt_intf_t *_p_intf)
     /* People who wrote the software */
     ui.authorsPage->setText( qfu( psz_authors ) );
 
-    ui.licenseButton->setText( "<html><head/><body><p><span style=\" text-decoration: underline; color:#0057ae;\">"+qtr( "License" )+"</span></p></body></html>");
-    ui.licenseButton->installEventFilter( this );
+    connect(ui.licenseButton, &QPushButton::clicked, this, &AboutDialog::showLicense);
 
-    ui.authorsButton->setText( "<html><head/><body><p><span style=\" text-decoration: underline; color:#0057ae;\">"+qtr( "Authors" )+"</span></p></body></html>");
-    ui.authorsButton->installEventFilter( this );
+    connect(ui.authorsButton, &QPushButton::clicked, this, &AboutDialog::showAuthors);
 
-    ui.creditsButton->setText( "<html><head/><body><p><span style=\" text-decoration: underline; color:#0057ae;\">"+qtr( "Credits" )+"</span></p></body></html>");
-    ui.creditsButton->installEventFilter( this );
+    connect(ui.creditsButton, &QPushButton::clicked, this, &AboutDialog::showCredit);
+
+    const auto updateLinkColor = [this] {
+        const QColor color = palette().color(QPalette::Link);
+        QString html = ui.MainBlabla->text();
+        html.remove(QRegularExpression(QStringLiteral(" style=\"color:#[0-9a-fA-F]{6};\"")));
+        html.replace(QStringLiteral("<a "), QStringLiteral("<a style=\"color:%1;\" ").arg(color.name()));
+        ui.MainBlabla->setText(html);
+    };
+    updateLinkColor();
+    if (auto* translator = InterfaceTranslator::instance())
+        connect(translator, &InterfaceTranslator::languageChanged, this, [updateText, updateLinkColor] {
+            updateText();
+            updateLinkColor();
+        });
+    if (p_intf->p_mi)
+    {
+        connect(p_intf->p_mi, &MainCtx::redesignAccentChanged, this, updateLinkColor);
+        connect(p_intf->p_mi->getColorScheme(), &ColorSchemeModel::currentChanged, this, updateLinkColor);
+        connect(qApp->styleHints(), &QStyleHints::colorSchemeChanged, this, updateLinkColor);
+    }
 
     ui.version->installEventFilter( this );
 }
@@ -160,13 +196,6 @@ bool AboutDialog::eventFilter(QObject *obj, QEvent *event)
             }
             return true;
         }
-        else if( obj == ui.licenseButton )
-            showLicense();
-        else if( obj == ui.authorsButton )
-            showAuthors();
-        else if( obj == ui.creditsButton )
-            showCredit();
-
         return false;
     }
 
@@ -184,204 +213,140 @@ void AboutDialog::showEvent( QShowEvent *event )
 class UpdateModelPrivate
 {
 public:
-    Q_DECLARE_PUBLIC(UpdateModel)
-    UpdateModelPrivate(UpdateModel * pub)
-        : q_ptr(pub)
-    {
-    }
-
-    update_t* m_update = nullptr;
-
-    const update_release_t* m_release = nullptr;
-    UpdateModel::Status m_status = UpdateModel::Unchecked;
-    bool m_explicitCheck = false;
-
-    UpdateModel* q_ptr = nullptr;
+    GithubReleaseService* service = nullptr;
+    std::optional<vlc::updates::Release> release;
+    UpdateModel::Status status = UpdateModel::Unchecked;
+    bool explicitCheck = false;
 };
 
-static void UpdateCallback(void *data, bool b_ret)
+UpdateModel::UpdateModel(qt_intf_t * p_intf)
+    : d_ptr(new UpdateModelPrivate)
 {
-    auto that = (UpdateModelPrivate*)data;
-    QMetaObject::invokeMethod(that->q_func(), [that, b_ret](){
-        if (!b_ret)
-        {
-            that->m_status = UpdateModel::CheckFailed;
-            that->m_release = nullptr;
-        }
-        else
-        {
-            bool needUpdate = update_NeedUpgrade( that->m_update );
-            if (!needUpdate)
-            {
-#if defined(UPDATE_MOCK) && !defined(NDEBUG)
-               static const update_release_t updateReleaseMock = {
-                   9,
-                   0,
-                   99,
-                   999,
-                   "",
-                   // Lorem ipsum with some "Security" to see if red coloring works:
-                   "Lorem ipsum dolor sit amet, security consectetur adipiscing elit. Sed vitae ante lobortis," \
-                   "condimentum sem et, auctor libero. Aliquam eget mi justo. <br /> <br /> Class aptent taciti sociosqu" \
-                   "ad litora Security torquent per conubia nostra, per inceptos himenaeos. Nulla id pretium ante. Nam" \
-                   "eu blandit lacus. Proin faucibus in risus quis condimentum. <br /> <br /> Pellentesque a tellus vitae" \
-                   "massa tristique cursus. Phasellus fermentum euismod mauris, at ultricies ipsum volutpat eu." \
-                   "Praesent arcu lacus, laoreet at lacinia quis, rhoncus at lectus. " \
-                   // Repeat:
-                   "Lorem ipsum dolor sit amet, security consectetur adipiscing elit. Sed vitae ante lobortis," \
-                   "condimentum sem et, auctor libero. Aliquam eget mi justo. <br /> <br /> Class aptent taciti sociosqu" \
-                   "ad litora Security torquent per conubia nostra, per inceptos himenaeos. Nulla id pretium ante. Nam" \
-                   "eu blandit lacus. Proin faucibus in risus quis condimentum. <br /> <br /> Pellentesque a tellus vitae" \
-                   "massa tristique cursus. Phasellus fermentum euismod mauris, at ultricies ipsum volutpat eu." \
-                   "Praesent arcu lacus, laoreet at lacinia quis, rhoncus at lectus. " \
-                   // Repeat:
-                   "Lorem ipsum dolor sit amet, security consectetur adipiscing elit. Sed vitae ante lobortis," \
-                   "condimentum sem et, auctor libero. Aliquam eget mi justo. <br /> <br /> Class aptent taciti sociosqu" \
-                   "ad litora Security torquent per conubia nostra, per inceptos himenaeos. Nulla id pretium ante. Nam" \
-                   "eu blandit lacus. Proin faucibus in risus quis condimentum. <br /> <br /> Pellentesque a tellus vitae" \
-                   "massa tristique cursus. Phasellus fermentum euismod mauris, at ultricies ipsum volutpat eu." \
-                   "Praesent arcu lacus, laoreet at lacinia quis, rhoncus at lectus. " \
-               };
-
-               that->m_release = &updateReleaseMock;
-               that->m_status = UpdateModel::NeedUpdate;
-#else
-               that->m_status = UpdateModel::UpToDate;
-               that->m_release = nullptr;
-#endif
-            }
-            else
-            {
-                that->m_status = UpdateModel::NeedUpdate;
-                that->m_release = update_GetRelease(that->m_update);
-            }
-        }
-        emit that->q_func()->updateStatusChanged();
+    Q_UNUSED(p_intf);
+    Q_D(UpdateModel);
+    d->service = new GithubReleaseService(this);
+    connect(d->service, &GithubReleaseService::finished, this, [this](bool success) {
+        Q_D(UpdateModel);
+        d->release = d->service->release();
+        d->status = !success ? CheckFailed : d->release ? NeedUpdate : UpToDate;
+        emit updateStatusChanged();
     });
 }
 
-UpdateModel::UpdateModel(qt_intf_t * p_intf)
-    : d_ptr(new UpdateModelPrivate(this))
-{
-    Q_D(UpdateModel);
-    d->m_update = update_New( p_intf );
-}
-
-UpdateModel::~UpdateModel()
-{
-    Q_D(UpdateModel);
-    update_Delete( d->m_update );
-}
+UpdateModel::~UpdateModel() = default;
 
 void UpdateModel::checkUpdate(bool explicitCheck)
 {
     Q_D(UpdateModel);
-    if (d->m_status == Checking)
-        return;
-
-    if (d->m_explicitCheck != explicitCheck)
+    // A manual request during an automatic check should still show its result.
+    if (explicitCheck && !d->explicitCheck)
     {
-        d->m_explicitCheck = explicitCheck;
+        d->explicitCheck = true;
         emit explicitCheckChanged();
     }
-
-    d->m_release = nullptr;
-    d->m_status = Checking;
+    if (d->status == Checking)
+        return;
+    d->release.reset();
+    const auto installed = vlc::updates::Version::parse(QStringLiteral(PACKAGE_VERSION));
+    d->status = installed ? Checking : CheckFailed;
     emit updateStatusChanged();
-    update_Check( d->m_update, UpdateCallback, d );
+    if (installed)
+        d->service->check(*installed, vlc::updates::Target::current());
 }
 
-bool UpdateModel::download(QString destDir)
+bool UpdateModel::openReleasePage()
 {
     Q_D(UpdateModel);
-    if (d->m_status != NeedUpdate)
-        return false;
-    update_Download( d->m_update, qtu( destDir ) );
-    return true;
+    return d->status == NeedUpdate && d->release &&
+           QDesktopServices::openUrl(d->release->pageUrl);
+}
+
+// Keep the existing invokables for interface compatibility. GitHub discovery
+// never hands an unsigned asset to the core's signed download/install backend.
+bool UpdateModel::download(QString destDir)
+{
+    Q_UNUSED(destDir);
+    return openReleasePage();
 }
 
 bool UpdateModel::download()
 {
-    QString dest_dir = QDir::tempPath();
-    if (Q_UNLIKELY(dest_dir.isEmpty()))
-        return false;
-
-    dest_dir = toNativeSepNoSlash( std::move(dest_dir) ) + DIR_SEP;
-    qDebug() << "Downloading to folder:" << qtu( dest_dir );
-
-    return download(dest_dir);
+    return openReleasePage();
 }
 
 void UpdateModel::resetStatus()
 {
     Q_D(UpdateModel);
-    if (d->m_status == Unchecked)
+    if (d->status == Unchecked || d->status == Checking)
         return;
-    d->m_status = Unchecked;
+    d->release.reset();
+    d->status = Unchecked;
     emit updateStatusChanged();
 }
 
 UpdateModel::Status UpdateModel::updateStatus() const
 {
     Q_D(const UpdateModel);
-    return d->m_status;
+    return d->status;
 }
 
 int UpdateModel::getMajor() const
 {
     Q_D(const UpdateModel);
-    if (!d->m_release) return 0;
-    return d->m_release->i_major;
+    return d->release ? int(d->release->version.major) : 0;
 }
 int UpdateModel::getMinor() const
 {
     Q_D(const UpdateModel);
-    if (!d->m_release) return 0;
-    return d->m_release->i_minor;
+    return d->release ? int(d->release->version.minor) : 0;
 }
 int UpdateModel::getRevision() const
 {
     Q_D(const UpdateModel);
-    if (!d->m_release) return 0;
-    return d->m_release->i_revision;
+    return d->release ? int(d->release->version.patch) : 0;
 }
 int UpdateModel::getExtra() const
 {
+    return 0;
+}
+QString UpdateModel::getVersion() const
+{
     Q_D(const UpdateModel);
-    if (!d->m_release) return 0;
-    return d->m_release->i_extra;
+    return d->release ? d->release->version.text : QString();
 }
 QString UpdateModel::getDescription() const
 {
     Q_D(const UpdateModel);
-    if (!d->m_release) return 0;
-    return qfu( d->m_release->psz_desc );
+    return d->release ? d->release->notes : QString();
 }
 QString UpdateModel::getUrl() const
 {
     Q_D(const UpdateModel);
-    if (!d->m_release) return 0;
-    return qfu( d->m_release->psz_desc );
+    return d->release ? d->release->pageUrl.toString() : QString();
+}
+QString UpdateModel::getAssetUrl() const
+{
+    Q_D(const UpdateModel);
+    return d->release ? d->release->asset.url.toString() : QString();
 }
 
 double UpdateModel::getProgress() const
 {
-    // TODO: Stub
     return 0.0;
 }
 
 bool UpdateModel::explicitCheck() const
 {
     Q_D(const UpdateModel);
-    return d->m_explicitCheck;
+    return d->explicitCheck;
 }
 
 void UpdateModel::resetExplicitCheck()
 {
     Q_D(UpdateModel);
-    if (!d->m_explicitCheck)
+    if (!d->explicitCheck)
         return;
-    d->m_explicitCheck = false;
+    d->explicitCheck = false;
     emit explicitCheckChanged();
 }
 
@@ -398,9 +363,9 @@ UpdateDialog::UpdateDialog( qt_intf_t *_p_intf ) : QVLCFrame( _p_intf )
     QPushButton *recheckButton = new QPushButton( qtr("&Recheck version"), this );
     ui.updateDialogButtonBox->addButton( recheckButton, QDialogButtonBox::ActionRole );
 
-    ui.updateNotifyButtonBox->addButton( new QPushButton( qtr("&Yes"), this ),
+    ui.updateNotifyButtonBox->addButton( new QPushButton( qtr("View release on &GitHub"), this ),
                                          QDialogButtonBox::AcceptRole );
-    ui.updateNotifyButtonBox->addButton( new QPushButton( qtr("&No"), this ),
+    ui.updateNotifyButtonBox->addButton( new QPushButton( qtr("&Dismiss"), this ),
                                          QDialogButtonBox::RejectRole );
 
     setWindowTitle( qtr( "VLC media player updates" ) );
@@ -459,12 +424,12 @@ void UpdateDialog::checkOrDownload()
     case UpdateModel::CheckFailed:
     {
         ui.stackedWidget->setCurrentWidget( ui.updateRequestPage );
-        m_model->checkUpdate();
+        m_model->checkUpdate(true);
         break;
     }
     case UpdateModel::NeedUpdate:
     {
-        if (m_model->download())
+        if (m_model->openReleasePage())
             toggleVisible();
         break;
     }
@@ -473,39 +438,23 @@ void UpdateDialog::checkOrDownload()
     }
 }
 
-/* Notify the end of the update_Check */
+/* Show the result of release discovery. */
 void UpdateDialog::updateUI( )
 {
     switch (m_model->updateStatus()) {
     case UpdateModel::NeedUpdate:
     {
         ui.stackedWidget->setCurrentWidget( ui.updateNotifyPage );
-        int extra = m_model->getExtra();
-        QString message = QString(
-                              qtr( "A new version of VLC (%1.%2.%3%4) is available." ) )
-                              .arg( m_model->getMajor() )
-                              .arg( m_model->getMinor() )
-                              .arg( m_model->getRevision()  )
-                              .arg( extra == 0 ? QStringLiteral("") : QStringLiteral(".") + QString::number( extra ) );
-
-        ui.updateNotifyLabel->setText( message );
-        message = m_model->getDescription().replace( "\n", "<br/>" );
-
-        /* Try to highlight releases featuring security changes */
-        int i_index = message.indexOf( "security", Qt::CaseInsensitive );
-        if ( i_index >= 0 )
-        {
-            message.insert( i_index + 8, "</font>" );
-            message.insert( i_index, "<font style=\"color:red\">" );
-        }
-        ui.updateNotifyTextEdit->setHtml( message );
+        ui.updateNotifyLabel->setText(qtr("A new version of VLC (%1) is available.")
+                                     .arg(m_model->getVersion()));
+        ui.updateNotifyTextEdit->setPlainText(m_model->getDescription());
         break;
     }
     case UpdateModel::UpToDate:
     {
         ui.stackedWidget->setCurrentWidget( ui.updateDialogPage );
         ui.updateDialogLabel->setText(
-            qtr( "You have the latest version of VLC media player." ) );
+            qtr("No newer compatible release is available for this build.") );
         break;
     }
     case UpdateModel::CheckFailed:

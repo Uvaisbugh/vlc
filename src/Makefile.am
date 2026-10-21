@@ -73,6 +73,7 @@ pluginsinclude_HEADERS.h = \
 	../include/vlc_media_source.h \
 	../include/vlc_memstream.h \
 	../include/vlc_messages.h \
+	../include/vlc_log_observer.h \
 	../include/vlc_tracer.h \
 	../include/vlc_meta.h \
 	../include/vlc_meta_fetcher.h \
@@ -222,6 +223,7 @@ endif
 libvlccore_la_SOURCES = \
 	libvlc.c \
 	libvlc.h \
+	instance_policy.h \
 	libvlc-module.c \
 	missing.c \
 	revision.c \
@@ -236,6 +238,8 @@ libvlccore_la_SOURCES = \
 	config/help.c \
 	config/intf.c \
 	config/cmdline.c \
+	config/startup.c \
+	config/language.c \
 	config/getopt.c \
 	config/vlc_getopt.h \
 	config/jaro_winkler.c \
@@ -454,6 +458,7 @@ libvlccore_la_SOURCES += \
 	win32/error.c \
 	win32/filesystem.c \
 	win32/netconf.c \
+	win32/proxy.h \
 	win32/plugin.c \
 	win32/rand.c \
 	win32/specific.c \
@@ -463,7 +468,7 @@ if HAVE_WINSTORE
 libvlccore_la_SOURCES += posix/timer.c win32/dirs-uap.c
 else
 libvlccore_la_SOURCES += win32/timer.c win32/dirs.c win32/spawn.c
-libvlccore_la_LIBADD += -lwinmm -lole32 -luuid
+libvlccore_la_LIBADD += -lwinmm -lole32 -luuid -lwinhttp
 endif
 libvlccore_la_LIBADD += -lbcrypt
 endif

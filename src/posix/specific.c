@@ -24,6 +24,7 @@
 
 #include <vlc_common.h>
 #include "../libvlc.h"
+#include "../instance_policy.h"
 #include "../lib/libvlc_internal.h"
 
 #ifdef HAVE_DBUS
@@ -51,9 +52,13 @@ static void system_ConfigureDbus(libvlc_int_t *vlc, int argc,
     if (var_InheritBool(vlc, "dbus"))
         libvlc_InternalAddIntf(vlc, "dbus,none");
 
-    if (!var_InheritBool(vlc, "one-instance")
-     && !(var_InheritBool(vlc, "one-instance-when-started-from-file")
-       && var_InheritBool(vlc, "started-from-file")))
+    if (var_Type(vlc, "dbus-mpris-name") != 0) {
+        char *name = var_GetString(vlc, "dbus-mpris-name");
+        const bool listening = name && !strcmp(name, MPRIS_BUS_NAME);
+        free(name);
+        var_SetBool(vlc, "single-instance-listening", listening);
+    }
+    if (!vlc_instance_ShouldReuse(VLC_OBJECT(vlc)))
          return;
 
     for (int i = 0; i < argc; i++)
@@ -91,6 +96,28 @@ static void system_ConfigureDbus(libvlc_int_t *vlc, int argc,
     }
 
     msg_Warn(vlc, "running VLC instance - exiting...");
+
+    if (argc == 0)
+    {
+        DBusMessage *req = dbus_message_new_method_call(MPRIS_BUS_NAME,
+            MPRIS_OBJECT_PATH, "org.mpris.MediaPlayer2", "Raise");
+        if (unlikely(req == NULL))
+        {
+            dbus_connection_unref(conn);
+            return;
+        }
+        DBusMessage *reply = dbus_connection_send_with_reply_and_block(conn,
+                                                               req, 3000, &err);
+        dbus_message_unref(req);
+        if (reply == NULL)
+        {
+            msg_Err(vlc, "D-Bus error: %s", err.message);
+            dbus_error_free(&err);
+            dbus_connection_unref(conn);
+            return;
+        }
+        dbus_message_unref(reply);
+    }
 
     const dbus_bool_t play = !var_InheritBool(vlc, "playlist-enqueue");
 

@@ -49,6 +49,34 @@
 extern "C" {
 # endif
 
+/**
+ * Expand saved standalone startup options before module/thread setup.
+ * The launch command follows the saved options and takes precedence. Embedded
+ * clients opt in only with --load-startup-options. Ignore/reset-config bypass
+ * saved options. Returns the new argc, or a negative VLC error. If non-NULL,
+ * *expanded owns all strings and must be freed with config_FreeStartupOptions.
+ */
+VLC_API int config_ExpandStartupOptions(int argc, const char *const argv[], char ***expanded);
+VLC_API void config_FreeStartupOptions(char **args);
+/** Validate quoted arguments using native option metadata, without applying them. */
+VLC_API int config_ValidateStartupOptions(vlc_object_t *parent, const char *text);
+
+/** Get the standalone interface language (caller frees the result).
+ * CLI, profile, legacy platform preference and system fallback are considered.
+ * This getter does not modify the process locale or environment.
+ */
+VLC_API char *config_GetInterfaceLanguage(int argc, const char *const argv[]);
+/** Get the original message-language environment or Windows UI language list,
+ * before the standalone UI override. The caller frees the result. NULL means
+ * use the platform language or that the result could not be allocated.
+ * No locale is changed.
+ */
+VLC_API char *config_GetSystemInterfaceLanguage(void);
+/** Apply the standalone language before any threads or LibVLC instances start.
+ * Embedded clients must not call this while their process is multithreaded.
+ */
+VLC_API int config_ApplyInterfaceLanguage(int argc, const char *const argv[]);
+
 typedef union
 {
     char       *psz;
@@ -97,6 +125,16 @@ struct module_config_t
  * \return The configuration item type or 0 if not found.
  */
 VLC_API int config_GetType(const char *name) VLC_USED;
+/** Whether an option is persistent, rather than a volatile or obsolete option. */
+VLC_API bool config_IsPersistent(const char *name) VLC_USED;
+
+/**
+ * Visits every persistent configuration item, including private items.
+ * The callback receives a borrowed name valid for the module bank lifetime.
+ * Volatile options, obsolete options and configuration hints are excluded.
+ */
+VLC_API void config_ForEachPersistent(void (*callback)(void *, const char *),
+                                    void *opaque);
 
 /**
  * Gets an integer configuration item's value.

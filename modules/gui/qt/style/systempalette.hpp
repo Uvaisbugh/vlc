@@ -111,7 +111,8 @@ public:
     Q_PROPERTY(CSDMetrics* csdMetrics READ getCSDMetrics NOTIFY CSDMetricsChanged FINAL)
 
     //standard color definitions used by light/dark themes
-    COLOR_DEFINITION(orange500, "#FF8800");
+    // Juxtopposed Dark/Accent/Main; explicit user/system accents override this default.
+    COLOR_DEFINITION(orange500, "#D37918");
     COLOR_DEFINITION(orange800, "#FF610A");
 
     COLOR_DEFINITION(orange400, "#f89a06"); //FIXME name have been chosen randomly by me

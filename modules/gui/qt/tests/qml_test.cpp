@@ -17,10 +17,26 @@
 *****************************************************************************/
 
 #include <QtQuickTest>
+#include <QFontDatabase>
+#include <QGuiApplication>
 #include "qml_test.hpp"
 
 // not much right now, type registration & initialisation may be required later on
 // https://doc.qt.io/qt-5/qtquicktest-index.html#executing-c-before-qml-tests
+
+void Setup::applicationAvailable()
+{
+    // Match the application's bundled font so geometry checks do not depend
+    // on the fonts installed on the test machine.
+    const int fontId = QFontDatabase::addApplicationFont(QStringLiteral(":/fonts/InterVariable.ttf"));
+    QFontDatabase::addApplicationFont(QStringLiteral(":/fonts/InterVariable-Italic.ttf"));
+    const auto families = QFontDatabase::applicationFontFamilies(fontId);
+    if (families.isEmpty())
+        qFatal("Cannot load the bundled Inter test font");
+    auto font = QGuiApplication::font();
+    font.setFamily(families.first());
+    QGuiApplication::setFont(font);
+}
 
 void Setup::qmlEngineAvailable(QQmlEngine *engine)
 {

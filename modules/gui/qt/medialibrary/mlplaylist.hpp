@@ -36,6 +36,10 @@ public:
 public: // Interface
     QString getName() const;
     void setName(const QString & name);
+    QString artwork() const { return m_artwork; }
+    uint32_t creationDate() const { return m_creationDate; }
+    bool readOnly() const { return m_readOnly; }
+    bool favorite() const { return m_favorite; }
 
     VLCDuration getDuration() const;
 
@@ -46,6 +50,10 @@ public: // Interface
 
 private:
     QString m_name;
+    QString m_artwork;
+    uint32_t m_creationDate;
+    bool m_readOnly;
+    bool m_favorite;
 
     int64_t m_duration;
 

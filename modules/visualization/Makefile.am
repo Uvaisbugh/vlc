@@ -11,7 +11,7 @@ visu_RPATH += -rpath '$(visudir)'
 endif
 
 libglspectrum_plugin_la_SOURCES = \
-	visualization/glspectrum.c \
+	visualization/glspectrum.c visualization/opengl_vout.h visualization/size.h \
 	visualization/visual/fft.c visualization/visual/fft.h \
 	visualization/visual/window.c visualization/visual/window.h \
 	visualization/visual/window_presets.h
@@ -26,14 +26,14 @@ visu_PLUGINS += libglspectrum_plugin.la
 endif
 endif
 
-libgoom_plugin_la_SOURCES = visualization/goom.c
+libgoom_plugin_la_SOURCES = visualization/goom.c visualization/size.h
 libgoom_plugin_la_CPPFLAGS = $(AM_CPPFLAGS) $(GOOM_CFLAGS)
 libgoom_plugin_la_LDFLAGS = $(AM_LDFLAGS) $(visu_RPATH)
 libgoom_plugin_la_LIBADD = $(GOOM_LIBS) $(LIBM)
 EXTRA_LTLIBRARIES += libgoom_plugin.la
 visu_PLUGINS += $(LTLIBgoom)
 
-libprojectm_plugin_la_SOURCES = visualization/projectm.cpp
+libprojectm_plugin_la_SOURCES = visualization/projectm.cpp visualization/opengl_vout.h visualization/size.h
 libprojectm_plugin_la_CXXFLAGS = $(AM_CXXFLAGS) $(PROJECTM_CFLAGS) $(CPPFLAGS_projectm)
 libprojectm_plugin_la_LDFLAGS = $(AM_LDFLAGS) $(visu_RPATH)
 libprojectm_plugin_la_LIBADD = $(PROJECTM_LIBS)
@@ -41,6 +41,7 @@ EXTRA_LTLIBRARIES += libprojectm_plugin.la
 visu_PLUGINS += $(LTLIBprojectm)
 
 libvisual_plugin_la_SOURCES = \
+	visualization/size.h \
 	visualization/visual/visual.c visualization/visual/visual.h \
 	visualization/visual/effects.c \
 	visualization/visual/fft.c visualization/visual/fft.h \

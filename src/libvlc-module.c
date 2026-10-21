@@ -60,6 +60,10 @@ VLC_META_EXPORT_DECL(license, VLC_MODULE_LICENSE)
 
 static const char *const ppsz_snap_formats[] =
 { "png", "jpg", "tiff", "webp" };
+static const int subtitle_size_modes[] = {0, 1};
+static const char *const subtitle_size_mode_names[] = {N_("Relative"), N_("Pixels")};
+static const int subtitle_vertical_positions[] = {SUBPICTURE_ALIGN_BOTTOM, 0, SUBPICTURE_ALIGN_TOP};
+static const char *const subtitle_vertical_position_names[] = {N_("Bottom"), N_("Center"), N_("Top")};
 
 /*****************************************************************************
  * Configuration options for the core module. Each module will also separately
@@ -146,6 +150,11 @@ static const char *const ppsz_snap_formats[] =
 #define AUDIO_LONGTEXT N_( \
     "You can completely disable the audio output. The audio " \
     "decoding stage will not take place, thus saving some processing power.")
+static const int visualization_size_values[] = {0, 1, 2, 3, -1};
+static const char *const visualization_size_labels[] = {
+    N_("Match window"), "800 × 500", "1280 × 720", "1920 × 1080", N_("Custom")
+};
+
 static const char *ppsz_roles[] = {
      "video", "music", "communication", "game",
      "notification", "animation", "production",
@@ -217,6 +226,11 @@ static const int pi_mix_mode_values[] = {
 static const char *const ppsz_mix_mode_texts[] = {
     N_("Unset"), N_("Stereo"), N_("Binaural"),
     "4.0", "5.1", "7.1",
+};
+
+static const int spatial_mode_values[] = { AOUT_MIX_MODE_BINAURAL, AOUT_MIX_MODE_UNSET };
+static const char *const spatial_mode_texts[] = {
+    N_("Headphone virtualization"), N_("Surround speakers"),
 };
 
 #define AUDIO_FILTER_TEXT N_("Audio filters")
@@ -551,6 +565,13 @@ static const char *const ppsz_mouse_pause_policy_values[] = {
 static const char *const ppsz_mouse_pause_policy_descriptions[] =
    { N_("Auto"), N_("Disabled"), N_("Toggle pause immediately on mouse released") };
 
+static const char *const mouse_double_click_values[] = {
+    "fullscreen", "play-pause", "disabled"
+};
+static const char *const mouse_double_click_texts[] = {
+    N_("Toggle fullscreen"), N_("Play / Pause"), N_("Do nothing")
+};
+
 /*****************************************************************************
  * Input
  ****************************************************************************/
@@ -672,12 +693,14 @@ static const char *const ppsz_clock_descriptions[] =
 #define INPUT_AUDIOTRACK_LANG_TEXT N_("Audio language")
 #define INPUT_AUDIOTRACK_LANG_LONGTEXT N_( \
     "Language of the audio track you want to use " \
-    "(comma separated, two or three letter ISO-639 country code; you may use 'none' to avoid a fallback to another language).")
+    "Use language names or two or three letter ISO-639 codes, separated by commas. " \
+    "Use 'system' for the system language, or 'none' to prevent a fallback to another language.")
 
 #define INPUT_SUBTRACK_LANG_TEXT N_("Subtitle language")
 #define INPUT_SUBTRACK_LANG_LONGTEXT N_( \
     "Language of the subtitle track you want to use " \
-    "(comma separated, two or three letter ISO-639 country code; you may use 'any' as a fallback).")
+    "Use language names or two or three letter ISO-639 codes, separated by commas. " \
+    "Use 'system' for the system language, or 'any' to allow another language.")
 
 #define INPUT_MENUTRACK_LANG_TEXT N_("Menu language")
 #define INPUT_MENUTRACK_LANG_LONGTEXT N_( \
@@ -842,6 +865,8 @@ static const char* const ppsz_restore_playback_desc[] = {
 #define OSD_LONGTEXT N_( \
     "VLC can display messages on the video. This is called OSD (On Screen " \
     "Display).")
+#define OSD_DURATION_TEXT N_("Shortcut feedback duration (ms)")
+#define OSD_DURATION_LONGTEXT N_("Set how long shortcut messages and icons stay on the video. This does not change the filename display time.")
 
 #define TEXTRENDERER_TEXT N_("Text rendering module")
 #define TEXTRENDERER_LONGTEXT N_( \
@@ -884,6 +909,9 @@ static const char* const ppsz_restore_playback_desc[] = {
 #define SUB_DELAY_TEXT N_("Subtitle delay")
 #define SUB_DELAY_LONGTEXT \
     N_("Apply a delay to all subtitles (in 1/10s, eg 100 means 10s).")
+#define SUB_DELAY_MS_TEXT N_("Subtitle delay (ms)")
+#define SUB_DELAY_MS_LONGTEXT \
+    N_("Apply a subtitle delay in milliseconds. VLC adds this delay to the delay set by sub-delay.")
 
 #define SUB_FILE_TEXT N_("Use subtitle file")
 #define SUB_FILE_LONGTEXT N_( \
@@ -972,10 +1000,22 @@ static const char* const ppsz_restore_playback_desc[] = {
    "This private key file (PEM format) is used for server-side TLS.")
 
 #define PROXY_TEXT N_("HTTP proxy")
+#ifdef _WIN32
+#if WINAPI_FAMILY_PARTITION(WINAPI_PARTITION_DESKTOP)
+#define PROXY_LONGTEXT N_( \
+    "Leave this field empty to use the Windows proxy settings. " \
+    "To use another proxy, enter its address, for example " \
+    "http://user@proxy.example.com:8080/." )
+#else
+#define PROXY_LONGTEXT N_( \
+    "Enter the proxy address, for example http://user@proxy.example.com:8080/." )
+#endif
+#else
 #define PROXY_LONGTEXT N_( \
     "HTTP proxy to be used It must be of the form " \
     "http://[user@]myproxy.mydomain:myport/ ; " \
     "if empty, the http_proxy environment variable will be tried." )
+#endif
 
 #define PROXY_PASS_TEXT N_("HTTP proxy password")
 #define PROXY_PASS_LONGTEXT N_( \
@@ -1227,14 +1267,14 @@ static const char *const clock_sources_text[] = {
 static const char *const psz_recursive_list[] = {
     "none", "collapse", "expand" };
 static const char *const psz_recursive_list_text[] = {
-    N_("None"), N_("Collapse"), N_("Expand") };
+    N_("Open folders on playback"), N_("Include subfolders"), N_("Expand all subfolders") };
 
 #define RECURSIVE_TEXT N_("Subdirectory behavior")
 #define RECURSIVE_LONGTEXT N_( \
-        "Select whether subdirectories must be expanded.\n" \
-        "none: subdirectories do not appear in the play queue.\n" \
-        "collapse: subdirectories appear but are expanded on first play.\n" \
-        "expand: all subdirectories are expanded.\n" )
+        "Select when VLC reads folders added to the queue.\n" \
+        "none: read folders when they are played.\n" \
+        "collapse: read one folder level and keep its subfolders in the queue.\n" \
+        "expand: read all subfolders at once.\n" )
 
 #define IGNORE_TEXT N_("Ignored extensions")
 #define IGNORE_LONGTEXT N_( \
@@ -1618,6 +1658,15 @@ vlc_module_begin ()
                  VOLUME_STEP_LONGTEXT )
         change_float_range( 1., AOUT_VOLUME_DEFAULT )
     add_bool( "volume-save", true, VOLUME_SAVE_TEXT, NULL )
+    add_integer_with_range("audio-startup-volume", -1, -1, 300,
+        N_("Startup volume (%)"), N_("Volume used when remembering the last volume is disabled. -1 preserves the audio driver's default."))
+    add_float_with_range("audio-last-volume", -1.f, -1.f, 3.f,
+        N_("Last used audio volume"), NULL)
+        change_private()
+    add_string("audio-device-default", "", N_("Default audio output device"),
+        N_("Device used for new audio outputs. An empty value uses the audio driver's default."))
+    add_string("audio-device-default-module", "", N_("Default audio device driver"), NULL)
+        change_private()
     add_bool( "audio-time-stretch", true, AUDIO_TIME_STRETCH_TEXT,
                 AUDIO_TIME_STRETCH_LONGTEXT )
 #if defined(__ANDROID__) || defined(__APPLE__) || defined(_WIN32)
@@ -1632,6 +1681,13 @@ vlc_module_begin ()
         change_integer_list( pi_stereo_mode_values, ppsz_stereo_mode_texts )
     add_integer( "mix-mode", AOUT_MIX_MODE_UNSET, MIX_MODE_TEXT, NULL )
         change_integer_list( pi_mix_mode_values, ppsz_mix_mode_texts )
+    add_bool("audio-spatial", false, N_("Spatial audio"),
+             N_("Use surround audio with headphones or speakers. "
+                "If you set Spatial audio to OFF, VLC uses your speaker setup. Stereo audio does not change."))
+    add_integer("audio-spatial-mode", AOUT_MIX_MODE_BINAURAL, N_("Spatial audio mode"),
+                N_("For headphones, select Headphone virtualization. For speakers, select Surround speakers. "
+                   "VLC uses your speaker setup for Surround speakers."))
+        change_integer_list(spatial_mode_values, spatial_mode_texts)
     add_integer( "audio-desync", 0, DESYNC_TEXT,
                  DESYNC_LONGTEXT )
         change_safe ()
@@ -1661,6 +1717,9 @@ vlc_module_begin ()
     set_subcategory( SUBCAT_AUDIO_VISUAL )
     add_module("audio-visual", "visualization", "none",
                AUDIO_VISUAL_TEXT, AUDIO_VISUAL_LONGTEXT)
+    add_integer("visualization-size", 0, N_("Visualization size"),
+        N_("Set the size of visualization frames. Match window uses the video area. Custom keeps the visualizer's width and height settings."))
+        change_integer_list(visualization_size_values, visualization_size_labels)
 
     set_subcategory( SUBCAT_AUDIO_RESAMPLER )
     add_module("audio-resampler", "audio resampler", "any",
@@ -1695,6 +1754,9 @@ vlc_module_begin ()
     add_string( "mouse-pause-policy", ppsz_mouse_pause_policy_values[0], MOUSE_PAUSE_POLICY_TEXT,
               MOUSE_PAUSE_POLICY_LONGTEXT);
         change_string_list(ppsz_mouse_pause_policy_values, ppsz_mouse_pause_policy_descriptions)
+    add_string("mouse-double-click-action", "fullscreen", N_("Double click on the video"),
+               N_("Choose what a double click on the video does."))
+        change_string_list(mouse_double_click_values, mouse_double_click_texts)
     add_bool( "video-on-top", false, VIDEO_ON_TOP_TEXT,
               VIDEO_ON_TOP_LONGTEXT )
     add_bool( "video-wallpaper", false, WALLPAPER_TEXT,
@@ -1806,12 +1868,16 @@ vlc_module_begin ()
     add_bool( "spu-fill", true, SPU_FULL_TEXT, SPU_FULL_LONGTEXT )
         change_safe ()
     add_bool( "osd", true, OSD_TEXT, OSD_LONGTEXT )
+    add_integer_with_range( "osd-duration", 1000, 500, 5000,
+                            OSD_DURATION_TEXT, OSD_DURATION_LONGTEXT )
     add_module("text-renderer", "text renderer", "any",
                TEXTRENDERER_TEXT, TEXTRENDERER_LONGTEXT)
 
     set_section( N_("Subtitles") , NULL )
     add_float( "sub-fps", 0.0, SUB_FPS_TEXT, SUB_FPS_LONGTEXT )
     add_integer( "sub-delay", 0, SUB_DELAY_TEXT, SUB_DELAY_LONGTEXT )
+    add_integer_with_range( "sub-delay-ms", 0, INT_MIN, INT_MAX,
+                            SUB_DELAY_MS_TEXT, SUB_DELAY_MS_LONGTEXT )
     add_loadfile("sub-file", NULL, SUB_FILE_TEXT, SUB_FILE_LONGTEXT)
         change_safe()
     add_bool( "sub-autodetect-file", true,
@@ -1829,6 +1895,16 @@ vlc_module_begin ()
                  SUB_MARGIN_LONGTEXT )
     add_integer_with_range( "sub-text-scale", 100, 10, 500,
                SUB_TEXT_SCALE_TEXT, SUB_TEXT_SCALE_LONGTEXT )
+    add_bool( "sub-text-use-embedded-style", true, N_("Use embedded subtitle formatting"),
+              N_("Use the font and colors from the subtitle file. Switch this setting off to use your subtitle appearance settings.") )
+    add_integer_with_range( "sub-text-size-mode", 0, 0, 1, N_("Subtitle size values"),
+                            N_("Use relative values or pixels for the subtitle font size.") )
+        change_integer_list( subtitle_size_modes, subtitle_size_mode_names )
+    add_integer_with_range( "sub-text-size-pixels", 30, 1, 500, N_("Subtitle font size (px)"),
+                            N_("Set the subtitle font size in pixels.") )
+    add_integer( "sub-text-vertical-position", SUBPICTURE_ALIGN_BOTTOM, N_("Subtitle vertical position"),
+                 N_("Set the position of text subtitles on the primary track. Subtitles with a position in the file keep that position.") )
+        change_integer_list( subtitle_vertical_positions, subtitle_vertical_position_names )
     set_section( N_( "Overlays" ) , NULL )
     add_module_list("sub-source", "sub source", NULL,
                     SUB_SOURCE_TEXT, SUB_SOURCE_LONGTEXT)
@@ -1864,10 +1940,10 @@ vlc_module_begin ()
     add_integer( "sub-track", -1,
                  INPUT_SUBTRACK_TEXT, INPUT_SUBTRACK_LONGTEXT )
         change_safe ()
-    add_string( "audio-language", "",
+    add_string( "audio-language", "system",
                  INPUT_AUDIOTRACK_LANG_TEXT, INPUT_AUDIOTRACK_LANG_LONGTEXT )
         change_safe ()
-    add_string( "sub-language", "",
+    add_string( "sub-language", "system",
                  INPUT_SUBTRACK_LANG_TEXT, INPUT_SUBTRACK_LANG_LONGTEXT )
         change_safe ()
     add_string( "menu-language", "",
@@ -1924,6 +2000,8 @@ vlc_module_begin ()
         change_safe ()
 
     add_bool( "save-recentplay", true, SAVE_RECENTPLAY, NULL )
+    add_string( "recentplay-filter", "", N_("Never remember items matching"),
+                N_("Enter a regular expression. VLC does not add matching file paths or links to the playback history. An empty field allows all paths and links.") )
 
     add_integer( "restore-playback-pos", VLC_PLAYER_RESTORE_PLAYBACK_POS_ASK,
                  RESTORE_PLAYBACK_POS_TEXT, RESTORE_PLAYBACK_POS_LONGTEXT )
@@ -2066,7 +2144,7 @@ vlc_module_begin ()
     add_category_hint(N_("Stream output"), SOUT_CAT_LONGTEXT)
 
     add_string( "sout", NULL, SOUT_TEXT, SOUT_LONGTEXT )
-    add_bool( "sout-display", false, SOUT_DISPLAY_TEXT,
+    add_bool( "sout-display", true, SOUT_DISPLAY_TEXT,
                                 SOUT_DISPLAY_LONGTEXT )
     add_bool( "sout-keep", false, SOUT_KEEP_TEXT,
                                 SOUT_KEEP_LONGTEXT )
@@ -2177,7 +2255,24 @@ vlc_module_begin ()
     add_bool( "dbus", false, DBUS_TEXT, DBUS_LONGTEXT )
 #endif
     add_bool( "media-library", false, ML_TEXT, ML_LONGTEXT )
-    add_bool( "playlist-tree", false, PLTREE_TEXT, PLTREE_LONGTEXT )
+    /* Empty preserves a pre-existing platform preference. Explicit auto is
+     * persisted so System can override a legacy Windows/macOS selection. */
+    add_string("language", "", N_("Interface language"),
+               N_("Choose a language for the interface. Restart VLC after a change."))
+    add_string("startup-options", "", N_("Additional command line options"),
+               N_("Use these options when VLC starts. The launch command takes priority. Restart VLC after a change."))
+    add_bool("load-startup-options", false, NULL, NULL)
+        change_volatile()
+        change_private()
+    add_bool( "media-library-default", false, NULL, NULL )
+        change_volatile()
+    add_bool( "single-instance-default", false, NULL, NULL )
+        change_volatile()
+    add_integer( "single-instance-preferences-version", 0, NULL, NULL )
+        change_private()
+    add_bool( "media-library-startup", true, N_("Use the media library when VLC starts"),
+              N_("Use the media library when VLC starts. Restart VLC after a change. The command line can set a different value.") )
+    add_bool( "playlist-tree", true, PLTREE_TEXT, PLTREE_LONGTEXT )
 
     add_string( "open", "", OPEN_TEXT, OPEN_LONGTEXT )
 
@@ -2279,6 +2374,8 @@ vlc_module_begin ()
     add_integer( "hotkeys-x-wheel-mode", 2, MOUSE_X_WHEEL_MODE_TEXT,
                  MOUSE_X_WHEEL_MODE_LONGTEXT )
         change_integer_list( mouse_wheel_values, mouse_wheel_texts )
+    add_bool("hotkeys-wheel-direction", false, N_("Reverse scroll direction"),
+             N_("Reverse the volume and seek actions of both mouse wheel axes."))
     add_obsolete_integer( "hotkeys-mousewheel-mode" ) /* since 3.0.0 */
 
 #if defined(__APPLE__)

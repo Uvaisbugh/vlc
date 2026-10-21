@@ -1,0 +1,166 @@
+name: Windows x64 VLC build
+
+on:
+  push:
+    branches: [codex/vlc-redesign]
+    paths:
+      - '.github/workflows/windows-build.yml'
+      - 'modules/gui/qt/**'
+      - 'extras/package/win32/test-runtime.ps1'
+      - 'extras/package/release/**'
+      - 'contrib/**'
+      - '**/meson.build'
+      - 'meson_options.txt'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-vlc-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  packaging-tests:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Test release tooling and generate playback fixture
+        run: |
+          python3 -m unittest discover -s extras/package/release/tests
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends ffmpeg
+          mkdir -p smoke-media
+          ffmpeg -nostdin -v error -f lavfi -i testsrc2=size=320x180:rate=24 -f lavfi -i sine=frequency=440:sample_rate=48000 -t 4 -c:v ffv1 -c:a pcm_s16le smoke-media/sample.mkv
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: smoke-media-${{ github.sha }}
+          path: smoke-media/sample.mkv
+          if-no-files-found: error
+          retention-days: 14
+
+  windows-x64:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 360
+    container:
+      # Same versioned image as extras/ci/gitlab-ci.yml at our baseline.
+      image: registry.videolan.org/vlc-debian-win64-posix:20260611225331
+      # The image's default UID differs from the hosted runner's workspace UID.
+      options: --user 0
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Check out source and history for contrib selection
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Record source and toolchain
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          mkdir -p build-evidence artifacts
+          {
+            git rev-parse HEAD
+            printf 'Build image: %s\n' 'registry.videolan.org/vlc-debian-win64-posix:20260611225331'
+            x86_64-w64-mingw32-gcc --version
+            uname -a
+          } > build-evidence/environment.txt
+
+      - name: Build native VLC and stage Windows runtime
+        run: |
+          set -euo pipefail
+          export JOBS=4
+          args=(-a x86_64 -x -o "$PWD/artifacts/vlc-win64")
+          contrib_sha=$(extras/ci/get-contrib-sha.sh win64)
+          contrib_url="https://artifacts.videolan.org/vlc/win64/vlc-contrib-x86_64-w64-mingw32-${contrib_sha}.tar.zst"
+          printf '%s\n' "$contrib_sha" > build-evidence/contrib-revision.txt
+          if extras/ci/check-url.sh "$contrib_url"; then
+            export VLC_PREBUILT_CONTRIBS_URL="$contrib_url"
+            args+=(-p)
+          fi
+          extras/package/win32/build.sh "${args[@]}" 2>&1 | tee build-evidence/build.log
+          test -f artifacts/vlc-win64/vlc.exe
+          # Keep the downloadable app small; upstream moves debug info aside.
+          make -C win64 package-win-strip 2>&1 | tee build-evidence/package.log
+          cp COPYING COPYING.LIB artifacts/vlc-win64/
+          # The Vulkan loader is redistributable, not a Windows system DLL.
+          cp contrib/x86_64-w64-mingw32/bin/vulkan-1.dll artifacts/vlc-win64/
+          mkdir -p artifacts/vlc-win64/licenses/{vulkan-loader,Inter,design}
+          cp contrib/contrib-win64/vulkan-loader/LICENSE.txt contrib/contrib-win64/vulkan-loader/LICENSES/*.txt artifacts/vlc-win64/licenses/vulkan-loader/
+          cp modules/gui/qt/fonts/LICENSE.txt artifacts/vlc-win64/licenses/Inter/
+          cp modules/gui/qt/pixmaps/redesign/CREDITS.md artifacts/vlc-win64/licenses/design/
+          tar -C artifacts --exclude='vlc-win64/sdk' -czf artifacts/vlc-windows-x64.tar.gz vlc-win64
+          sha256sum artifacts/vlc-windows-x64.tar.gz > artifacts/SHA256SUMS
+
+      - name: Upload Windows runtime
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: vlc-windows-x64-${{ github.sha }}
+          path: |
+            artifacts/vlc-windows-x64.tar.gz
+            artifacts/SHA256SUMS
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Preserve build evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: build-evidence-${{ github.sha }}
+          path: |
+            build-evidence/
+            win64/config.log
+          if-no-files-found: warn
+          retention-days: 14
+  windows-smoke:
+    needs: [windows-x64, packaging-tests]
+    runs-on: windows-2022
+    timeout-minutes: 10
+    steps:
+      - name: Check out runtime test
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - name: Download the matching Windows package
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: vlc-windows-x64-${{ github.sha }}
+          path: runtime
+
+      - name: Verify and extract package
+        shell: pwsh
+        run: |
+          $expected = ((Get-Content runtime/SHA256SUMS -Raw).Trim() -split '\s+')[0]
+          $actual = (Get-FileHash runtime/vlc-windows-x64.tar.gz -Algorithm SHA256).Hash
+          if ($expected -ne $actual) { throw 'Runtime checksum mismatch.' }
+          tar -xzf runtime/vlc-windows-x64.tar.gz -C runtime
+          if ($LASTEXITCODE -ne 0) { throw 'Runtime extraction failed.' }
+
+      - name: Download generated video and audio
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: smoke-media-${{ github.sha }}
+          path: smoke-media
+
+      - name: Launch native interfaces and play generated audio and video
+        shell: pwsh
+        run: |
+          ./extras/package/win32/test-runtime.ps1 -RuntimeDirectory runtime/vlc-win64 -EvidenceDirectory smoke-evidence -VideoFixture smoke-media/sample.mkv
+
+      - name: Preserve Windows runtime evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: windows-smoke-${{ github.sha }}
+          path: smoke-evidence/
+          if-no-files-found: warn
+          retention-days: 14
+
+  native-qt-tests:
+    uses: ./.github/workflows/native-qt-tests.yml

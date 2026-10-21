@@ -14,6 +14,18 @@
 #include <vlc_vector.h>
 #include <vlc_filter.h>
 
+#ifdef OUTPUT_TEARDOWN_TEST
+struct window_teardown_test {
+    vlc_mutex_t lock;
+    vlc_cond_t wait;
+    bool blocked;
+    bool entered;
+    unsigned opened;
+    unsigned closed;
+};
+extern struct window_teardown_test window_teardown;
+#endif
+
 #if defined(ZVBI_COMPILED)
 # define TELETEXT_DECODER "zvbi,"
 #elif defined(TELX_COMPILED)
@@ -236,6 +248,7 @@ struct media_params
 #define DISABLE_AUDIO        (1 << 3)
 #define AUDIO_INSTANT_DRAIN  (1 << 4)
 #define CLOCK_MASTER_MONOTONIC (1 << 5)
+#define AUDIO_TEST_DEFAULTS (1 << 6)
 
 struct ctx
 {

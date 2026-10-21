@@ -1,0 +1,514 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+#include "subtitle_source_service.hpp"
+#include <QDir>
+#include <QCoreApplication>
+#include <QEvent>
+#include <QCryptographicHash>
+#include <QFile>
+#include <QFileInfo>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QNetworkRequest>
+#include <QRegularExpression>
+#include <QSaveFile>
+#include <QSettings>
+#include <QSet>
+#include <QStringDecoder>
+#include <QTimer>
+#include <QUrlQuery>
+#include <QXmlStreamReader>
+#include <memory>
+#include <algorithm>
+#if __has_include("subtitle_consumer_key.hpp")
+#include "subtitle_consumer_key.hpp"
+#else
+static constexpr char subtitleConsumerKey[] = "";
+#endif
+
+namespace {
+SubtitleSourceService::Options defaultOptions()
+{
+    SubtitleSourceService::Options options;
+    options.consumerApiKey = subtitleConsumerKey;
+    return options;
+}
+QString safeName(QString name, const QString& format = QStringLiteral("srt"))
+{
+    name.replace('\\', '/'); name = QFileInfo(name).fileName();
+    name.replace(QRegularExpression(QStringLiteral("[<>:\"/\\\\|?*\\x00-\\x1f]")), QStringLiteral("_"));
+    while (name.endsWith('.') || name.endsWith(' ')) name.chop(1);
+    name = QFileInfo(name).completeBaseName().left(96);
+    if (name.isEmpty() || name == "." || name == "..") name = QStringLiteral("subtitle");
+    static const QRegularExpression device(QStringLiteral("^(?:con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\\.|$)"), QRegularExpression::CaseInsensitiveOption);
+    if (device.match(name).hasMatch()) name.prepend(QLatin1Char('_'));
+    return name + QLatin1Char('.') + format;
+}
+QString sourceUrl(qint64 id, const QString& name)
+{
+    QUrl url; url.setScheme(QStringLiteral("opensubtitles"));
+    url.setPath(QStringLiteral("/%1/%2").arg(id).arg(name));
+    return url.toString(QUrl::FullyEncoded);
+}
+}
+
+SubtitleSourceService::SubtitleSourceService(QObject* parent)
+    : SubtitleSourceService(defaultOptions(), parent) {}
+
+SubtitleSourceService::SubtitleSourceService(const Options& options, QObject* parent)
+    : QObject(parent), m_options(options), m_network(this), m_apiKey(options.consumerApiKey)
+{
+    m_languages = {QVariantMap{{"code", "en"}, {"text", QT_TR_NOOP("English")}},
+        QVariantMap{{"code", "es"}, {"text", QT_TR_NOOP("Spanish")}}, QVariantMap{{"code", "ja"}, {"text", QT_TR_NOOP("Japanese")}},
+        QVariantMap{{"code", "de"}, {"text", QT_TR_NOOP("German")}}, QVariantMap{{"code", "nl"}, {"text", QT_TR_NOOP("Dutch")}},
+        QVariantMap{{"code", "fr"}, {"text", QT_TR_NOOP("French")}}};
+    qApp->installEventFilter(this);
+}
+
+QVariantList SubtitleSourceService::languages() const
+{
+    auto languages = m_languages;
+    for (auto& entry : languages) {
+        auto row = entry.toMap();
+        const auto source = row.value(QStringLiteral("text")).toString().toUtf8();
+        row.insert(QStringLiteral("text"), tr(source.constData()));
+        entry = row;
+    }
+    return languages;
+}
+
+bool SubtitleSourceService::eventFilter(QObject* object, QEvent* event)
+{
+    if (object == qApp && event->type() == QEvent::LanguageChange)
+        emit languagesChanged();
+    return QObject::eventFilter(object, event);
+}
+
+SubtitleSourceService::~SubtitleSourceService()
+{
+    for (auto* reply : m_network.findChildren<QNetworkReply*>()) {
+        disconnect(reply, nullptr, this, nullptr); reply->abort();
+    }
+}
+
+void SubtitleSourceService::setStorageDirectory(const QString& directory)
+{
+    cancelSearch(); cancelPreparation();
+    ++m_languagesGeneration;
+    if (m_languagesReply) m_languagesReply->abort();
+    m_languagesReply = nullptr; m_languagesLoaded = false;
+    m_storageDirectory = QFileInfo(directory).isAbsolute() ? directory : QString();
+    m_apiKey = m_options.consumerApiKey; m_customKey = false;
+    if (!m_storageDirectory.isEmpty()) {
+        QSettings settings(QDir(directory).filePath(QStringLiteral("source-settings.ini")), QSettings::IniFormat);
+        const auto key = settings.value(QStringLiteral("OpenSubtitles/api-key")).toByteArray();
+        const bool valid = !key.isEmpty() && key.size() <= 512 && std::all_of(key.cbegin(), key.cend(), [](unsigned char ch) { return ch >= 0x21 && ch <= 0x7e; });
+        if (valid) { m_apiKey = key; m_customKey = true; }
+    }
+    emit configurationChanged();
+}
+
+bool SubtitleSourceService::setApiKey(const QString& value)
+{
+    const auto text = value.trimmed();
+    const auto key = text.toLatin1();
+    if (text != QString::fromLatin1(key) || key.isEmpty() || key.size() > 512 || m_storageDirectory.isEmpty() || m_preparing) return false;
+    for (const char ch : key) if (static_cast<unsigned char>(ch) < 0x21 || ch > 0x7e) return false;
+    if (!QDir().mkpath(m_storageDirectory)) return false;
+    const auto path = QDir(m_storageDirectory).filePath(QStringLiteral("source-settings.ini"));
+    // Create the configuration with owner permissions before QSettings writes the key.
+    if (!QFileInfo::exists(path)) {
+        QSaveFile file(path);
+        if (!file.open(QIODevice::WriteOnly)) return false;
+        file.setPermissions(QFile::ReadOwner | QFile::WriteOwner);
+        if (!file.commit()) return false;
+    }
+    QSettings settings(path, QSettings::IniFormat);
+    settings.setValue(QStringLiteral("OpenSubtitles/api-key"), key); settings.sync();
+    if (settings.status() != QSettings::NoError) return false;
+    QFile::setPermissions(path, QFile::ReadOwner | QFile::WriteOwner);
+    cancelSearch(); cancelPreparation(); ++m_languagesGeneration;
+    if (m_languagesReply) m_languagesReply->abort();
+    m_languagesReply = nullptr; m_languagesLoaded = false; m_apiKey = key; m_customKey = true; emit configurationChanged(); return true;
+}
+
+bool SubtitleSourceService::clearApiKey()
+{
+    if (m_storageDirectory.isEmpty() || m_preparing) return false;
+    QSettings settings(QDir(m_storageDirectory).filePath(QStringLiteral("source-settings.ini")), QSettings::IniFormat);
+    settings.remove(QStringLiteral("OpenSubtitles/api-key")); settings.sync();
+    if (settings.status() != QSettings::NoError) return false;
+    cancelSearch(); ++m_languagesGeneration;
+    if (m_languagesReply) m_languagesReply->abort();
+    m_languagesReply = nullptr; m_languagesLoaded = false; m_apiKey = m_options.consumerApiKey; m_customKey = false;
+    emit configurationChanged(); return true;
+}
+
+QString SubtitleSourceService::networkError(int status, QNetworkReply::NetworkError error, bool api) const
+{
+    if (status == 401 || status == 403) return api ? (m_customKey
+        ? tr("OpenSubtitles refused this request. Check your key and its download settings.")
+        : tr("OpenSubtitles refused this request. Try again later, or add your own key in setup."))
+        : tr("The subtitle server refused this link. Check the link and try again.");
+    if (status == 406 || status == 429) return api ? tr("OpenSubtitles cannot download more files now. Try again later.")
+        : tr("The subtitle server cannot download more files now. Try again later.");
+    if (status >= 400) return tr("The subtitle server could not complete this request. Try again.");
+    if (error != QNetworkReply::NoError) return tr("VLC cannot connect to the subtitle server. Try again.");
+    if (status >= 300) return tr("The subtitle server returned an invalid response. Try again.");
+    return {};
+}
+
+QNetworkReply* SubtitleSourceService::request(const QUrl& url, const QByteArray& body,
+                                              bool api, qint64 limit, ReplyCallback callback)
+{
+    QNetworkRequest request(url);
+    request.setRawHeader("User-Agent", "VLC-Juxtopposed v4.0");
+    request.setAttribute(QNetworkRequest::RedirectPolicyAttribute,
+        api ? QNetworkRequest::SameOriginRedirectPolicy : QNetworkRequest::NoLessSafeRedirectPolicy);
+    request.setMaximumRedirectsAllowed(5);
+    if (api) {
+        request.setRawHeader("Api-Key", m_apiKey);
+        request.setRawHeader("Accept", "application/json");
+        if (!body.isEmpty()) request.setHeader(QNetworkRequest::ContentTypeHeader, QStringLiteral("application/json"));
+    }
+    auto* reply = body.isEmpty() ? m_network.get(request) : m_network.post(request, body);
+    struct State { QByteArray bytes; bool tooLarge = false; bool timedOut = false; };
+    auto state = std::make_shared<State>();
+    auto* timer = new QTimer(reply); timer->setSingleShot(true);
+    connect(timer, &QTimer::timeout, this, [reply, state] { state->timedOut = true; reply->abort(); });
+    connect(reply, &QNetworkReply::readyRead, this, [reply, state, limit] {
+        state->bytes.append(reply->readAll());
+        if (state->bytes.size() > limit) { state->tooLarge = true; reply->abort(); }
+    });
+    connect(reply, &QNetworkReply::finished, this, [this, reply, state, timer, limit, api, callback = std::move(callback)] {
+        timer->stop(); if (reply->isReadable()) state->bytes.append(reply->readAll());
+        const auto error = state->tooLarge || state->bytes.size() > limit ? tr("This subtitle response is too large.")
+            : state->timedOut ? tr("The subtitle request took too long. Try again.")
+            : networkError(reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt(), reply->error(), api);
+        reply->deleteLater(); callback(state->bytes, error);
+    });
+    timer->start(m_options.timeoutMs); return reply;
+}
+
+void SubtitleSourceService::cancelSearch()
+{
+    ++m_searchGeneration;
+    if (m_searchReply) m_searchReply->abort();
+    m_searchReply = nullptr;
+}
+
+QVariantList SubtitleSourceService::parseSources(const QByteArray& bytes, QString& error)
+{
+    QJsonParseError parse;
+    const auto document = QJsonDocument::fromJson(bytes, &parse);
+    if (parse.error != QJsonParseError::NoError || !document.isObject() || !document.object().value("data").isArray()) {
+        error = tr("OpenSubtitles returned an invalid response. Try again."); return {};
+    }
+    QVariantList sources; QSet<qint64> seen;
+    for (const auto& entry : document.object().value("data").toArray()) {
+        const auto attributes = entry.toObject().value("attributes").toObject();
+        for (const auto& value : attributes.value("files").toArray()) {
+            const auto file = value.toObject();
+            const auto id = file.value("file_id").toInteger();
+            if (id <= 0 || seen.contains(id)) continue;
+            const auto name = safeName(file.value("file_name").toString(attributes.value("release").toString()));
+            const auto url = sourceUrl(id, name); seen.insert(id); m_records.insert(url, {id, name});
+            const QFileInfo cached(cachePath({id, name}));
+            const auto available = cached.isFile() && cached.size() > 0 && cached.size() <= m_options.maxFileBytes
+                ? QUrl::fromLocalFile(cached.absoluteFilePath()).toString(QUrl::FullyEncoded) : url;
+            sources.append(QVariantMap{{"url", available}, {"name", name},
+                {"language", attributes.value("language").toString()},
+                {"release", attributes.value("release").toString()},
+                {"hearingImpaired", attributes.value("hearing_impaired").toBool()},
+                {"forced", attributes.value("foreign_parts_only").toBool()}});
+            if (sources.size() >= 500) return sources;
+        }
+    }
+    return sources;
+}
+
+void SubtitleSourceService::fetchLanguages()
+{
+    if (!configured() || m_languagesLoaded || m_languagesReply) return;
+    const auto generation = ++m_languagesGeneration;
+    m_languagesReply = request(m_options.apiBase.resolved(QUrl(QStringLiteral("infos/languages"))), {}, true,
+        m_options.maxJsonBytes, [this, generation](const QByteArray& bytes, const QString& error) {
+            if (generation != m_languagesGeneration) return;
+            m_languagesReply = nullptr;
+            if (!error.isEmpty()) return;
+            const auto data = QJsonDocument::fromJson(bytes).object().value("data").toArray();
+            QVariantList languages; QSet<QString> seen;
+            const QRegularExpression code(QStringLiteral("^[a-z]{2,3}(?:-[a-z]{2,3})?$"));
+            for (const auto& value : data) {
+                const auto item = value.toObject();
+                const auto key = item.value("language_code").toString();
+                const auto name = item.value("language_name").toString();
+                if (seen.contains(key) || name.isEmpty() || !code.match(key).hasMatch()) continue;
+                seen.insert(key); languages.append(QVariantMap{{"code", key}, {"text", name}});
+            }
+            if (languages.isEmpty()) return;
+            std::sort(languages.begin(), languages.end(), [](const QVariant& a, const QVariant& b) {
+                return QString::localeAwareCompare(a.toMap().value("text").toString(), b.toMap().value("text").toString()) < 0;
+            });
+            m_languages = languages; m_languagesLoaded = true; emit languagesChanged();
+        });
+}
+
+quint64 SubtitleSourceService::search(const QString& text, const QString& language)
+{
+    cancelSearch(); const auto generation = m_searchGeneration;
+    const auto query = text.trimmed();
+    static const QRegularExpression code(QStringLiteral("^[a-z]{2,3}(?:-[a-z]{2,3})?$"));
+    if (!configured() || query.isEmpty() || query.size() > 512 || (!language.isEmpty() && !code.match(language).hasMatch())) {
+        const auto error = !configured() ? tr("OpenSubtitles is not set up. Add an API key to use this source.")
+                                        : tr("Enter a title and select a subtitle language.");
+        QTimer::singleShot(0, this, [this, generation, error] {
+            if (generation == m_searchGeneration) emit searchFinished(generation, {{"success", false}, {"error", error}});
+        }); return generation;
+    }
+    auto url = m_options.apiBase.resolved(QUrl(QStringLiteral("subtitles")));
+    QUrlQuery parameters;
+    if (!language.isEmpty()) parameters.addQueryItem(QStringLiteral("languages"), language);
+    parameters.addQueryItem(QStringLiteral("query"), query.toLower());
+    url.setQuery(parameters);
+    m_searchReply = request(url, {}, true, m_options.maxJsonBytes,
+        [this, generation](const QByteArray& bytes, QString error) {
+            if (generation != m_searchGeneration) return;
+            m_searchReply = nullptr;
+            auto sources = error.isEmpty() ? parseSources(bytes, error) : QVariantList{};
+            emit searchFinished(generation, {{"success", error.isEmpty()}, {"error", error}, {"sources", sources}});
+        });
+    return generation;
+}
+
+QString SubtitleSourceService::cachePath(const Record& record) const
+{
+    return QDir(m_storageDirectory).filePath(QStringLiteral("opensubtitles/%1/%2").arg(record.id).arg(record.name));
+}
+
+QByteArray SubtitleSourceService::subtitleText(const QByteArray& bytes) const
+{
+    const auto encoding = QStringConverter::encodingForData(bytes).value_or(QStringConverter::Utf8);
+    QStringDecoder decode(encoding); const QString text = decode(bytes);
+    if (decode.hasError() || text.contains(QChar::Null)) return {};
+    static const QRegularExpression timing(QStringLiteral(
+        "^\\s*\\d{1,3}:[0-5]\\d:[0-5]\\d[,.]\\d{3}\\s*-->\\s*\\d{1,3}:[0-5]\\d:[0-5]\\d[,.]\\d{3}"),
+        QRegularExpression::MultilineOption);
+    if (!timing.match(text).hasMatch()) return {};
+    return text.toUtf8();
+}
+
+bool SubtitleSourceService::downloadUrlAllowed(const QUrl& url) const
+{
+    if (!url.isValid() || url.host().isEmpty() || !url.userInfo().isEmpty()) return false;
+    if (url.scheme() == "https") return true;
+    // A local HTTP endpoint lets the same client run against a controlled test server.
+    return m_options.apiBase.scheme() == "http" && url.scheme() == "http"
+        && url.host() == m_options.apiBase.host() && url.port() == m_options.apiBase.port()
+        && (url.host() == "127.0.0.1" || url.host() == "localhost" || url.host() == "::1");
+}
+
+void SubtitleSourceService::cancelPreparation()
+{
+    ++m_prepareGeneration;
+    if (m_downloadReply) m_downloadReply->abort();
+    m_downloadReply = nullptr;
+    const bool preparing = m_preparing; m_preparing = false;
+    m_pending.clear(); m_rows.clear(); m_ready.clear();
+    if (preparing) emit preparingChanged();
+}
+
+void SubtitleSourceService::resetSession()
+{
+    cancelSearch(); cancelPreparation(); m_records.clear(); m_links.clear(); ++m_languagesGeneration;
+    if (m_languagesReply) m_languagesReply->abort();
+    m_languagesReply = nullptr;
+}
+
+quint64 SubtitleSourceService::prepareRows(const QVariantList& rows)
+{
+    cancelPreparation(); const auto generation = m_prepareGeneration;
+    m_rows = rows; m_preparing = true; emit preparingChanged();
+    for (const auto& item : rows) for (const auto& value : item.toMap().value("tracks").toList()) {
+        const auto url = value.toUrl();
+        if ((url.scheme() == "opensubtitles" || url.scheme() == "subtitlelink") && !m_pending.contains(url.toString(QUrl::FullyEncoded)))
+            m_pending.append(url.toString(QUrl::FullyEncoded));
+    }
+    QTimer::singleShot(0, this, [this, generation] { downloadNext(generation); });
+    return generation;
+}
+
+void SubtitleSourceService::downloadNext(quint64 generation)
+{
+    if (generation != m_prepareGeneration || !m_preparing) return;
+    if (m_pending.isEmpty()) { finishPreparation(generation); return; }
+    const auto source = m_pending.first();
+    const auto link = m_links.constFind(source);
+    if (link != m_links.cend()) { downloadLink(generation, source, *link); return; }
+    const auto record = m_records.constFind(source);
+    if (record == m_records.cend() || !configured() || m_storageDirectory.isEmpty()) {
+        finishPreparation(generation, tr("Search for these subtitles again before Save.")); return;
+    }
+    const auto path = cachePath(*record);
+    QFile cached(path);
+    if (cached.size() <= m_options.maxFileBytes && cached.open(QIODevice::ReadOnly) && !subtitleText(cached.readAll()).isEmpty()) {
+        m_ready.insert(source, QUrl::fromLocalFile(path).toString(QUrl::FullyEncoded));
+        m_pending.removeFirst(); QTimer::singleShot(0, this, [this, generation] { downloadNext(generation); }); return;
+    }
+    const auto body = QJsonDocument(QJsonObject{{"file_id", record->id}, {"sub_format", "srt"}}).toJson(QJsonDocument::Compact);
+    m_downloadReply = request(m_options.apiBase.resolved(QUrl(QStringLiteral("download"))), body, true,
+        m_options.maxJsonBytes, [this, generation, source, path](const QByteArray& bytes, QString error) {
+            if (generation != m_prepareGeneration) return;
+            if (!error.isEmpty()) { finishPreparation(generation, error); return; }
+            const auto document = QJsonDocument::fromJson(bytes);
+            const QUrl link(document.object().value("link").toString());
+            if (!downloadUrlAllowed(link)) { finishPreparation(generation, tr("The subtitle server returned an invalid download link.")); return; }
+            // The temporary file link receives no API key or account credentials.
+            m_downloadReply = request(link, {}, false, m_options.maxFileBytes,
+                [this, generation, source, path](const QByteArray& data, QString error) {
+                    if (generation != m_prepareGeneration) return;
+                    if (!error.isEmpty()) { finishPreparation(generation, error); return; }
+                    const auto text = subtitleText(data);
+                    if (text.isEmpty()) { finishPreparation(generation, tr("This download does not contain valid subtitles.")); return; }
+                    if (!writeSubtitle(path, text)) {
+                        finishPreparation(generation, tr("VLC cannot save these subtitles.")); return;
+                    }
+                    m_ready.insert(source, QUrl::fromLocalFile(path).toString(QUrl::FullyEncoded)); m_pending.removeFirst();
+                    QTimer::singleShot(1000, this, [this, generation] { downloadNext(generation); });
+                });
+        });
+}
+
+bool SubtitleSourceService::writeSubtitle(const QString& path, const QByteArray& bytes)
+{
+    if (!QDir().mkpath(QFileInfo(path).absolutePath())) return false;
+    QSaveFile output(path);
+    if (!output.open(QIODevice::WriteOnly)) return false;
+    output.setPermissions(QFile::ReadOwner | QFile::WriteOwner);
+    return output.write(bytes) == bytes.size() && output.commit();
+}
+
+QVariantMap SubtitleSourceService::addLinks(const QStringList& values)
+{
+    QVariantList sources; QSet<QString> seen; int skipped = 0;
+    for (const auto& value : values) {
+        const auto text = value.trimmed();
+        QUrl url(text, QUrl::StrictMode); url.setFragment({});
+        if (text.size() > 8192 || !url.isValid() || url.host().isEmpty() || !url.userInfo().isEmpty()
+            || (url.scheme() != "https" && url.scheme() != "http")) { ++skipped; continue; }
+        const auto key = QString::fromLatin1(QCryptographicHash::hash(url.toEncoded(), QCryptographicHash::Sha256).toHex());
+        if (seen.contains(key)) continue;
+        seen.insert(key);
+        auto suffix = QFileInfo(url.fileName()).suffix().toLower();
+        static const QRegularExpression extension(QStringLiteral("^[a-z0-9]{1,16}$"));
+        if (!extension.match(suffix).hasMatch()) suffix = QStringLiteral("srt");
+        const auto name = safeName(url.fileName(), suffix);
+        QUrl source; source.setScheme(QStringLiteral("subtitlelink")); source.setPath(QLatin1Char('/') + key + QLatin1Char('/') + name);
+        const auto id = source.toString(QUrl::FullyEncoded);
+        const Link link{url, name, key}; m_links.insert(id, link);
+        QString available = id, availableName = name;
+        for (const auto& format : {"srt", "vtt", "ass", "ssa", "sub", "smi", "ttml", "usf"}) {
+            const QFileInfo cached(linkCachePath(link, QLatin1String(format)));
+            if (!m_storageDirectory.isEmpty() && cached.isFile() && cached.size() > 0 && cached.size() <= m_options.maxFileBytes) {
+                available = QUrl::fromLocalFile(cached.absoluteFilePath()).toString(QUrl::FullyEncoded); availableName = cached.fileName(); break;
+            }
+        }
+        sources.append(QVariantMap{{"url", available}, {"name", availableName}, {"kind", "link"}});
+    }
+    return {{"success", !sources.isEmpty()}, {"sources", sources}, {"error", skipped || sources.isEmpty()
+        ? tr("Use direct subtitle file links that start with http:// or https://.") : QString()}};
+}
+
+QString SubtitleSourceService::linkCachePath(const Link& link, const QString& format) const
+{
+    return QDir(m_storageDirectory).filePath(QStringLiteral("links/%1/%2").arg(link.key, safeName(link.name, format)));
+}
+
+QString SubtitleSourceService::linkFormat(const QByteArray& bytes) const
+{
+    if (bytes.isEmpty()) return {};
+    const auto encoding = QStringConverter::encodingForData(bytes).value_or(QStringConverter::Utf8);
+    QStringDecoder decode(encoding); QString text = decode(bytes);
+    // Keep the original bytes so that VLC can use the selected legacy text encoding.
+    if (decode.hasError()) {
+        if (encoding != QStringConverter::Utf8) return {};
+        text = QString::fromLatin1(bytes);
+    }
+    if (text.contains(QChar::Null)) return {};
+    const auto trimmed = text.trimmed();
+    static const QRegularExpression html(QStringLiteral("<(?:!doctype\\s+html|html)\\b"), QRegularExpression::CaseInsensitiveOption);
+    if (html.match(trimmed.left(4096)).hasMatch() || trimmed.startsWith(QLatin1String("<head"), Qt::CaseInsensitive)
+        || trimmed.startsWith(QLatin1String("<body"), Qt::CaseInsensitive)) return {};
+    static const QRegularExpression vtt(QStringLiteral("^(?:\\d+:)?\\d{2,}:[0-5]\\d\\.\\d{3}\\s+-->\\s+(?:\\d+:)?\\d{2,}:[0-5]\\d\\.\\d{3}"), QRegularExpression::MultilineOption);
+    if (trimmed.startsWith(QLatin1String("WEBVTT")) && vtt.match(text).hasMatch()) return QStringLiteral("vtt");
+    if (!subtitleText(bytes).isEmpty()) return QStringLiteral("srt");
+    // ASCII timing and section markers remain readable in legacy encodings.
+    static const QRegularExpression srt(QStringLiteral("^\\s*\\d{1,3}:[0-5]\\d:[0-5]\\d,\\d{3}\\s*-->\\s*\\d{1,3}:[0-5]\\d:[0-5]\\d,\\d{3}"), QRegularExpression::MultilineOption);
+    if (srt.match(text).hasMatch()) return QStringLiteral("srt");
+    static const QRegularExpression dialogue(QStringLiteral("^Dialogue\\s*:"), QRegularExpression::MultilineOption | QRegularExpression::CaseInsensitiveOption);
+    if (text.contains(QLatin1String("[Events]"), Qt::CaseInsensitive) && dialogue.match(text).hasMatch())
+        return text.contains(QLatin1String("[V4 Styles]"), Qt::CaseInsensitive) ? QStringLiteral("ssa") : QStringLiteral("ass");
+    static const QRegularExpression micro(QStringLiteral("^\\{\\d+\\}\\{\\d+\\}.+"), QRegularExpression::MultilineOption);
+    static const QRegularExpression viewer(QStringLiteral("^\\d{2}:[0-5]\\d:[0-5]\\d[,.]\\d{2},\\d{2}:[0-5]\\d:[0-5]\\d[,.]\\d{2}"), QRegularExpression::MultilineOption);
+    if (micro.match(text).hasMatch() || viewer.match(text).hasMatch()) return QStringLiteral("sub");
+    static const QRegularExpression sami(QStringLiteral("<sync\\s+[^>]*start\\s*="), QRegularExpression::CaseInsensitiveOption);
+    if (text.contains(QLatin1String("<sami"), Qt::CaseInsensitive) && sami.match(text).hasMatch()) return QStringLiteral("smi");
+    QXmlStreamReader xml(text); QString root; bool timed = false;
+    while (!xml.atEnd()) {
+        xml.readNext(); if (!xml.isStartElement()) continue;
+        if (root.isEmpty()) root = xml.name().toString();
+        timed = timed || xml.attributes().hasAttribute(QLatin1String("begin")) || xml.attributes().hasAttribute(QLatin1String("start"));
+    }
+    if (!xml.hasError() && timed) {
+        if (root == QLatin1String("tt")) return QStringLiteral("ttml");
+        if (root == QLatin1String("USFSubtitles")) return QStringLiteral("usf");
+    }
+    return {};
+}
+
+void SubtitleSourceService::downloadLink(quint64 generation, const QString& source, const Link& link)
+{
+    if (m_storageDirectory.isEmpty()) { finishPreparation(generation, tr("VLC cannot create the subtitle folder.")); return; }
+    for (const auto& format : {"srt", "vtt", "ass", "ssa", "sub", "smi", "ttml", "usf"}) {
+        const auto path = linkCachePath(link, QLatin1String(format)); QFile file(path);
+        if (file.size() <= m_options.maxFileBytes && file.open(QIODevice::ReadOnly) && linkFormat(file.readAll()) == QLatin1String(format)) {
+            m_ready.insert(source, QUrl::fromLocalFile(path).toString(QUrl::FullyEncoded)); m_pending.removeFirst();
+            QTimer::singleShot(0, this, [this, generation] { downloadNext(generation); }); return;
+        }
+    }
+    m_downloadReply = request(link.url, {}, false, m_options.maxFileBytes,
+        [this, generation, source, link](const QByteArray& bytes, const QString& error) {
+            if (generation != m_prepareGeneration) return;
+            if (!error.isEmpty()) { finishPreparation(generation, error); return; }
+            const auto format = linkFormat(bytes);
+            if (format.isEmpty()) {
+                finishPreparation(generation, bytes.startsWith("PK\003\004")
+                    ? tr("This link contains an archive. Extract its subtitle files, then add them from Computer.")
+                    : tr("This link does not contain a subtitle file. Use a direct subtitle file link.")); return;
+            }
+            const auto path = linkCachePath(link, format);
+            if (!writeSubtitle(path, bytes)) { finishPreparation(generation, tr("VLC cannot save these subtitles.")); return; }
+            m_ready.insert(source, QUrl::fromLocalFile(path).toString(QUrl::FullyEncoded)); m_pending.removeFirst();
+            QTimer::singleShot(0, this, [this, generation] { downloadNext(generation); });
+        });
+}
+
+void SubtitleSourceService::finishPreparation(quint64 generation, const QString& error)
+{
+    if (generation != m_prepareGeneration) return;
+    m_downloadReply = nullptr;
+    QVariantList rows;
+    if (error.isEmpty()) for (const auto& item : m_rows) {
+        auto row = item.toMap(); QStringList tracks;
+        for (const auto& value : row.value("tracks").toList()) {
+            const auto url = value.toUrl().toString(QUrl::FullyEncoded);
+            tracks.append(m_ready.value(url, url));
+        }
+        row.insert("tracks", tracks); rows.append(row);
+    }
+    QVariantMap resolved;
+    for (auto it = m_ready.cbegin(); it != m_ready.cend(); ++it) resolved.insert(it.key(), it.value());
+    m_rows.clear(); m_pending.clear(); m_ready.clear();
+    m_preparing = false; emit preparingChanged();
+    emit preparationFinished(generation, {{"success", error.isEmpty()}, {"error", error}, {"rows", rows}, {"resolved", resolved}});
+}

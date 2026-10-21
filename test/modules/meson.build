@@ -1,4 +1,59 @@
 vlc_tests += {
+    'name': 'test_modules_stream_out_renderer_quality',
+    'sources': files('stream_out/renderer_quality.cpp'),
+    'suite': ['modules', 'test_modules'],
+    'link_with': [libvlc, libvlccore],
+}
+
+vlc_tests += {
+    'name': 'test_modules_text_renderer_freetype',
+    'sources': files('text_renderer/freetype.c'),
+    'suite': ['modules', 'test_modules'],
+    'link_with': [libvlc, libvlccore],
+    'module_depends': ['freetype'],
+    'env': ['VLC_PLUGIN_PATH=' + vlc_build_root / 'modules'],
+}
+
+vlc_tests += {
+    'name': 'test_modules_video_filter_puzzle',
+    'sources': files('video_filter/puzzle.c', '../../modules/video_filter/puzzle/puzzle_lib.c'),
+    'suite': ['modules', 'test_modules'],
+    'link_with': [libvlccore],
+}
+
+vlc_tests += {
+    'name': 'test_modules_visualization_resize',
+    'sources': files('visualization/resize.c'),
+    'suite': ['modules', 'test_modules'],
+    'link_with': [libvlc, libvlccore],
+    'module_depends': ['visual', 'demux_mock', 'araw', 'adummy'],
+    'env': ['VLC_PLUGIN_PATH=' + vlc_build_root / 'modules'],
+}
+
+if opengl_dep.found() and (host_system == 'windows' or egl_dep.found())
+    vlc_tests += {
+        'name': 'test_modules_visualization_gl_resize',
+        'sources': files('visualization/resize.c'),
+        'suite': ['modules', 'test_modules'],
+        'link_with': [libvlc, libvlccore],
+        'c_args': ['-DVISUAL_RESIZE_TEST_GL'],
+        'module_depends': vlc_plugins_targets.keys(),
+        'env': ['VLC_PLUGIN_PATH=' + vlc_build_root / 'modules'],
+    }
+    vlc_tests += {
+        'name': 'test_modules_visualization_projectm_resize',
+        'sources': files('visualization/resize.c'),
+        'suite': ['modules', 'test_modules'],
+        'link_with': [libvlc, libvlccore],
+        'c_args': ['-DVISUAL_RESIZE_TEST_GL', '-DVISUAL_RESIZE_TEST_PROJECTM'],
+        'module_depends': vlc_plugins_targets.keys(),
+        'enabled': get_option('projectm').allowed(),
+        'env': ['VLC_PLUGIN_PATH=' + vlc_build_root / 'modules'],
+    }
+endif
+
+
+vlc_tests += {
     'name' : 'test_modules_lua_extension',
     'sources' : files('lua/extension.c'),
     'suite' : ['modules', 'test_modules'],
@@ -14,6 +69,16 @@ vlc_tests += {
     'module_depends' : ['lua'],
 }
 
+vlc_tests += {
+    'name': 'test_modules_misc_media_tracks',
+    'sources': files('misc/media_tracks.c'),
+    'suite': ['modules', 'test_modules'],
+    'link_with': [libvlc, libvlccore],
+    'module_depends': ['medialibrary', 'wav', 'araw', 'adummy', 'subtitle', 'subsdec'],
+    'env': ['VLC_PLUGIN_PATH=' + vlc_build_root / 'modules'],
+    'enabled': medialibrary_dep.found(),
+}
+
 if not (host_system == 'windows') # missing mkdtemp()
 vlc_tests += {
     'name' : 'test_modules_misc_medialibrary',
@@ -21,6 +86,7 @@ vlc_tests += {
     'suite' : ['modules', 'test_modules'],
     'link_with' : [libvlc, libvlccore],
     'module_depends' : vlc_plugins_targets.keys(),
+    'enabled' : medialibrary_dep.found(),
     #'module_depends' : ['medialibrary', 'demux_mock', 'jpeg', 'png', 'rawvid'],
 }
 endif
@@ -177,6 +243,22 @@ vlc_tests += {
     'module_depends' : vlc_plugins_targets.keys()
 }
 
+if opengl_dep.found() and (host_system == 'windows' or egl_dep.found())
+    foreach api, api_flag : {'opengl': 'VLC_OPENGL', 'opengl_es2': 'VLC_OPENGL_ES2'}
+        if api == 'opengl' or host_system != 'windows'
+            vlc_tests += {
+                'name': 'test_modules_video_output_' + api + '_offscreen',
+                'sources': files('video_output/opengl/offscreen.c'),
+                'suite': ['modules', 'test_modules'],
+                'link_with': [libvlc, libvlccore, libvlc_opengl],
+                'dependencies': host_system == 'windows' ? [] : [egl_dep],
+                'c_args': ['-DVLC_TEST_OPENGL_API=' + api_flag] + (host_system == 'windows' ? [] : ['-DVLC_TEST_EXTERNAL_EGL']),
+                'module_depends': host_system == 'windows' ? ['opengl_win_offscreen'] : ['egl_pbuffer_filter', 'egl_display_generic'],
+            }
+        endif
+    endforeach
+endif
+
 vlc_tests += {
     'name' : 'test_modules_video_output_opengl_filters',
     'sources' : files(
@@ -258,3 +340,33 @@ vlc_tests += {
     'link_with' : [libvlc, libvlccore],
     'module_depends' : vlc_plugins_targets.keys()
 }
+
+if pipewire_dep.found()
+    vlc_tests += {
+        'name': 'test_modules_audio_output_pipewire_devices',
+        'sources': files('audio_output/pipewire_devices.c'),
+        'suite': ['modules', 'test_modules'],
+        'dependencies': [pipewire_dep, m_lib],
+        'link_with': [libvlccore, libvlc_pipewire],
+        'c_args': ['-ffunction-sections', '-fdata-sections'],
+        'link_args': ['-Wl,--gc-sections'],
+    }
+endif
+
+if have_wayland and egl_dep.found()
+    foreach variant, variant_args : {
+        'modern': [],
+        'ext': ['-DTEST_EGL14'],
+        'no_reference_headers': ['-DTEST_NO_REFERENCE_HEADERS'],
+    }
+        vlc_tests += {
+            'name': 'test_modules_video_output_egl_display_' + variant,
+            'sources': files('video_output/egl_display.c'),
+            'suite': ['modules', 'test_modules'],
+            'dependencies': [egl_dep, wayland_deps],
+            'link_with': [libvlccore],
+            'c_args': variant_args + ['-ffunction-sections', '-fdata-sections', '-Werror=incompatible-pointer-types'],
+            'link_args': ['-Wl,--gc-sections'],
+        }
+    endforeach
+endif

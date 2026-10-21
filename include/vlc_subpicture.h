@@ -58,6 +58,15 @@ typedef struct filter_t vlc_blender_t;
 #define VLC_SUBPIC_TEXT_FLAG_TEXT_NOT_BALANCED (1 << 6)
 /** mark the subpicture region as a text flag */
 #define VLC_SUBPIC_TEXT_FLAG_IS_TEXT           (1 << 7)
+/** Use the text style's pixel size without relative text scaling. */
+#define VLC_SUBPIC_TEXT_FLAG_PIXEL_SIZE        (1 << 8)
+/** The text has no position set by its subtitle file. */
+#define VLC_SUBPIC_TEXT_FLAG_DEFAULT_POSITION  (1 << 9)
+
+/** Invalidate cached text subtitle styles after changing appearance settings. */
+VLC_API void vlc_subpicture_InvalidateTextStyle(void);
+/** Return the current text subtitle style generation. Thread-safe. */
+VLC_API uint64_t vlc_subpicture_GetTextStyleRevision(void);
 
 /**
  * Video subtitle region
@@ -167,6 +176,13 @@ VLC_API void subpicture_region_Delete( subpicture_region_t *p_region );
  */
 VLC_API void vlc_spu_regions_Clear( vlc_spu_regions * );
 
+struct vlc_subtitle_text_size
+{
+    unsigned scale;       /**< relative scale, in percent */
+    unsigned pixel_size;  /**< font size in rendering pixels */
+    bool pixels;
+};
+
 struct vlc_spu_updater_configuration
 {
     struct
@@ -182,6 +198,8 @@ struct vlc_spu_updater_configuration
     // timestamp when the SPU will be displayed, between i_start and i_stop
     // for subtitles
     vlc_tick_t           pts;
+    /* Current output preferences; valid only during the update callback. */
+    const struct vlc_subtitle_text_size *text_size;
 };
 
 /**
@@ -314,6 +332,10 @@ VLC_API subpicture_t * subpicture_NewFromPicture( vlc_object_t *, picture_t *, v
  */
 VLC_API void subpicture_Update( subpicture_t *, const video_format_t *src, const video_format_t *,
     unsigned display_width, unsigned display_height, vlc_tick_t );
+
+/* Update with the output's current subtitle sizing. NULL retains decoder defaults. */
+VLC_API void subpicture_UpdateWithTextSize(subpicture_t *, const video_format_t *, const video_format_t *,
+    unsigned display_width, unsigned display_height, vlc_tick_t, const struct vlc_subtitle_text_size *);
 
 /**
  * This function will blend a given subpicture onto a picture.

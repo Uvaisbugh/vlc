@@ -6,16 +6,25 @@ qt6 = import('qt6')
 
 qt_include_dir = include_directories('.')
 
+subtitle_consumer_key = custom_target('subtitle_consumer_key',
+    output: 'subtitle_consumer_key.hpp',
+    command: [find_program('python3'), files('scripts/subtitle-consumer-key.py'), '--output', '@OUTPUT@'],
+    build_always_stale: true)
+
 qt_extra_deps = []
 qt_extra_flags = ['-DQT_STRICT_ITERATORS','-DQT_USE_QSTRINGBUILDER','-DQT_NO_CAST_TO_ASCII','-DQT_NO_CAST_FROM_BYTEARRAY']
 qt_cppargs = []
 qt_link_args = [gc_sections_linkargs]
 
+qt_dependency_method = host_machine.system() == 'darwin' ? 'config-tool' : 'auto'
 qt6_dep = dependency('qt6',
+    # Official macOS SDKs omit .pc files. Prefer qmake so a selected SDK is not
+    # silently replaced by a different Qt version from Homebrew's pkg-config.
+    method: qt_dependency_method,
     # Note that Qt < 6.2.5 does not provide pc files!
     version: '>=6.2',
     modules: [
-        'Core', 'Gui', 'Widgets', 'Qml',
+        'Core', 'Gui', 'Widgets', 'Qml', 'Network',
         'Quick', 'QuickControls2'
         ],
     private_headers: true,
@@ -24,8 +33,15 @@ qt6_dep = dependency('qt6',
 # Qt module doesn't provide the framework path to moc executable, so we
 # need to help moc find them. It's needed for QtQml/ module registration.
 if host_machine.system() == 'darwin' and qt6_dep.found()
-    qt_libdir = qt6_dep.get_variable(pkgconfig: 'libdir', configtool: '-query QT_INSTALL_LIBS')
+    qt_libdir = qt6_dep.get_variable(pkgconfig: 'libdir', configtool: 'QT_INSTALL_LIBS')
     qt_extra_flags += '-F' + qt_libdir
+    if host_machine.cpu_family() == 'aarch64' and qt6_dep.version().version_compare('<6.9')
+        # Qt 6.8's qyieldcpu.h calls __yield without its ARM ACLE declaration
+        # when newer Apple Clang recognizes it as a builtin.
+        qt_extra_flags += ['-include', 'arm_acle.h']
+    endif
+    # The platform compositor messages the native video view directly.
+    qt_link_args += '-lobjc'
 endif
 
 moc_headers = files(
@@ -61,6 +77,7 @@ moc_headers = files(
     'dialogs/preferences/expert_model.hpp',
     'dialogs/preferences/expert_view.hpp',
     'dialogs/preferences/preferences.hpp',
+    'dialogs/preferences/redesign_preferences.hpp',
     'dialogs/preferences/preferences_widgets.hpp',
     'dialogs/preferences/simple_preferences.hpp',
     'dialogs/sout/convert.hpp',
@@ -81,10 +98,12 @@ moc_headers = files(
     'maininterface/mainctx_submodels.hpp',
     'maininterface/mainui.hpp',
     'maininterface/navigationmodel.hpp',
+    'maininterface/videobackdrop.hpp',
     'maininterface/videosurface.hpp',
     'maininterface/video_window_handler.hpp',
     'medialibrary/medialib.hpp',
     'medialibrary/mlmediastore.hpp',
+    'medialibrary/mlfileartwork.hpp',
     'medialibrary/mlalbummodel.hpp',
     'medialibrary/mlaudiomodel.hpp',
     'medialibrary/mlartistmodel.hpp',
@@ -95,6 +114,8 @@ moc_headers = files(
     'medialibrary/mlthreadpool.hpp',
     'medialibrary/mlqmltypes.hpp',
     'medialibrary/mlrecentmediamodel.hpp',
+    'medialibrary/mlrecentaudiomodel.hpp',
+    'medialibrary/mlplayedartistmodel.hpp',
     'medialibrary/mlrecentvideomodel.hpp',
     'medialibrary/mlurlmodel.hpp',
     'medialibrary/mlvideo.hpp',
@@ -127,9 +148,13 @@ moc_headers = files(
     'playlist/playlist_controller.hpp',
     'playlist/playlist_item.hpp',
     'playlist/playlist_model.hpp',
+    'playlist/playlist_tree_model.hpp',
+    'util/github_release_service.hpp',
+    'util/subtitle_source_service.hpp',
     'util/asynctask.hpp',
     'util/accessible_compat_attached.hpp',
     'util/audio_device_model.hpp',
+    'util/redesign_folder_model.hpp',
     'util/workerthreadset.hpp',
     'util/base_model.hpp',
     'util/color_scheme_model.hpp',
@@ -163,6 +188,8 @@ moc_headers = files(
     'widgets/native/animators.hpp',
     'widgets/native/csdthemeimage.hpp',
     'widgets/native/customwidgets.hpp',
+    'widgets/native/embedded_file_browser.hpp',
+    'util/interface_translator.hpp',
     'widgets/native/interface_widgets.hpp',
     'widgets/native/navigation_attached.hpp',
     'widgets/native/mlfolderseditor.hpp',
@@ -263,6 +290,10 @@ qt_plugin_sources = files(
     'dialogs/preferences/expert_model.hpp',
     'dialogs/preferences/expert_view.cpp',
     'dialogs/preferences/expert_view.hpp',
+    'dialogs/preferences/redesign_preferences.cpp',
+    'player/stereo_test_player.cpp',
+    'player/stereo_test_player.hpp',
+    'player/stereo_test_signal.hpp',
     'dialogs/preferences/preferences.cpp',
     'dialogs/preferences/preferences.hpp',
     'dialogs/preferences/preferences_widgets.cpp',
@@ -279,6 +310,7 @@ qt_plugin_sources = files(
     'dialogs/sout/sout_widgets.cpp',
     'dialogs/sout/sout_widgets.hpp',
     'dialogs/systray/systray.cpp',
+    'dialogs/systray/notification_policy.hpp',
     'dialogs/systray/systray.hpp',
     'dialogs/toolbar/controlbar_profile.hpp',
     'dialogs/toolbar/controlbar_profile.cpp',
@@ -307,6 +339,8 @@ qt_plugin_sources = files(
     'maininterface/mainui.hpp',
     'maininterface/navigationmodel.cpp',
     'maininterface/navigationmodel.hpp',
+    'maininterface/videobackdrop.cpp',
+    'maininterface/videobackdrop.hpp',
     'maininterface/videosurface.cpp',
     'maininterface/videosurface.hpp',
     'maininterface/video_window_handler.cpp',
@@ -315,6 +349,7 @@ qt_plugin_sources = files(
     'medialibrary/medialib.cpp',
     'medialibrary/medialib.hpp',
     'medialibrary/mlmediastore.cpp',
+    'medialibrary/mlfileartwork.cpp',
     'medialibrary/mlmediastore.hpp',
     'medialibrary/mlalbum.cpp',
     'medialibrary/mlalbum.hpp',
@@ -353,7 +388,11 @@ qt_plugin_sources = files(
     'medialibrary/mlqueryparams.hpp',
     'medialibrary/mlrecentmediamodel.cpp',
     'medialibrary/mlrecentmediamodel.hpp',
+    'medialibrary/mlrecentaudiomodel.cpp',
+    'medialibrary/mlplayedartistmodel.cpp',
     'medialibrary/mlrecentvideomodel.cpp',
+    'medialibrary/mlrecentaudiomodel.hpp',
+    'medialibrary/mlplayedartistmodel.hpp',
     'medialibrary/mlrecentvideomodel.hpp',
     'medialibrary/mlurlmodel.cpp',
     'medialibrary/mlurlmodel.hpp',
@@ -384,6 +423,7 @@ qt_plugin_sources = files(
     'menus/qml_menu_wrapper.cpp',
     'menus/qml_menu_wrapper.hpp',
     'menus/menus.cpp',
+    'menus/redesign_menu_style.cpp',
     'menus/menus.hpp',
     'network/addonsmodel.cpp',
     'network/addonsmodel.hpp',
@@ -417,6 +457,17 @@ qt_plugin_sources = files(
     'player/player_controller.cpp',
     'player/player_controller.hpp',
     'player/player_controller_p.hpp',
+    'player/subtitle_timeline_scanner.cpp',
+    'player/audio_waveform_scanner.cpp',
+    'player/audio_waveform_scanner.hpp',
+    'player/subtitle_timeline_scanner.hpp',
+    'util/seek_preview_cache.hpp',
+    'util/seek_preview_image_provider.hpp',
+    'util/subtitle_source_service.hpp',
+    'util/subtitle_source_service.cpp',
+    'util/github_release_service.cpp',
+    'util/release_info.cpp',
+    'util/release_info.hpp',
     'player/player_controlbar_model.cpp',
     'player/player_controlbar_model.hpp',
     'player/control_list_model.cpp',
@@ -431,12 +482,15 @@ qt_plugin_sources = files(
     'playlist/playlist_item.cpp',
     'playlist/playlist_item.hpp',
     'playlist/playlist_model.cpp',
+    'playlist/playlist_tree_model.cpp',
     'playlist/playlist_model.hpp',
+    'playlist/playlist_tree_model.hpp',
     'playlist/playlist_model_p.hpp',
     'util/asynctask.hpp',
     'util/accessible_compat_attached.cpp',
     'util/accessible_compat_attached.hpp',
     'util/audio_device_model.cpp',
+    'util/redesign_folder_model.cpp',
     'util/audio_device_model.hpp',
     'util/workerthreadset.cpp',
     'util/workerthreadset.hpp',
@@ -445,6 +499,15 @@ qt_plugin_sources = files(
     'util/base_model_p.hpp',
     'util/color_scheme_model.cpp',
     'util/color_scheme_model.hpp',
+    'util/redesign_widget_theme.cpp',
+    'util/redesign_widget_theme.hpp',
+    'util/playlist_cover_store.hpp',
+    'util/track_matching.hpp',
+    'util/local_file_url.hpp',
+    'util/gettext_translator.cpp',
+    'util/gettext_translator.hpp',
+    'util/interface_translator.cpp',
+    'util/interface_translator.hpp',
     'util/ui_notifier.cpp',
     'util/ui_notifier.hpp',
     'util/color_svg_image_provider.cpp',
@@ -494,6 +557,11 @@ qt_plugin_sources = files(
     'util/vlctick.hpp',
     'util/vlchotkeyconverter.cpp',
     'util/vlchotkeyconverter.hpp',
+    'util/postprocessing_preferences.hpp',
+    'util/file_log_preferences.hpp',
+    'util/message_log.hpp',
+    'util/message_log_buffer.hpp',
+    'util/video_window_geometry.hpp',
     'util/shared_input_item.hpp',
     'util/fast_gaussian_blur_template.h',
     'util/effects_image_provider.cpp',
@@ -520,6 +588,8 @@ qt_plugin_sources = files(
     'util/pointingtooltipattached.hpp',
     'widgets/native/animators.cpp',
     'widgets/native/animators.hpp',
+    'widgets/native/embedded_file_browser.cpp',
+    'widgets/native/embedded_file_browser.hpp',
     'widgets/native/customwidgets.cpp',
     'widgets/native/customwidgets.hpp',
     'widgets/native/csdthemeimage.cpp',
@@ -535,6 +605,8 @@ qt_plugin_sources = files(
     'widgets/native/searchlineedit.cpp',
     'widgets/native/searchlineedit.hpp',
     'widgets/native/viewblockingrectangle.cpp',
+    'util/video_backdrop_region.hpp',
+    'util/video_backdrop_reporter.hpp',
     'widgets/native/viewblockingrectangle.hpp',
     'widgets/native/doubleclickignoringitem.hpp',
 )
@@ -548,7 +620,11 @@ if host_system == 'windows'
         'style/windowsthemeprovider.cpp',
         'util/csdmenu_win32.c',
         'util/csdmenu_win32.h',
+        'util/win32_emutls.cpp',
         'maininterface/compositor_dcomp.cpp',
+        'maininterface/compositor_dcomp_background.hpp',
+        'maininterface/compositor_dcomp_backdrop.cpp',
+        'maininterface/compositor_dcomp_backdrop.hpp',
         'maininterface/compositor_dcomp_acrylicsurface.cpp',
     )
 endif
@@ -581,7 +657,6 @@ ui_sources = files(
     'dialogs/extended/equalizer.ui',
     'dialogs/extended/video_effects.ui',
     'dialogs/fingerprint/fingerprintdialog.ui',
-    'dialogs/firstrun/firstrunwizard.ui',
     'dialogs/help/about.ui',
     'dialogs/help/update.ui',
     'dialogs/messages/messages_panel.ui',
@@ -625,7 +700,7 @@ qml_modules += {
 
 qml_maininterface_extra_files = []
 
-if get_option('update-check').allowed() and gcrypt_dep.found()
+if get_option('update-check').allowed()
     qt_extra_flags += '-DUPDATE_CHECK'
     qml_maininterface_extra_files += 'maininterface/qml/UpdatePane.qml'
 endif
@@ -734,6 +809,91 @@ qml_modules += {
    'outdir' : 'VLC/Player',
    'sources': files(
        'player/qml/ControlBar.qml',
+       'player/qml/redesign/RedesignBookmarks.qml',
+       'player/qml/redesign/RedesignBookmarksView.qml',
+       'player/qml/redesign/RedesignChaptersView.qml',
+       'player/qml/redesign/RedesignQueuePanel.qml',
+       'player/qml/redesign/RedesignLibrary.qml',
+       'player/qml/redesign/RedesignPlayer.qml',
+       'player/qml/redesign/RedesignPlayerLayout.qml',
+       'player/qml/redesign/RedesignPlayerChrome.qml',
+       'player/qml/redesign/RedesignCustomizationCatalog.qml',
+       'player/qml/redesign/RedesignCustomizationEditor.qml',
+       'player/qml/redesign/RedesignExtraControl.qml',
+       'player/qml/redesign/RedesignMediaFavorite.qml',
+       'player/qml/redesign/RedesignPlayerFavorite.qml',
+       'player/qml/redesign/RedesignPreferenceRow.qml',
+       'player/qml/redesign/RedesignComboBox.qml',
+       'player/qml/redesign/RedesignEqualizer.qml',
+       'player/qml/redesign/RedesignSpatializer.qml',
+       'player/qml/redesign/RedesignStartupVolume.qml',
+       'player/qml/redesign/RedesignConfirmationDialog.qml',
+       'player/qml/redesign/RedesignNetworkDialog.qml',
+       'player/qml/redesign/RedesignPlaylistDialog.qml',
+       'player/qml/redesign/RedesignPlaylistProperties.qml',
+       'player/qml/redesign/RedesignPlaylistTrackTarget.qml',
+       'player/qml/redesign/RedesignTrackAssignmentDialog.qml',
+       'player/qml/redesign/RedesignSubtitleProviderSetup.qml',
+       'player/qml/redesign/RedesignSubtitleSourcePreferences.qml',
+       'player/qml/redesign/RedesignAddons.qml',
+       'player/qml/redesign/RedesignPlugins.qml',
+       'player/qml/redesign/RedesignTrackAssignments.qml',
+       'player/qml/redesign/RedesignFolderInfo.qml',
+       'player/qml/redesign/RedesignAddToPlaylistDialog.qml',
+       'player/qml/redesign/RedesignAddToPlaylist.qml',
+       'player/qml/redesign/RedesignNetworkStreams.qml',
+       'player/qml/redesign/RedesignNetworkStreamLibrary.qml',
+       'player/qml/redesign/RedesignPreferencesCatalog.qml',
+       'player/qml/redesign/RedesignPreferencesWindow.qml',
+       'player/qml/redesign/RedesignSettingSlider.qml',
+       'player/qml/redesign/RedesignSleepTimer.qml',
+       'player/qml/redesign/RedesignModelChoice.qml',
+       'player/qml/redesign/RedesignPlaybackSettings.qml',
+       'player/qml/redesign/RedesignTrackDefaults.qml',
+       'player/qml/redesign/RedesignAudioSettings.qml',
+       'player/qml/redesign/RedesignSubtitleSettings.qml',
+       'player/qml/redesign/RedesignVideoSettings.qml',
+       'player/qml/redesign/RedesignOnboardingView.qml',
+       'player/qml/redesign/RedesignOnboardingWindow.qml',
+       'player/qml/redesign/RedesignFilterSection.qml',
+       'player/qml/redesign/RedesignSwitchRow.qml',
+       'player/qml/redesign/RedesignStatistics.qml',
+       'player/qml/redesign/RedesignSettings.qml',
+       'player/qml/redesign/RedesignPlayerPreset.qml',
+       'player/qml/redesign/RedesignTrackPopup.qml',
+       'player/qml/redesign/RedesignShortcutEditor.qml',
+       'player/qml/redesign/RedesignShortcuts.qml',
+       'player/qml/redesign/RedesignTracks.qml',
+       'player/qml/redesign/RedesignButton.qml',
+       'player/qml/redesign/RedesignToolTip.qml',
+       'player/qml/redesign/RedesignIcon.qml',
+       'player/qml/redesign/RedesignSvg.qml',
+       'player/qml/redesign/RedesignActionMenu.qml',
+       'player/qml/redesign/RedesignSurfaceBackdrop.qml',
+       'player/qml/redesign/RedesignSoftwareShadow.qml',
+       'player/qml/redesign/RedesignDialogSurface.qml',
+       'player/qml/redesign/RedesignSettingsDialog.qml',
+       'player/qml/redesign/RedesignLibraryArtwork.qml',
+       'player/qml/redesign/RedesignAudioArtwork.qml',
+       'player/qml/redesign/RedesignLibraryView.qml',
+       'player/qml/redesign/RedesignBreadcrumbs.qml',
+       'player/qml/redesign/RedesignLibraryPath.qml',
+       'player/qml/redesign/RedesignLibraryPins.qml',
+       'player/qml/redesign/RedesignLibraryNavigation.qml',
+       'player/qml/redesign/RedesignHomeView.qml',
+       'player/qml/redesign/RedesignLibraryDrag.qml',
+       'player/qml/redesign/RedesignLibraryVisits.qml',
+       'player/qml/redesign/RedesignLibrarySort.qml',
+       'player/qml/redesign/RedesignMenu.qml',
+       'player/qml/redesign/RedesignRecentMenuModel.qml',
+       'player/qml/redesign/RedesignPlayerView.qml',
+       'player/qml/redesign/RedesignQueue.qml',
+       'player/qml/redesign/RedesignSeekBar.qml',
+       'player/qml/redesign/RedesignSeekThumbnail.qml',
+       'player/qml/redesign/RedesignPlayerSeekBar.qml',
+       'player/qml/redesign/RedesignMiniPlayer.qml',
+       'player/qml/redesign/RedesignTheme.qml',
+       'player/qml/redesign/RedesignVolume.qml',
        'player/qml/PlaybackSpeed.qml',
        'player/qml/LyricsFlickable.qml',
        'player/qml/MiniPlayer.qml',
@@ -948,6 +1108,7 @@ qml_modules += {
         'widgets/qml/RoundedRectangleShadow.qml',
         'widgets/qml/VoronoiSnow.qml',
         'widgets/qml/DualKawaseBlur.qml',
+        'widgets/qml/BackdropBlur.qml',
         'widgets/qml/CheckBoxExt.qml',
         'widgets/qml/ProgressBarExt.qml',
     ),
@@ -955,6 +1116,51 @@ qml_modules += {
 
 qml_tests = {
     'tst_FSM': files('tests/tst_FSM.qml'),
+    'tst_Redesign': files('tests/tst_Redesign.qml'),
+    'tst_RedesignMediaFavorite': files('tests/tst_RedesignMediaFavorite.qml'),
+    'tst_RedesignCustomizationControls': files('tests/tst_RedesignCustomizationControls.qml'),
+    'tst_RedesignCustomizationEditor': files('tests/tst_RedesignCustomizationEditor.qml'),
+    'tst_RedesignAddToPlaylist': files('tests/tst_RedesignAddToPlaylist.qml'),
+    'tst_RedesignPlayerLayout': files('tests/tst_RedesignPlayerLayout.qml'),
+    'tst_RedesignPlayerChrome': files('tests/tst_RedesignPlayerChrome.qml'),
+    'tst_RedesignCursor': files('tests/tst_RedesignCursor.qml'),
+    'tst_RedesignTheme': files('tests/tst_RedesignTheme.qml'),
+    'tst_RedesignSliders': files('tests/tst_RedesignSliders.qml'),
+    'tst_RedesignActionMenu': files('tests/tst_RedesignActionMenu.qml'),
+    'tst_RedesignDialogSurfaces': files('tests/tst_RedesignDialogSurfaces.qml'),
+    'tst_RedesignSettingsDialog': files('tests/tst_RedesignSettingsDialog.qml'),
+    'tst_RedesignShortcutEditor': files('tests/tst_RedesignShortcutEditor.qml'),
+    'tst_RedesignAppearance': files('tests/tst_RedesignAppearance.qml'),
+    'tst_RedesignCompactMenus': files('tests/tst_RedesignCompactMenus.qml'),
+    'tst_RedesignLibrary': files('tests/tst_RedesignLibrary.qml'),
+    'tst_RedesignQueue': files('tests/tst_RedesignQueue.qml'),
+    'tst_RedesignIconSizing': files('tests/tst_RedesignIconSizing.qml'),
+    'tst_RedesignBookmarks': files('tests/tst_RedesignBookmarks.qml'),
+    'tst_RedesignChapters': files('tests/tst_RedesignChapters.qml'),
+    'tst_RedesignNetwork': files('tests/tst_RedesignNetwork.qml'),
+    'tst_RedesignPlaylist': files('tests/tst_RedesignPlaylist.qml'),
+    'tst_RedesignPlaylistProperties': files('tests/tst_RedesignPlaylistProperties.qml'),
+    'tst_RedesignPlaylistTrackTarget': files('tests/tst_RedesignPlaylistTrackTarget.qml'),
+    'tst_RedesignTrackAssignments': files('tests/tst_RedesignTrackAssignments.qml'),
+    'tst_RedesignFolderInfo': files('tests/tst_RedesignFolderInfo.qml'),
+    'tst_RedesignPreferences': files('tests/tst_RedesignPreferences.qml'),
+    'tst_RedesignAddons': files('tests/tst_RedesignAddons.qml'),
+    'tst_RedesignPlugins': files('tests/tst_RedesignPlugins.qml'),
+    'tst_RedesignPlayback': files('tests/tst_RedesignPlayback.qml'),
+    'tst_RedesignWaveform': files('tests/tst_RedesignWaveform.qml'),
+    'tst_RedesignSubtitleTimeline': files('tests/tst_RedesignSubtitleTimeline.qml'),
+    'tst_RedesignAudio': files('tests/tst_RedesignAudio.qml'),
+    'tst_RedesignGlobalEqualizer': files('tests/tst_RedesignGlobalEqualizer.qml'),
+    'tst_RedesignEqualizerScroll': files('tests/tst_RedesignEqualizerScroll.qml'),
+    'tst_RedesignChoices': files('tests/tst_RedesignChoices.qml'),
+    'tst_RedesignSpatializer': files('tests/tst_RedesignSpatializer.qml'),
+    'tst_RedesignVideo': files('tests/tst_RedesignVideo.qml'),
+    'tst_RedesignOnboarding': files('tests/tst_RedesignOnboarding.qml'),
+    'tst_RedesignPlayerPreset': files('tests/tst_RedesignPlayerPreset.qml'),
+    'tst_RedesignMenu': files('tests/tst_RedesignMenu.qml'),
+    'tst_RedesignToolTip': files('tests/tst_RedesignToolTip.qml'),
+    'tst_RedesignVolume': files('tests/tst_RedesignVolume.qml'),
+    'tst_RedesignSubtitles': files('tests/tst_RedesignSubtitles.qml'),
 }
 
 qmllibs = []
@@ -1009,6 +1215,7 @@ if qt6_dep.found()
         )
         module_qrc = qt6.preprocess(
             module['target'] + '_assets',
+            method: qt_dependency_method,
             qresources: files(
                 meson.current_build_dir() / module['outdir'] / 'res.qrc',
                 meson.current_build_dir() / module['outdir'] / 'qmldir.qrc',
@@ -1034,7 +1241,7 @@ if qt6_dep.found()
     '''
 
     if cpp.compiles(qt_static_check, dependencies: qt6_dep, name: 'Qt6 compiled with static libraries')
-        qt_install_bin_directory = qt6_dep.get_variable(pkgconfig: 'bindir', configtool: '-query QT_INSTALL_BINS')
+        qt_install_bin_directory = qt6_dep.get_variable(pkgconfig: 'bindir', configtool: 'QT_INSTALL_BINS')
         qmake6 = find_program(qt_install_bin_directory + '/qmake6', required: true)
         if qmake6.found()
             qmake_additional_params = []
@@ -1076,7 +1283,19 @@ if qt6_dep.found()
         endif
     endif
 
+    if host_system == 'windows'
+        vlc_tests += {
+            'name': 'test_qt_win32_emutls',
+            'sources': files('tests/test_win32_emutls.cpp', 'util/win32_emutls.cpp'),
+            'suite': ['qt'],
+            'dependencies': [qt6_dep, qt_extra_deps],
+            'cpp_args': qt_extra_flags,
+            'link_args': qt_link_args,
+        }
+    endif
+
     qt6pre_qrc = qt6.preprocess(
+        method: qt_dependency_method,
         qresources: qrc_files,
         include_directories: qt_include_dir,
         dependencies: qt6_dep,
@@ -1265,6 +1484,7 @@ if qt6_dep.found()
     }
 
     qt6pre_files = qt6.preprocess(ui_files: ui_sources,
+        method: qt_dependency_method,
         moc_headers: moc_headers,
         moc_extra_arguments: qt_extra_flags,
         include_directories: qt_include_dir,
@@ -1275,7 +1495,7 @@ if qt6_dep.found()
 
     vlc_modules += {
         'name' : 'qt',
-        'sources' : [qt6pre_files, qt6pre_qrc, shader_targets, shaders_processed, qt_sources, qt_plugin_sources],
+        'sources' : [qt6pre_files, qt6pre_qrc, shader_targets, shaders_processed, qt_sources, qt_plugin_sources, subtitle_consumer_key],
         'extra_files' : [shader_files],
         'dependencies' : [qt_extra_deps, qt6_dep, corefoundation_dep],
         'include_directories' : qt_include_dir,
@@ -1305,8 +1525,198 @@ if qt6_dep.found()
 
     qtest_qt6_dep = dependency('qt6', version: '=' + qt6_dep.version(), modules: ['Test'], required: false)
     if qtest_qt6_dep.found()
+        if host_system == 'windows'
+            vlc_tests += {
+                'name': 'test_qt_window_fullscreen',
+                'sources': files('tests/test_window_fullscreen.cpp', 'util/win32_emutls.cpp'),
+                'moc_sources': files('tests/test_window_fullscreen.cpp'),
+                'suite': ['qt'],
+                'include_directories': qt_include_dir,
+                'dependencies': [qt6_dep, qtest_qt6_dep, qt_extra_deps],
+                'link_args': qt_link_args,
+            }
+            vlc_tests += {
+                'name': 'test_qt_dcomp_backdrop',
+                'sources': files('tests/test_dcomp_backdrop.cpp', 'maininterface/compositor_dcomp_backdrop.cpp'),
+                'moc_sources': files('tests/test_dcomp_backdrop.cpp'),
+                'suite': ['qt'],
+                'include_directories': qt_include_dir,
+                'dependencies': [qt6_dep, qt_extra_deps, qtest_qt6_dep,
+                                 cc.find_library('d3d11'), cc.find_library('dcomp'), cc.find_library('dxguid')],
+            }
+        endif
+        vlc_tests += {
+            'name': 'test_qt_backdrop_blur',
+            'sources': [files('tests/test_backdrop_blur.cpp', 'util/textureproviderobserver.cpp', 'widgets/native/viewblockingrectangle.cpp'), shaders_processed, shader_targets],
+            'moc_sources': files('tests/test_backdrop_blur.cpp'),
+            'moc_headers': files('util/textureproviderobserver.hpp', 'widgets/native/viewblockingrectangle.hpp'),
+            'suite': ['qt'],
+            'include_directories': qt_include_dir,
+            'dependencies': [qt6_dep, qt_extra_deps, qtest_qt6_dep],
+        }
+        vlc_tests += {
+            'name': 'test_qt_video_backdrop',
+            'sources': files('tests/test_video_backdrop.cpp', 'maininterface/videobackdrop.cpp'),
+            'moc_sources': files('tests/test_video_backdrop.cpp'),
+            'moc_headers': files('maininterface/videobackdrop.hpp'),
+            'suite': ['qt'],
+            'include_directories': qt_include_dir,
+            'dependencies': [qt6_dep, qt_extra_deps, qtest_qt6_dep],
+        }
+        vlc_tests += {
+            'name': 'test_qt_video_backdrop_reporter',
+            'sources': files('tests/test_video_backdrop_reporter.cpp'),
+            'moc_sources': files('tests/test_video_backdrop_reporter.cpp'),
+            'suite': ['qt'],
+            'include_directories': qt_include_dir,
+            'dependencies': [qt6_dep, qt_extra_deps, qtest_qt6_dep],
+        }
+        vlc_tests += {
+            'name': 'test_qt_viewblockingrectangle',
+            'sources': files('tests/test_viewblockingrectangle.cpp', 'widgets/native/viewblockingrectangle.cpp'),
+            'moc_sources': files('tests/test_viewblockingrectangle.cpp'),
+            'moc_headers': files('widgets/native/viewblockingrectangle.hpp'),
+            'suite': ['qt'],
+            'include_directories': qt_include_dir,
+            'dependencies': [qt6_dep, qt_extra_deps, qtest_qt6_dep],
+        }
+        vlc_tests += {
+            'name': 'test_qt_track_folder_rules',
+            'sources': files('tests/test_track_folder_rules.cpp', '../../misc/medialibrary/track_rule_store.cpp'),
+            'moc_sources': files('tests/test_track_folder_rules.cpp'),
+            'suite': ['qt'],
+            'include_directories': qt_include_dir,
+            'link_with': [libvlccore],
+            'dependencies': [qt6_dep, qt_extra_deps, qtest_qt6_dep],
+        }
+        vlc_tests += {
+            'name': 'test_qt_github_releases',
+            'sources': files('tests/test_github_releases.cpp', 'util/release_info.cpp', 'util/github_release_service.cpp'),
+            'moc_sources': files('tests/test_github_releases.cpp'),
+            'moc_headers': files('util/github_release_service.hpp'),
+            'suite': ['qt'],
+            'include_directories': qt_include_dir,
+            'dependencies': [qt6_dep, qt_extra_deps, qtest_qt6_dep],
+            'link_args': qt_link_args,
+        }
+        vlc_tests += {
+            'name': 'test_qt_subtitle_sources',
+            'sources': files('tests/test_subtitle_sources.cpp', 'util/subtitle_source_service.cpp'),
+            'moc_sources': files('tests/test_subtitle_sources.cpp'),
+            'moc_headers': files('util/subtitle_source_service.hpp'),
+            'suite': ['qt'],
+            'include_directories': qt_include_dir,
+            'dependencies': [qt6_dep, qt_extra_deps, qtest_qt6_dep],
+        }
+        vlc_tests += {
+            'name': 'test_qt_track_list_model',
+            'sources': files('tests/test_track_list_model.cpp', 'player/input_models.cpp', 'util/vlctick.cpp'),
+            'moc_sources': files('tests/test_track_list_model.cpp'),
+            'moc_headers': files('player/input_models.hpp', 'util/vlctick.hpp'),
+            'suite': ['qt'],
+            'include_directories': qt_include_dir,
+            'link_with': [libvlccore],
+            'dependencies': [qt6_dep, qt_extra_deps, qtest_qt6_dep],
+        }
+        vlc_tests += {
+            'name': 'test_qt_audio_device_model',
+            'sources': files('tests/test_audio_device_model.cpp', 'util/audio_device_model.cpp'),
+            'moc_sources': files('tests/test_audio_device_model.cpp'),
+            'moc_headers': files('util/audio_device_model.hpp'),
+            'suite': ['qt'],
+            'include_directories': qt_include_dir,
+            'dependencies': [qt6_dep, qt_extra_deps, qtest_qt6_dep],
+        }
+        vlc_tests += {
+            'name': 'test_qt_stereo_test_signal',
+            'sources': files('tests/test_stereo_test_signal.cpp'),
+            'moc_sources': files('tests/test_stereo_test_signal.cpp'),
+            'suite': ['qt'],
+            'include_directories': qt_include_dir,
+            'dependencies': [qt6_dep, qt_extra_deps, qtest_qt6_dep],
+        }
+        vlc_tests += {
+            'name': 'test_qt_cover_generator',
+            'sources': files('tests/test_cover_generator.cpp', 'util/covergenerator.cpp'),
+            'moc_sources': files('tests/test_cover_generator.cpp'),
+            'suite': ['qt'],
+            'include_directories': qt_include_dir,
+            'dependencies': [qt6_dep, qt_extra_deps, qtest_qt6_dep],
+        }
+        vlc_tests += {
+            'name': 'test_qt_redesign_folder_model',
+            'sources': files('tests/test_redesign_folder_model.cpp', 'util/redesign_folder_model.cpp'),
+            'moc_sources': files('tests/test_redesign_folder_model.cpp'),
+            'moc_headers': files('util/redesign_folder_model.hpp'),
+            'suite': ['qt'],
+            'include_directories': qt_include_dir,
+            'dependencies': [qt6_dep, qt_extra_deps, qtest_qt6_dep],
+        }
+        vlc_tests += {
+            'name': 'test_qt_effects_image_provider',
+            'sources': files('tests/test_effects_image_provider.cpp', 'util/effects_image_provider.cpp'),
+            'moc_sources': files('tests/test_effects_image_provider.cpp'),
+            'moc_headers': files('util/effects_image_provider.hpp'),
+            'suite': ['qt'],
+            'include_directories': qt_include_dir,
+            'dependencies': [qt6_dep, qt_extra_deps, qtest_qt6_dep],
+        }
+        vlc_tests += {
+            'name': 'test_qt_seek_preview_image_provider',
+            'sources': files('tests/test_seek_preview_image_provider.cpp'),
+            'moc_sources': files('tests/test_seek_preview_image_provider.cpp'),
+            'suite': ['qt'],
+            'include_directories': qt_include_dir,
+            'link_with': [libvlccore, libvlc],
+            'link_args': qt_link_args,
+            'dependencies': [qt6_dep, qt_extra_deps, qtest_qt6_dep],
+        }
+        vlc_tests += {
+            'name': 'test_qt_subtitle_timeline_scanner',
+            'sources': files('tests/test_subtitle_timeline_scanner.cpp', 'player/subtitle_timeline_scanner.cpp'),
+            'moc_sources': files('tests/test_subtitle_timeline_scanner.cpp'),
+            'suite': ['qt'],
+            'include_directories': qt_include_dir,
+            'link_with': [libvlccore, libvlc],
+            'link_args': qt_link_args,
+            'dependencies': [qt6_dep, qt_extra_deps, qtest_qt6_dep],
+            'module_depends': ['filesystem', 'subtitle', 'subsdec', 'http'],
+            'env': ['VLC_PLUGIN_PATH=' + vlc_build_root / 'modules'],
+        }
+        if x11_dep.found() and xcb_dep.found() and qt_features_xcb
+            vlc_tests += {
+                'name': 'test_qt_x11_surface_size',
+                'sources': files(
+                    'tests/test_x11_surface_size.cpp',
+                    'maininterface/compositor_x11_uisurface.cpp',
+                    'maininterface/compositor_common.cpp'),
+                'moc_sources': files('tests/test_x11_surface_size.cpp'),
+                'moc_headers': files(
+                    'maininterface/compositor_x11_uisurface.hpp',
+                    'maininterface/compositor_common.hpp'),
+                'suite': ['qt'],
+                'include_directories': qt_include_dir,
+                'link_with': [libvlccore, libvlc],
+                'link_args': qt_link_args,
+                'dependencies': [qt6_dep, qt_extra_deps, qtest_qt6_dep],
+            }
+        endif
+
+        vlc_tests += {
+            'name': 'test_qt_audio_waveform_scanner',
+            'sources': files('tests/test_audio_waveform_scanner.cpp', 'player/audio_waveform_scanner.cpp'),
+            'moc_sources': files('tests/test_audio_waveform_scanner.cpp'),
+            'suite': ['qt'],
+            'include_directories': qt_include_dir,
+            'link_with': [libvlccore, libvlc],
+            'link_args': qt_link_args,
+            'dependencies': [qt6_dep, qt_extra_deps, qtest_qt6_dep],
+            'module_depends': ['filesystem', 'wav', 'araw', 'ugly_resampler', 'simple_channel_mixer', 'trivial_channel_mixer', 'audio_format'],
+            'env': ['VLC_PLUGIN_PATH=' + vlc_build_root / 'modules'],
+        }
         vlc_tests += {
             'name': 'test_qt_ml_model',
+            'module_depends': ['export'],
             'sources': files(
                 'tests/test_ml_model.cpp',
                 'tests/vlc_stub_modules.cpp',
@@ -1315,6 +1725,9 @@ if qt6_dep.found()
                 'medialibrary/mlbasemodel.cpp',
                 'medialibrary/medialib.cpp',
                 'medialibrary/mlthreadpool.cpp',
+                'medialibrary/mlmediastore.cpp',
+                'medialibrary/mlfoldersmodel.cpp',
+                'medialibrary/mlhelper.cpp',
                 'playlist/playlist_controller.cpp',
                 'playlist/playlist_item.cpp',
             ),
@@ -1331,6 +1744,8 @@ if qt6_dep.found()
                 'medialibrary/mlbasemodel.hpp',
                 'medialibrary/medialib.hpp',
                 'medialibrary/mlthreadpool.hpp',
+                'medialibrary/mlmediastore.hpp',
+                'medialibrary/mlfoldersmodel.hpp',
                 'playlist/playlist_controller.hpp',
                 'playlist/playlist_item.hpp',
             ),
@@ -1382,6 +1797,16 @@ if qt6_dep.found()
         }
 
         vlc_tests += {
+            'name': 'test_qt_postprocessing_preferences',
+            'sources': files('tests/vlc_stub_modules.cpp', 'tests/test_postprocessing_preferences.cpp'),
+            'moc_sources': files('tests/test_postprocessing_preferences.cpp'),
+            'suite': ['qt'],
+            'include_directories': qt_include_dir,
+            'link_with': [libvlccore, libvlc],
+            'dependencies': [qt6_dep, qt_extra_deps, qtest_qt6_dep]
+        }
+
+        vlc_tests += {
             'name': 'test_qt_renderer_manager',
             'sources': files(
                 'tests/vlc_stub_modules.cpp',
@@ -1423,6 +1848,120 @@ if qt6_dep.found()
 
 
         vlc_tests += {
+            'name': 'test_qt_message_handler',
+            'sources': files('tests/test_vlcqtmessagehandler.cpp', 'util/vlcqtmessagehandler.cpp'),
+            'moc_sources': files('tests/test_vlcqtmessagehandler.cpp'),
+            'suite': ['qt'],
+            'include_directories': qt_include_dir,
+            'link_with': [libvlccore, libvlc],
+            'link_args': qt_link_args,
+            'dependencies': [qt6_dep, qt_extra_deps, qtest_qt6_dep],
+        }
+
+        vlc_tests += {
+            'name': 'test_qt_interface_translator',
+            'sources': files('tests/test_interface_translator.cpp', 'util/interface_translator.cpp', 'util/gettext_translator.cpp'),
+            'moc_sources': files('tests/test_interface_translator.cpp'),
+            'moc_headers': files('util/interface_translator.hpp'),
+            'suite': ['qt'],
+            'include_directories': qt_include_dir,
+            'link_args': qt_link_args,
+            'dependencies': [qt6_dep, qtest_qt6_dep],
+        }
+
+        vlc_tests += {
+            'name': 'test_qt_gettext_translator',
+            'sources': files('tests/test_gettext_translator.cpp', 'util/gettext_translator.cpp'),
+            'moc_sources': files('tests/test_gettext_translator.cpp'),
+            'suite': ['qt'],
+            'include_directories': qt_include_dir,
+            'link_args': qt_link_args,
+            'dependencies': [qt6_dep, qtest_qt6_dep],
+        }
+
+        vlc_tests += {
+            'name': 'test_qt_embedded_file_browser',
+            'sources': files('tests/test_embedded_file_browser.cpp', 'widgets/native/embedded_file_browser.cpp'),
+            'moc_sources': files('tests/test_embedded_file_browser.cpp'),
+            'moc_headers': files('widgets/native/embedded_file_browser.hpp'),
+            'suite': ['qt'],
+            'include_directories': qt_include_dir,
+            'link_args': qt_link_args,
+            'dependencies': [qt6_dep, qtest_qt6_dep],
+        }
+
+        vlc_tests += {
+            'name': 'test_qt_playlist_tree_model',
+            'sources': files('tests/test_playlist_tree_model.cpp', 'playlist/playlist_tree_model.cpp'),
+            'moc_sources': files('tests/test_playlist_tree_model.cpp'),
+            'moc_headers': files('playlist/playlist_tree_model.hpp'),
+            'suite': ['qt'],
+            'include_directories': qt_include_dir,
+            'link_args': qt_link_args,
+            'dependencies': [qt6_dep, qtest_qt6_dep],
+        }
+
+        vlc_tests += {
+            'name': 'test_qt_video_window_geometry',
+            'sources': files('tests/test_video_window_geometry.cpp'),
+            'moc_sources': files('tests/test_video_window_geometry.cpp'),
+            'suite': ['qt'],
+            'include_directories': qt_include_dir,
+            'link_args': qt_link_args,
+            'dependencies': [qt6_dep, qtest_qt6_dep],
+        }
+
+        vlc_tests += {
+            'name': 'test_qt_tray_notification_policy',
+            'sources': files('tests/test_tray_notification_policy.cpp'),
+            'moc_sources': files('tests/test_tray_notification_policy.cpp'),
+            'suite': ['qt'],
+            'include_directories': qt_include_dir,
+            'link_args': qt_link_args,
+            'dependencies': [qt6_dep, qtest_qt6_dep],
+        }
+
+        vlc_tests += {
+            'name': 'test_qt_file_log_preferences',
+            'sources': files('tests/test_file_log_preferences.cpp'),
+            'moc_sources': files('tests/test_file_log_preferences.cpp'),
+            'suite': ['qt'],
+            'include_directories': qt_include_dir,
+            'link_args': qt_link_args,
+            'dependencies': [qt6_dep, qtest_qt6_dep],
+        }
+
+        vlc_tests += {
+            'name': 'test_qt_warning_log_buffer',
+            'sources': files('tests/test_warning_log_buffer.cpp'),
+            'moc_sources': files('tests/test_warning_log_buffer.cpp'),
+            'suite': ['qt'],
+            'include_directories': qt_include_dir,
+            'link_args': qt_link_args,
+            'dependencies': [qt6_dep, qtest_qt6_dep],
+        }
+
+        vlc_tests += {
+            'name': 'test_qt_message_log',
+            'sources': files('tests/test_message_log.cpp'),
+            'moc_sources': files('tests/test_message_log.cpp'),
+            'suite': ['qt'],
+            'include_directories': qt_include_dir,
+            'link_args': qt_link_args,
+            'dependencies': [qt6_dep, qtest_qt6_dep],
+        }
+
+        vlc_tests += {
+            'name': 'test_qt_message_log_buffer',
+            'sources': files('tests/test_message_log_buffer.cpp'),
+            'moc_sources': files('tests/test_message_log_buffer.cpp'),
+            'suite': ['qt'],
+            'include_directories': qt_include_dir,
+            'link_args': qt_link_args,
+            'dependencies': [qt6_dep, qtest_qt6_dep],
+        }
+
+        vlc_tests += {
             'name': 'test_qt_dialog_model',
             'sources': files(
                 'tests/vlc_stub_modules.cpp',
@@ -1447,6 +1986,7 @@ if qt6_dep.found()
     quicktest_qt6_dep = dependency('qt6', version: '=' + qt6_dep.version(), modules: ['QuickTest'], required: false)
     if quicktest_qt6_dep.found() and  qtest_qt6_dep.found()
         qml_test_moc = qt6.compile_moc(
+            method: qt_dependency_method,
             headers : files('tests/qml_test.hpp'),
             dependencies : [quicktest_qt6_dep, qt6_dep]
         )

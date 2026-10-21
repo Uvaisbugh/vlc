@@ -28,11 +28,13 @@
 /* Auto-generated from .ui files */
 #include "ui_messages_panel.h"
 
-#include <QMutex>
+#include "util/message_log_buffer.hpp"
+#include <QTimer>
 
 class QTreeWidget;
 class QTreeWidgetItem;
-class MsgEvent;
+class QLabel;
+struct vlc_log_subscription;
 
 class MessagesDialog : public QVLCFrame
 {
@@ -44,12 +46,9 @@ public:
 
 private:
     Ui::messagesPanelWidget ui;
-    static void sinkMessage( void *, vlc_log_t *, unsigned );
-    void customEvent( QEvent * );
-    void sinkMessage( const MsgEvent * );
     bool matchFilter( const QString& );
 
-    std::atomic<int> verbosity;
+    std::atomic<int> verbosity{-1};
     static void MsgCallback( void *, int, const vlc_log_t *, const char *,
                              va_list );
 
@@ -62,19 +61,33 @@ private slots:
     void filterMessages();
     void addError( int );
     void errorsCountChanged();
+    void drainMessages();
+    void updateHistoryInfo();
 
 private:
     void buildTree( QTreeWidgetItem *, vlc_object_t * );
+    void updateActionIcon();
 
-    QToolButton *updateButton;
-    QMutex messageLocker;
+    QToolButton *updateButton = nullptr;
+    QLabel* m_historyInfo;
+    MessageLogBuffer m_pendingMessages;
+    QTimer m_logTimer;
+    quint64 m_skippedMessages = 0;
+    QList<int> m_errorRowLengths;
+    vlc_log_subscription *m_logSubscription = nullptr;
 #ifndef NDEBUG
     QTreeWidget *pldebugTree;
     void updatePLTree();
+    void retranslatePLTree();
 #endif
 
 public:
     void showTab( int i );
+
+protected:
+    void changeEvent(QEvent*) override;
+    void showEvent(QShowEvent*) override;
+    void hideEvent(QHideEvent*) override;
 };
 
 #endif

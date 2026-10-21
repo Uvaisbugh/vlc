@@ -30,6 +30,7 @@
 #include "util/vlctick.hpp"
 
 #include <QObject>
+#include <algorithm>
 #include <QDateTime>
 #include <QTimeZone>
 
@@ -65,6 +66,10 @@ public:
         m_duration = VLCDuration::fromMS(media->i_duration);
         m_progress = media->f_progress;
         m_playCount = media->i_playcount;
+        if (media->i_subtype == VLC_ML_MEDIA_SUBTYPE_ALBUMTRACK) {
+            m_trackNumber = std::max(0, media->album_track.i_track_nb);
+            m_discNumber = std::max(0, media->album_track.i_disc_nb);
+        }
         m_mrl = getMRL();
         m_type = media->i_type;
         m_isFavorite = media->b_is_favorite;
@@ -76,6 +81,8 @@ public:
     VLCDuration duration() const { return m_duration; }
     qreal progress() const { return m_progress; }
     int playCount() const { return m_playCount; }
+    unsigned trackNumber() const { return m_trackNumber; }
+    unsigned discNumber() const { return m_discNumber; }
     QString mrl() const { return m_mrl.toEncoded(); }
     vlc_ml_media_type_t type() const { return m_type; }
     bool isFavorite() const { return m_isFavorite; }
@@ -102,7 +109,7 @@ protected:
     struct MLThumbnail
     {
         QString mrl;
-        vlc_ml_thumbnail_status_t status;
+        vlc_ml_thumbnail_status_t status = VLC_ML_THUMBNAIL_STATUS_MISSING;
     };
 
     QString m_title;
@@ -110,10 +117,12 @@ protected:
     MLThumbnail m_smallThumbnail;
     MLThumbnail m_bannerThumbnail;
     VLCDuration m_duration;
-    qreal m_progress;
-    int m_playCount;
+    qreal m_progress = 0;
+    int m_playCount = 0;
+    unsigned m_trackNumber = 0;
+    unsigned m_discNumber = 0;
     QUrl m_mrl;
-    vlc_ml_media_type_t m_type;
-    bool m_isFavorite;
+    vlc_ml_media_type_t m_type = VLC_ML_MEDIA_TYPE_UNKNOWN;
+    bool m_isFavorite = false;
     QDateTime m_lastPlayedDate;
 };

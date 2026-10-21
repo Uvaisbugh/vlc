@@ -88,6 +88,8 @@ vout_thread_t *input_resource_HoldDummyVout( input_resource_t * );
 void input_resource_HoldVouts( input_resource_t *, vout_thread_t ***, size_t * );
 
 void input_resource_StopFreeVout( input_resource_t * );
+/* Release a cached video output when the new input has no video tracks. */
+void input_resource_CloseFreeVout( input_resource_t * );
 
 /**
  * This function holds the input_resource_t itself

@@ -38,7 +38,9 @@
 #include "dialogs/dialogs_provider.hpp" /* Open Subtitle file */
 #include "util/qt_dirs.hpp"
 #include "util/validators.hpp"
+#include "util/interface_translator.hpp"
 #include "util/colorizedsvgicon.hpp"
+#include "widgets/native/embedded_file_browser.hpp"
 #include <vlc_intf_strings.h>
 #include <vlc_modules.h>
 #include <vlc_plugin.h>
@@ -55,6 +57,7 @@
 #include <QDropEvent>
 #include <QRegularExpression>
 #include <QPushButton>
+#include <QSignalBlocker>
 
 #define I_DEVICE_TOOLTIP \
     I_DIR_OR_FOLDER( N_("Select a device or a VIDEO_TS directory"), \
@@ -76,6 +79,29 @@
 static const char psz_devModule[][8] = { "v4l2", "pvr", "dtv",
                                        "dshow", "screen", "jack" };
 
+namespace {
+template<typename Widget>
+Widget* captureText(const char* source, QWidget* parent)
+{
+    auto* widget = new Widget(qtr(source), parent);
+    const QByteArray text(source);
+    if (auto* translator = InterfaceTranslator::instance())
+        QObject::connect(translator, &InterfaceTranslator::languageChanged, widget,
+                         [widget, text] { widget->setText(qtr(text.constData())); });
+    return widget;
+}
+
+void watchCaptureMode(QComboBox* combo, int row, const char* source)
+{
+    const QByteArray text(source);
+    if (auto* translator = InterfaceTranslator::instance())
+        QObject::connect(translator, &InterfaceTranslator::languageChanged, combo, [combo, row, text] {
+            const QSignalBlocker blocker(combo);
+            combo->setItemText(row, qtr(text.constData()));
+        });
+}
+}
+
 /**************************************************************************
  * Open Files and subtitles                                               *
  **************************************************************************/
@@ -84,14 +110,16 @@ FileOpenPanel::FileOpenPanel( QWidget *_parent, qt_intf_t *_p_intf ) :
 {
     /* Classic UI Setup */
     ui.setupUi( this );
+    if (auto* translator = InterfaceTranslator::instance())
+        connect(translator, &InterfaceTranslator::languageChanged, this, [this] {
+            ui.retranslateUi(this);
+            if (dialogBox) {
+                dialogBox->setLabelText(QFileDialog::FileName, qtr("File names:"));
+                dialogBox->setLabelText(QFileDialog::FileType, qtr("File type:"));
+            }
+        });
 
     setAcceptDrops( true );
-
-    if( var_InheritBool( p_intf, "qt-embedded-open" ) )
-    {
-        ui.tempWidget->hide();
-        BuildOldPanel();
-    }
 
     /* Subtitles */
     /* Deactivate the subtitles control by default. */
@@ -108,71 +136,33 @@ FileOpenPanel::FileOpenPanel( QWidget *_parent, qt_intf_t *_p_intf ) :
 
     connect( ui.fileListWidg, &QListWidget::itemChanged, this, &FileOpenPanel::updateMRL );
     connect( ui.subInput, &QLineEdit::textChanged, this, &FileOpenPanel::updateMRL );
+    onFocus();
     updateButtons();
 }
 
-inline void FileOpenPanel::BuildOldPanel()
+void FileOpenPanel::createEmbeddedBrowser()
 {
-    /** BEGIN QFileDialog tweaking **/
-    /* Use a QFileDialog and customize it because we don't want to
-       rewrite it all. Be careful to your eyes cause there are a few hacks.
-       Be very careful and test correctly when you modify this. */
+    dialogBox = new EmbeddedFileBrowser(this);
+    dialogBox->setDirectoryUrl(p_intf->p_mi->getDialogFilePath());
+    dialogBox->restoreState(getSettings()->value("file-dialog-state").toByteArray());
+    dialogBox->setLabelText(QFileDialog::FileName, qtr("File names:"));
+    dialogBox->setLabelText(QFileDialog::FileType, qtr("File type:"));
+    connect(dialogBox, &EmbeddedFileBrowser::selectionChanged, this, &FileOpenPanel::updateMRL);
+    connect(dialogBox, &EmbeddedFileBrowser::filesActivated, this, &OpenPanel::acceptRequested);
+    connect(dialogBox, &EmbeddedFileBrowser::cancelRequested, this, &OpenPanel::cancelRequested);
+    ui.gridLayout->addWidget(dialogBox, 0, 0, 1, 3);
+}
 
-    /* Make this QFileDialog a child of tempWidget from the ui. */
-    dialogBox = new FileOpenBox( ui.tempWidget, NULL,
-                                 p_intf->p_mi->getDialogFilePath(), "" );
-
-    dialogBox->setFileMode( QFileDialog::ExistingFiles );
-    dialogBox->setAcceptMode( QFileDialog::AcceptOpen );
-    dialogBox->restoreState(
-            getSettings()->value( "file-dialog-state" ).toByteArray() );
-
-    /* We don't want to see a grip in the middle of the window, do we? */
-    dialogBox->setSizeGripEnabled( false );
-
-    /* Add a tooltip */
-    dialogBox->setToolTip( qtr( "Select one or multiple files" ) );
-    dialogBox->setMinimumHeight( 250 );
-
-#warning Qt open_panels should use a more sustainable way to customize FileDialogBox
-    /* Ugly hacks to get the good Widget */
-    // But hide the two OK/Cancel buttons. Enable them for debug.
-    QList<QDialogButtonBox*> buttons =
-        dialogBox->findChildren<QDialogButtonBox*>();
-    if( !buttons.isEmpty() )
-    {
-        QDialogButtonBox *fileDialogAcceptBox = buttons[0];
-        fileDialogAcceptBox->hide();
-    }
-
-    /* Make a list of QLabel inside the QFileDialog to access the good ones */
-    QList<QLabel *> listLabel = dialogBox->findChildren<QLabel*>();
-
-    if( listLabel.size() > 3 )
-    {
-        /* Hide the FileNames one. Enable it for debug */
-        listLabel[1]->setText( qtr( "File names:" ) );
-        /* Change the text that was uncool in the usual box */
-        listLabel[2]->setText( qtr( "Filter:" ) );
-    }
-
-    //This lineEdit is the normal line in the fileDialog.
-    QList<QLineEdit*> lineEdits = dialogBox->findChildren<QLineEdit*>();
-    if( !lineEdits.isEmpty() )
-    {
-        QLineEdit *lineFileEdit = lineEdits[0];
-        connect( lineFileEdit, &QLineEdit::textChanged, this, &FileOpenPanel::updateMRL );
-    }
-
-    dialogBox->layout()->setContentsMargins(0, 0, 0, 0);
-    dialogBox->layout()->setSizeConstraint( QLayout::SetNoConstraint );
-
-    /** END of QFileDialog tweaking **/
-
-    // Add the DialogBox to the layout
-    ui.gridLayout->addWidget( dialogBox, 0, 0, 1, 3 );
-
-    dialogBox->installEventFilter( this );
+void FileOpenPanel::onFocus()
+{
+    const bool enabled = var_InheritBool(p_intf, "qt-embedded-open");
+    if (enabled == embedded) return;
+    clear();
+    if (enabled && !dialogBox) createEmbeddedBrowser();
+    embedded = enabled;
+    ui.tempWidget->setVisible(!embedded);
+    if (dialogBox) dialogBox->setVisible(embedded);
+    updateMRL();
 }
 
 FileOpenPanel::~FileOpenPanel()
@@ -204,6 +194,13 @@ void FileOpenPanel::dropEvent( QDropEvent *event )
         return;
 
     const QMimeData *mimeData = event->mimeData();
+    if (embedded) {
+        auto urls = dialogBox->selectedMediaUrls();
+        for (const auto& url : mimeData->urls()) if (url.isValid()) urls.append(url);
+        dialogBox->selectUrls(urls);
+        event->accept();
+        return;
+    }
     foreach( const QUrl &url, mimeData->urls() )
     {
         if( url.isValid() )
@@ -277,12 +274,12 @@ void FileOpenPanel::updateMRL()
     QString mrl;
 
     /* File Listing */
-    if( dialogBox == NULL )
+    if( !embedded )
         foreach( const QUrl& url, urlList )
             fileList << url.toEncoded();
     else
     {
-        QList<QUrl> urls = dialogBox->selectedUrls();
+        QList<QUrl> urls = dialogBox->selectedMediaUrls();
         foreach( const QUrl &url, urls )
             fileList.append( url.toEncoded() );
     }
@@ -292,17 +289,15 @@ void FileOpenPanel::updateMRL()
         mrl.append( " :sub-file=" + colon_escape( toNativeSeparators( subUrl.toLocalFile() ) ) );
     }
 
+    updateButtons();
     emit methodChanged( "file-caching" );
     emit mrlUpdated( fileList, mrl );
 }
 
 /* Function called by Open Dialog when clicke on Play/Enqueue */
-void FileOpenPanel::accept()
+void FileOpenPanel::onAccept()
 {
-    if( dialogBox )
-        p_intf->p_mi->setDialogFilePath(dialogBox->directory().absolutePath());
-    ui.fileListWidg->clear();
-    urlList.clear();
+    if (embedded) p_intf->p_mi->setDialogFilePath(dialogBox->directoryUrl());
 }
 
 /* Function called by Open Dialog when clicked on cancel */
@@ -312,12 +307,15 @@ void FileOpenPanel::clear()
     ui.subInput->clear();
     urlList.clear();
     subUrl = QUrl();
+    ui.subGroupBox->setChecked(false);
+    if (dialogBox) dialogBox->clearSelection();
+    updateMRL();
 }
 
 /* Update buttons depending on current selection */
 void FileOpenPanel::updateButtons()
 {
-    bool b_has_files = !urlList.empty();
+    const bool b_has_files = embedded ? !dialogBox->selectedMediaUrls().isEmpty() : !urlList.empty();
     ui.removeFileButton->setEnabled( b_has_files );
     ui.subGroupBox->setEnabled( b_has_files );
 }
@@ -329,6 +327,13 @@ DiscOpenPanel::DiscOpenPanel( QWidget *_parent, qt_intf_t *_p_intf ) :
                                 OpenPanel( _parent, _p_intf )
 {
     ui.setupUi( this );
+    if (auto* translator = InterfaceTranslator::instance())
+        connect(translator, &InterfaceTranslator::languageChanged, this, [this] {
+            ui.retranslateUi(this);
+            ui.browseDiscButton->setToolTip(qfut(I_DEVICE_TOOLTIP));
+            ui.deviceCombo->setToolTip(qfut(I_DEVICE_TOOLTIP));
+            ui.titleLabel->setText(m_discType == Vcd ? qtr("Entry") : m_discType == Cdda ? qtr("Track") : qtr("Title"));
+        });
 
     /* Get the default configuration path for the devices */
     psz_dvddiscpath = var_InheritString( p_intf, "dvd" );
@@ -686,6 +691,8 @@ NetOpenPanel::NetOpenPanel( QWidget *_parent, qt_intf_t *_p_intf ) :
                                 OpenPanel( _parent, _p_intf )
 {
     ui.setupUi( this );
+    if (auto* translator = InterfaceTranslator::instance())
+        connect(translator, &InterfaceTranslator::languageChanged, this, [this] { ui.retranslateUi(this); });
     connect( ui.urlComboBox, &QComboBox::editTextChanged, this, &NetOpenPanel::updateMRL );
     connect( ui.clearHistoryButton, &QPushButton::clicked, this, &NetOpenPanel::clearHistory );
 
@@ -826,7 +833,8 @@ void CaptureOpenPanel::initialize()
     layout * name ## PropLayout = new layout;               \
     name ## DevPage->setLayout( name ## DevLayout );                  \
     name ## PropPage->setLayout( name ## PropLayout );                \
-    ui.deviceCombo->addItem( qfut( label ), QVariant( number ) );
+    ui.deviceCombo->addItem( qfut( label ), QVariant( number ) );        \
+    watchCaptureMode(ui.deviceCombo, ui.deviceCombo->count() - 1, label);
 
 #define CuMRL( widget, slot ) connect( widget, slot, this, &CaptureOpenPanel::updateMRL );
 
@@ -850,7 +858,7 @@ void CaptureOpenPanel::initialize()
     line++;
 
     /* dshow Properties */
-    QLabel *dshowVSizeLabel = new QLabel( qtr( "Video size" ) );
+    QLabel *dshowVSizeLabel = captureText<QLabel>(N_("Video size"), this);
     dshowPropLayout->addWidget( dshowVSizeLabel, 0, 0 );
 
     dshowVSizeLine = new QLineEdit;
@@ -875,7 +883,7 @@ void CaptureOpenPanel::initialize()
     addModuleAndLayouts( V4L2_DEVICE, v4l2, N_("Video camera"), QGridLayout );
 
     /* V4L2 main panel */
-    QLabel *v4l2VideoDeviceLabel = new QLabel( qtr( "Video device name" ) );
+    QLabel *v4l2VideoDeviceLabel = captureText<QLabel>(N_("Video device name"), this);
     v4l2DevLayout->addWidget( v4l2VideoDeviceLabel, 0, 0 );
 
     v4l2VideoDevice = new QComboBox( this );
@@ -883,7 +891,7 @@ void CaptureOpenPanel::initialize()
     POPULATE_WITH_DEVS( ppsz_v4lvdevices, v4l2VideoDevice );
     v4l2DevLayout->addWidget( v4l2VideoDevice, 0, 1 );
 
-    QLabel *v4l2AudioDeviceLabel = new QLabel( qtr( "Audio device name" ) );
+    QLabel *v4l2AudioDeviceLabel = captureText<QLabel>(N_("Audio device name"), this);
     v4l2DevLayout->addWidget( v4l2AudioDeviceLabel, 1, 0 );
 
     v4l2AudioDevice = new QComboBox( this );
@@ -903,7 +911,7 @@ void CaptureOpenPanel::initialize()
     v4l2DevLayout->addWidget( v4l2AudioDevice, 1, 1 );
 
     /* v4l2 Props panel */
-    QLabel *v4l2StdLabel = new QLabel( qtr( "Video standard" ) );
+    QLabel *v4l2StdLabel = captureText<QLabel>(N_("Video standard"), this);
     v4l2PropLayout->addWidget( v4l2StdLabel, 0 , 0 );
 
     v4l2StdBox = new QComboBox;
@@ -930,7 +938,7 @@ void CaptureOpenPanel::initialize()
 
     /* Jack Main panel */
     /* Channels */
-    QLabel *jackChannelsLabel = new QLabel( qtr( "Channels:" ) );
+    QLabel *jackChannelsLabel = captureText<QLabel>(N_("Channels:"), this);
     jackDevLayout->addWidget( jackChannelsLabel, 1, 0 );
 
     jackChannels = new QSpinBox;
@@ -941,7 +949,7 @@ void CaptureOpenPanel::initialize()
     jackDevLayout->addWidget( jackChannels, 1, 1 );
 
     /* Selected ports */
-    QLabel *jackPortsLabel = new QLabel( qtr( "Selected ports:" ) );
+    QLabel *jackPortsLabel = captureText<QLabel>(N_("Selected ports:"), this);
     jackDevLayout->addWidget( jackPortsLabel, 0 , 0 );
 
     jackPortsSelected = new QLineEdit( qfu( ".*" ) );
@@ -951,11 +959,11 @@ void CaptureOpenPanel::initialize()
     /* Jack Props panel */
 
     /* Pace */
-    jackPace = new QCheckBox(qtr( "Use VLC pace" ));
+    jackPace = captureText<QCheckBox>(N_("Use VLC pace"), this);
     jackPropLayout->addWidget( jackPace, 1, 1 );
 
     /* Auto Connect */
-    jackConnect = new QCheckBox( qtr( "Auto connection" ));
+    jackConnect = captureText<QCheckBox>(N_("Auto connection"), this);
     jackPropLayout->addWidget( jackConnect, 1, 2 );
 
     /* Jack CONNECTs */
@@ -974,8 +982,8 @@ void CaptureOpenPanel::initialize()
     addModuleAndLayouts( DTV_DEVICE, dvb, N_("TV - digital"), QGridLayout );
 
     /* DVB Main */
-    QLabel *dvbDeviceLabel = new QLabel( qtr( "Tuner card" ) );
-    QLabel *dvbTypeLabel = new QLabel( qtr( "Delivery system" ) );
+    QLabel *dvbDeviceLabel = captureText<QLabel>(N_("Tuner card"), this);
+    QLabel *dvbTypeLabel = captureText<QLabel>(N_("Delivery system"), this);
 
     dvbCard = new QSpinBox;
     dvbCard->setAlignment( Qt::AlignRight );
@@ -1005,7 +1013,7 @@ void CaptureOpenPanel::initialize()
 
     /* DVB Props panel */
     QLabel *dvbFreqLabel =
-                    new QLabel( qtr( "Transponder/multiplex frequency" ) );
+                    captureText<QLabel>(N_("Transponder/multiplex frequency"), this);
     dvbPropLayout->addWidget( dvbFreqLabel, 0, 0 );
 
     dvbFreq = new QSpinBox;
@@ -1015,7 +1023,7 @@ void CaptureOpenPanel::initialize()
     setSpinBoxFreq( dvbFreq  );
     dvbPropLayout->addWidget( dvbFreq, 0, 1 );
 
-    dvbSrateLabel = new QLabel( qtr( "Transponder symbol rate" ) );
+    dvbSrateLabel = captureText<QLabel>(N_("Transponder symbol rate"), this);
     dvbPropLayout->addWidget( dvbSrateLabel, 1, 0 );
 
     dvbSrate = new QSpinBox;
@@ -1024,7 +1032,7 @@ void CaptureOpenPanel::initialize()
     setSpinBoxFreq( dvbSrate );
     dvbPropLayout->addWidget( dvbSrate, 1, 1 );
 
-    dvbModLabel = new QLabel( qtr( "Modulation / Constellation" ) );
+    dvbModLabel = captureText<QLabel>(N_("Modulation / Constellation"), this);
     dvbPropLayout->addWidget( dvbModLabel, 2, 0 );
 
     dvbQamBox = new QComboBox;
@@ -1048,7 +1056,7 @@ void CaptureOpenPanel::initialize()
     dvbQamBox->hide();
     dvbPskBox->hide();
 
-    dvbBandLabel = new QLabel( qtr( "Bandwidth" ) );
+    dvbBandLabel = captureText<QLabel>(N_("Bandwidth"), this);
     dvbPropLayout->addWidget( dvbBandLabel, 2, 0 );
 
     dvbBandBox = new QComboBox;
@@ -1095,7 +1103,7 @@ void CaptureOpenPanel::initialize()
     addModuleAndLayouts( PVR_DEVICE, pvr, N_("TV - analog"), QGridLayout );
 
     /* PVR Main panel */
-    QLabel *pvrDeviceLabel = new QLabel( qtr( "Device name" ) );
+    QLabel *pvrDeviceLabel = captureText<QLabel>(N_("Device name"), this);
     pvrDevLayout->addWidget( pvrDeviceLabel, 0, 0 );
 
     pvrDevice = new QComboBox;
@@ -1104,7 +1112,7 @@ void CaptureOpenPanel::initialize()
     v4l2VideoDevice->clearEditText();
     pvrDevLayout->addWidget( pvrDevice, 0, 1 );
 
-    QLabel *pvrAudioDeviceLabel = new QLabel( qtr( "Audio device name" ) );
+    QLabel *pvrAudioDeviceLabel = captureText<QLabel>(N_("Audio device name"), this);
     pvrDevLayout->addWidget( pvrAudioDeviceLabel, 1, 0 );
 
     pvrAudioDevice = new QComboBox( this );
@@ -1124,14 +1132,14 @@ void CaptureOpenPanel::initialize()
     pvrDevLayout->addWidget( pvrAudioDevice, 1, 1 );
 
     /* PVR props panel */
-    QLabel *pvrNormLabel = new QLabel( qtr( "Video standard" ) );
+    QLabel *pvrNormLabel = captureText<QLabel>(N_("Video standard"), this);
     pvrPropLayout->addWidget( pvrNormLabel, 0, 0 );
 
     pvrNormBox = new QComboBox;
     setfillVLCConfigCombo( "v4l2-standard", pvrNormBox );
     pvrPropLayout->addWidget( pvrNormBox, 0, 1 );
 
-    QLabel *pvrFreqLabel = new QLabel( qtr( "Frequency" ) );
+    QLabel *pvrFreqLabel = captureText<QLabel>(N_("Frequency"), this);
     pvrPropLayout->addWidget( pvrFreqLabel, 1, 0 );
 
     pvrFreq = new QSpinBox;
@@ -1155,13 +1163,12 @@ void CaptureOpenPanel::initialize()
      * Screen *
      **********/
     addModuleAndLayouts( SCREEN_DEVICE, screen, N_("Desktop"), QGridLayout );
-    QLabel *screenLabel = new QLabel( qtr( "Your display will be "
-            "opened and played in order to stream or save it." ) );
+    QLabel *screenLabel = captureText<QLabel>(N_("Your display will be "
+            "opened and played in order to stream or save it."), this);
     screenLabel->setWordWrap( true );
     screenDevLayout->addWidget( screenLabel, 0, 0 );
 
-    QLabel *screenFPSLabel = new QLabel(
-            qtr( "Desired frame rate for the capture." ) );
+    QLabel *screenFPSLabel = captureText<QLabel>(N_("Desired frame rate for the capture."), this);
     screenPropLayout->addWidget( screenFPSLabel, 0, 0 );
 
     screenFPS = new QDoubleSpinBox;
@@ -1182,6 +1189,14 @@ void CaptureOpenPanel::initialize()
         this->updateMRL();
         this->updateButtons();
     } );
+
+    if (auto* translator = InterfaceTranslator::instance())
+        connect(translator, &InterfaceTranslator::languageChanged, this, [this] {
+            ui.retranslateUi(this);
+            const QSignalBlocker blocker(screenFPS);
+            /* xgettext: frames per second */
+            screenFPS->setSuffix(qtr(" f/s"));
+        });
 
 #undef CuMRL
 #undef addModuleAndLayouts
@@ -1427,6 +1442,13 @@ void CaptureOpenPanel::advancedDialog()
     advButtonBox->addButton( cancelButton, QDialogButtonBox::RejectRole );
 
     mainLayout->addWidget( advButtonBox );
+
+    if (auto* translator = InterfaceTranslator::instance())
+        connect(translator, &InterfaceTranslator::languageChanged, adv, [dialog = adv, closeButton, cancelButton] {
+            dialog->setWindowTitle(qtr("Advanced Options"));
+            closeButton->setText(qtr("OK"));
+            cancelButton->setText(qtr("Cancel"));
+        });
 
     /* Creation of the MRL */
     if( adv->exec() )

@@ -44,7 +44,7 @@ Item {
     // Events
     //---------------------------------------------------------------------------------------------
 
-    Component.onCompleted: if (DialogErrorModel.repeatedMessageCount){
+    Component.onCompleted: if (DialogErrorModel.notificationAllowed && DialogErrorModel.repeatedMessageCount){
                                hideErrorPopupTimer.restart()
                                errorPopup.state = "visible"
                            }
@@ -144,7 +144,15 @@ Item {
     {
         target: DialogErrorModel
 
-        function onCountChanged() {
+        function onNotificationsEnabledChanged() {
+            if (!DialogErrorModel.notificationAllowed) {
+                hideErrorPopupTimer.stop()
+                errorPopup.state = "hidden"
+            }
+        }
+
+        function onNotificationRequested() {
+            if (!DialogErrorModel.notificationAllowed) return
             hideErrorPopupTimer.restart()
             errorPopup.state = "visible"
         }
@@ -156,6 +164,7 @@ Item {
 
     Widgets.DrawerExt {
         id: errorPopup
+        objectName: "errorNotificationPopup"
 
         property string messageText
         property int repeatedMessageCount: 0
@@ -178,7 +187,10 @@ Item {
         }
 
         component: Rectangle {
-            color: errorMsgTheme.bg.negative
+            color: DialogErrorModel.notificationIsWarning
+                ? (VLCStyle.palette.isDark ? "#191919" : "#acacac") : errorMsgTheme.bg.negative
+            border.width: DialogErrorModel.notificationIsWarning ? VLCStyle.dp(1, VLCStyle.scale) : 0
+            border.color: VLCStyle.palette.isDark ? "#d69c38" : "#775100"
 
             height: messageText.implicitHeight + VLCStyle.margin_normal
             radius: VLCStyle.fontHeight_normal / 2
@@ -186,7 +198,7 @@ Item {
             property real layoutWidth: layout.width
 
             Accessible.role: Accessible.AlertMessage
-            Accessible.name: qsTr("error popup")
+            Accessible.name: DialogErrorModel.notificationIsWarning ? qsTr("Warning notice") : qsTr("Error notice")
 
             RowLayout {
                 id: layout
@@ -197,7 +209,8 @@ Item {
 
                 Widgets.IconLabel {
                     text: VLCIcons.info
-                    color: errorMsgTheme.fg.primary
+                    color: DialogErrorModel.notificationIsWarning
+                        ? (VLCStyle.palette.isDark ? "#d69c38" : "#775100") : errorMsgTheme.fg.primary
                     Layout.leftMargin: VLCStyle.margin_xxsmall
                 }
 
@@ -211,16 +224,18 @@ Item {
                     text: (DialogErrorModel.repeatedMessageCount > 1 ? '[' + DialogErrorModel.repeatedMessageCount + '] ' : '')
                           + DialogErrorModel.notificationText
 
+                    textFormat: Text.PlainText
                     wrapMode: Text.WrapAnywhere
                     font.pixelSize: VLCStyle.fontSize_normal
                     font.bold: true
-                    color: errorMsgTheme.fg.primary
+                    color: DialogErrorModel.notificationIsWarning
+                        ? (VLCStyle.palette.isDark ? "#e5e5e5" : "#2e2e2e") : errorMsgTheme.fg.primary
                 }
 
                 Widgets.TextToolButton {
                     id: detailsBtn
 
-                    text: qsTr("Show Details")
+                    text: qsTr("Show details")
 
                     colorContext.colorSet: ColorContext.ButtonAccent
 
@@ -603,6 +618,10 @@ Item {
             target: DialogsProvider
 
             function onShowToolbarEditorDialog() {
+                if (root.bgContent && typeof root.bgContent.beginCustomization === "function") {
+                    root.bgContent.beginCustomization()
+                    return
+                }
                 toolbarEditorDialogLoader.active = true
                 toolbarEditorDialogLoader.item.open()
             }

@@ -292,6 +292,7 @@ vlc_player_input_HandleState(struct vlc_player_input *input,
                 reason = VLC_PLAYER_MEDIA_STOPPING_USER;
             else
                 reason = VLC_PLAYER_MEDIA_STOPPING_EOS;
+            input->ml.completed = reason == VLC_PLAYER_MEDIA_STOPPING_EOS;
             input->started = false;
 
             /* Note: no need to hold the media here, as it is already protected
@@ -348,6 +349,13 @@ vlc_player_input_HandleState(struct vlc_player_input *input,
 
     if (send_event)
     {
+        if (input->state == VLC_PLAYER_STATE_STOPPED)
+        {
+            /* STOPPED permits synchronous media changes. Publish it only
+             * after the mainloop has released the output resources. */
+            player->mainloop.notify_stopped = true;
+            return;
+        }
         assert(player->global_state != input->state);
         player->global_state = input->state;
         vlc_player_SendEvent(player, on_state_changed, player->global_state);
@@ -1294,6 +1302,7 @@ vlc_player_input_New(vlc_player_t *player, input_item_t *item)
     input->ml.restore = VLC_RESTOREPOINT_NONE;
     input->ml.restore_states = false;
     input->ml.delay_restore = false;
+    input->ml.completed = false;
     input->ml.pos = -1.f;
     input->ml.has_audio_tracks = input->ml.has_video_tracks = false;
 
@@ -1337,7 +1346,8 @@ vlc_player_input_New(vlc_player_t *player, input_item_t *item)
         [AUDIO_ES] =
             VLC_TICK_FROM_MS(var_InheritInteger(player, "audio-desync")),
         [SPU_ES] =
-            vlc_tick_from_samples(var_InheritInteger(player, "sub-delay"), 10),
+            vlc_tick_from_samples(var_InheritInteger(player, "sub-delay"), 10)
+            + VLC_TICK_FROM_MS(var_InheritInteger(player, "sub-delay-ms")),
     };
 
     for (enum es_format_category_e i = UNKNOWN_ES; i < DATA_ES; ++i)

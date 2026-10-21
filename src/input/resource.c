@@ -586,6 +586,18 @@ void input_resource_StopFreeVout(input_resource_t *p_resource)
     vlc_mutex_unlock(&p_resource->lock);
 }
 
+void input_resource_CloseFreeVout(input_resource_t *p_resource)
+{
+    vlc_mutex_lock(&p_resource->lock);
+    if (p_resource->vout_rsc_free != NULL)
+    {
+        /* A disabled cached window still owns the interface's video surface.
+         * Audio visualizations must be able to acquire that surface. */
+        DestroyVout(p_resource);
+    }
+    vlc_mutex_unlock(&p_resource->lock);
+}
+
 /* */
 sout_stream_t *input_resource_RequestSout( input_resource_t *p_resource, const char *psz_sout )
 {

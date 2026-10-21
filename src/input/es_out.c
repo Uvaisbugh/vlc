@@ -159,6 +159,7 @@ struct es_out_id_t
     void* mouse_event_userdata;
     vlc_mouse_t oldmouse;
     bool mouse_being_dragged;
+    bool mouse_release_consumed;
 };
 
 typedef struct
@@ -242,7 +243,6 @@ typedef struct
 
     unsigned    cc_decoder;
 
-    enum vlc_mouse_pause_policy mouse_pause_policy;
 
     struct vlc_input_es_out out;
 } es_out_sys_t;
@@ -393,17 +393,11 @@ static void MouseEventCb(const vlc_mouse_t *newmouse, void *userdata)
     if(!p_sys->p_input)
         return;
 
-    enum vlc_mouse_pause_policy policy = p_sys->mouse_pause_policy;
-
-    //TODO: More behaviors to be implemented.
-
-    if (policy == VLC_MOUSE_PAUSE_DISABLED)
-        return;
-
     if(!newmouse)
     {
         vlc_mouse_Init(&id->oldmouse);
         id->mouse_being_dragged = false;
+        id->mouse_release_consumed = false;
         return;
     }
 
@@ -415,14 +409,30 @@ static void MouseEventCb(const vlc_mouse_t *newmouse, void *userdata)
         }
     };
 
+    if (newmouse->b_double_click && vlc_mouse_IsLeftPressed(newmouse)) {
+        char *action = var_InheritString(p_sys->p_input, "mouse-double-click-action");
+        if (action != NULL && strcmp(action, "play-pause") == 0) {
+            // A single-click action already handled the first release. Avoid
+            // overlapping pause/resume requests on the double click.
+            id->mouse_release_consumed = true;
+            if (mouse_pause_policy_inherit(p_sys->p_input) == VLC_MOUSE_PAUSE_DISABLED)
+                input_SendEvent(p_sys->p_input, &(struct vlc_input_event) {
+                    .type = INPUT_EVENT_MOUSE_LEFT
+                });
+        }
+        free(action);
+    }
+
     if (vlc_mouse_HasReleased(&id->oldmouse, newmouse, MOUSE_BUTTON_LEFT)) {
-        if (!id->mouse_being_dragged) {
+        if (!id->mouse_being_dragged && !id->mouse_release_consumed &&
+            mouse_pause_policy_inherit(p_sys->p_input) != VLC_MOUSE_PAUSE_DISABLED) {
             input_SendEvent(p_sys->p_input, &(struct vlc_input_event) {
                 .type = INPUT_EVENT_MOUSE_LEFT
             });
         }
 
         id->mouse_being_dragged = false;
+        id->mouse_release_consumed = false;
     }
 
     id->oldmouse = *newmouse;
@@ -1203,11 +1213,26 @@ static void EsOutChangePosition(es_out_sys_t *p_sys,
     p_sys->i_prev_stream_level = -1;
 }
 
+static bool EsOutHasVideo(es_out_sys_t *p_sys)
+{
+    es_out_id_t *es;
+    foreach_es_then_es_slaves(es)
+        if (es->fmt.i_cat == VIDEO_ES && !es->b_terminated)
+            return true;
+    return false;
+}
+
 static void EsOutStopFreeVout(es_out_sys_t *p_sys)
 {
     /* Clean up vout after user action (in active mode only). */
     if( p_sys->b_active )
-        input_resource_StopFreeVout( input_priv(p_sys->p_input)->p_resource );
+    {
+        input_resource_t *resource = input_priv(p_sys->p_input)->p_resource;
+        if (EsOutHasVideo(p_sys))
+            input_resource_StopFreeVout(resource);
+        else
+            input_resource_CloseFreeVout(resource);
+    }
 }
 
 static void EsOutDecodersStopBuffering(es_out_sys_t *p_sys, bool b_forced)
@@ -2527,6 +2552,7 @@ static es_out_id_t *EsOutAddLocked(es_out_sys_t *p_sys,
     es->mouse_event_cb = MouseEventCb;
     es->mouse_event_userdata = es;
     es->mouse_being_dragged = false;
+    es->mouse_release_consumed = false;
     es->i_pts_level = VLC_TICK_INVALID;
     es->delay = VLC_TICK_MAX;
 
@@ -4044,21 +4070,10 @@ static int EsOutVaPrivControlLocked(es_out_sys_t *p_sys, input_source_t *source,
 
         if (i_mode != ES_OUT_MODE_NONE && !p_sys->b_active && !vlc_list_is_empty(&p_sys->es))
         {
-            /* XXX Terminate vout if there are tracks but no video one.
-             * This one is not mandatory but is he earliest place where it
-             * can be done */
-            es_out_id_t *p_es;
-            bool found = false;
-
-            foreach_es_then_es_slaves(p_es)
-                if( p_es->fmt.i_cat == VIDEO_ES && !found /* nested loop */ )
-                {
-                    found = true;
-                    break;
-                }
-
-            if (!found)
-                EsOutStopFreeVout(p_sys);
+            /* Release a previous video's cached output before starting an
+             * audio-only input. A visualizer can then use the same surface. */
+            if (!EsOutHasVideo(p_sys))
+                input_resource_CloseFreeVout(input_priv(p_sys->p_input)->p_resource);
         }
         p_sys->b_active = i_mode != ES_OUT_MODE_NONE;
         p_sys->i_mode = i_mode;
@@ -4451,7 +4466,6 @@ input_EsOutNew(input_thread_t *p_input, input_source_t *main_source, float rate,
                     "sub-track-id", "sub-track", "sub-language", "sub" );
 
     p_sys->cc_decoder = var_InheritInteger( p_input, "captions" );
-    p_sys->mouse_pause_policy = mouse_pause_policy_inherit(p_sys->p_input);
 
     p_sys->i_group_id = var_GetInteger( p_input, "program" );
     p_sys->i_audio_delay = p_sys->i_spu_delay = p_sys->i_video_delay = 0;
@@ -4513,7 +4527,7 @@ static char *LanguageGetCode( const char *psz_lang )
     {
         pl = vlc_find_iso639( psz_lang, true );
         if( pl != NULL )
-            return strdup( pl->psz_iso639_2B );
+            return strdup( *pl->psz_iso639_2B ? pl->psz_iso639_2B : pl->psz_iso639_2T );
     }
     return strdup("???");
 }
@@ -4547,7 +4561,8 @@ static char **LanguageSplit( const char *psz_langs )
         }
         else
         {
-            psz_code = LanguageGetCode( psz_parser );
+            const iso639_lang_t *system = !strcmp(psz_parser, "system") ? vlc_get_system_language() : NULL;
+            psz_code = LanguageGetCode( system ? system->psz_iso639_2T : psz_parser );
             if( strcmp( psz_code, "???" ) )
             {
                 TAB_APPEND( i_psz, ppsz, psz_code );
@@ -5053,6 +5068,12 @@ const char *
 vlc_es_id_GetStrId(vlc_es_id_t *id)
 {
     return id->str_id;
+}
+
+const char *
+vlc_es_id_GetSourceUri(vlc_es_id_t *id)
+{
+    return id->source->uri;
 }
 
 enum es_format_category_e

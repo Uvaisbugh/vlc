@@ -23,7 +23,10 @@
 #include "dialogs/extensions/extensions_manager.hpp"
 #include "player_controller.hpp"
 #include "player_controller_p.hpp"
+#include "subtitle_timeline_scanner.hpp"
+#include "audio_waveform_scanner.hpp"
 #include "util/shared_input_item.hpp"
+#include "util/seek_preview_image_provider.hpp"
 
 #include <vlc_actions.h>           /* ACTION_ID */
 #include <vlc_url.h>            /* vlc_uri_decode */
@@ -33,11 +36,18 @@
 #include <vlc_cxx_helpers.hpp>
 #include <vlc_vout.h>
 #include <vlc_preparser.h>
+#include <vlc_picture.h>
+#include <vlc_block.h>
 
 #include <QFile>
+#include <QFileInfo>
+#include <QDateTime>
 #include <QDir>
 #include <QSignalMapper>
 #include <QThreadPool>
+#include <QImage>
+#include <QBuffer>
+#include <cmath>
 #ifndef QT_HAS_LIBATOMIC
 #include <QReadLocker>
 #include <QWriteLocker>
@@ -60,14 +70,31 @@ using SharedTitleList = ::vlc::vlc_shared_data_ptr<vlc_player_title_list,
 PlayerControllerPrivate::~PlayerControllerPrivate()
 {
     assert(m_smpteTimerRequestCount == 0);
+    m_seekSampleTimer.stop();
+    m_seekPreviewEnabled = false;
+    m_subtitleTimelineEnabled = false;
+    resetSubtitleTimeline();
+    // Finish cancelled reads before the interface and queued callbacks die.
+    m_subtitleTimelineWorkers.waitForDone();
+    m_audioWaveformEnabled = false;
+    resetAudioWaveform();
+    m_audioWaveformWorkers.waitForDone();
 
-    vlc_player_locker locker{m_player}; //this also locks the player
-    vlc_player_vout_RemoveListener( m_player, m_player_vout_listener );
-    vlc_player_aout_RemoveListener( m_player, m_player_aout_listener );
-    vlc_player_RemoveListener( m_player, m_player_listener );
-    vlc_player_RemoveTimer( m_player, m_player_timer );
+    {
+        vlc_player_locker locker{m_player};
+        vlc_player_vout_RemoveListener( m_player, m_player_vout_listener );
+        vlc_player_aout_RemoveListener( m_player, m_player_aout_listener );
+        vlc_player_RemoveListener( m_player, m_player_listener );
+        vlc_player_RemoveTimer( m_player, m_player_timer );
+    }
+    // Artwork completion takes the player lock. Never hold it while waiting
+    // for preparser workers, including callbacks delivered during cancellation.
     if (m_preparser != nullptr)
         vlc_preparser_Delete(m_preparser);
+    if (m_seekPreparser != nullptr)
+        vlc_preparser_Delete(m_seekPreparser);
+    if (m_seekRequest != nullptr)
+        vlc_preparser_req_Release(m_seekRequest);
 }
 
 bool PlayerControllerPrivate::isCurrentItemSynced()
@@ -149,7 +176,9 @@ void PlayerControllerPrivate::UpdateArt(input_item_t *p_item)
 void PlayerControllerPrivate::UpdateStats( const input_stats_t& stats )
 {
     Q_Q(PlayerController);
+    m_stats = stats;
     emit q->statisticsUpdated( stats );
+    emit q->playbackStatisticsChanged();
 }
 
 void PlayerControllerPrivate::UpdateProgram(enum vlc_player_list_action action, const struct vlc_player_program* prgm)
@@ -315,6 +344,7 @@ void PlayerControllerPrivate::UpdateSpuOrder(vlc_es_id_t *es_id, enum vlc_vout_o
         default:
             break;
     }
+    resetSubtitleTimeline();
 }
 
 int PlayerControllerPrivate::interpolateTime(vlc_tick_t system_now)
@@ -341,6 +371,7 @@ static  void on_player_current_media_changed(vlc_player_t *, input_item_t *new_m
     if (!new_media)
     {
         that->callAsync([that] () {
+            that->m_seekDragItem.reset();
             {
                 vlc_player_locker lock{ that->m_player };
                 that->m_currentItem.reset(nullptr);
@@ -353,6 +384,7 @@ static  void on_player_current_media_changed(vlc_player_t *, input_item_t *new_m
             emit that->q_func()->syltLyricsChanged();
             emit that->q_func()->currentLyricIndexChanged(-1);
             emit that->q_func()->currentLyricChanged();
+            that->UpdateStats({});
             emit that->q_func()->inputChanged(false);
         });
         return;
@@ -361,6 +393,7 @@ static  void on_player_current_media_changed(vlc_player_t *, input_item_t *new_m
     SharedInputItem newMediaPtr = SharedInputItem( new_media );
     that->callAsync([that,newMediaPtr] () {
         PlayerController* q = that->q_func();
+        that->m_seekDragItem.reset();
 
         that->m_syltRaw.reset();
         that->m_syltLyrics.reset();
@@ -369,6 +402,7 @@ static  void on_player_current_media_changed(vlc_player_t *, input_item_t *new_m
         emit q->syltLyricsChanged();
         emit q->currentLyricIndexChanged(-1);
         emit q->currentLyricChanged();
+        that->UpdateStats({});
 
         that->UpdateArt( newMediaPtr.get() );
         that->UpdateMeta( newMediaPtr.get() );
@@ -413,10 +447,12 @@ static void on_player_state_changed(vlc_player_t *, enum vlc_player_state state,
             msg_Dbg( that->p_intf, "on_player_state_changed VLC_PLAYER_STATE_PAUSED");
             break;
         case VLC_PLAYER_STATE_STOPPING:
+            that->m_seekDragItem.reset();
             msg_Dbg( that->p_intf, "on_player_state_changed VLC_PLAYER_STATE_STOPPING");
             break;
         case VLC_PLAYER_STATE_STOPPED:
         {
+            that->m_seekDragItem.reset();
             msg_Dbg( that->p_intf, "on_player_state_changed VLC_PLAYER_STATE_STOPPED");
 
             that->m_audioStereoMode.resetObject((audio_output_t*)nullptr);
@@ -783,6 +819,20 @@ static void on_player_associated_subs_fps_changed(vlc_player_t *, float subs_fps
     });
 }
 
+static void on_player_subtitle_text_size_changed(vlc_player_t *, unsigned scale,
+    enum vlc_player_subtitle_size_mode mode, unsigned pixels, void *data)
+{
+    auto *that = static_cast<PlayerControllerPrivate *>(data);
+    that->callAsync([that, scale, mode, pixels] {
+        that->m_subtitleTextScale = scale;
+        that->m_subtitleTextSizeMode = mode;
+        that->m_subtitleTextPixelSize = pixels;
+        emit that->q_func()->subtitleTextScaleChanged(scale);
+        emit that->q_func()->subtitleTextSizeModeChanged(mode);
+        emit that->q_func()->subtitleTextPixelSizeChanged(pixels);
+    });
+}
+
 void on_player_renderer_changed(vlc_player_t *, vlc_renderer_item_t *new_item, void *data)
 {
     VLC_UNUSED(new_item);
@@ -813,8 +863,7 @@ static void on_player_stats_changed(vlc_player_t *, const struct input_stats_t *
     PlayerControllerPrivate* that = static_cast<PlayerControllerPrivate*>(data);
     struct input_stats_t stats_tmp = *stats;
     that->callAsync([that,stats_tmp] () {
-        that->m_stats = stats_tmp;
-        emit that->q_func()->statisticsUpdated( that->m_stats );
+        that->UpdateStats(stats_tmp);
     });
 }
 
@@ -1137,6 +1186,7 @@ static const struct vlc_player_cbs player_cbs = [] {
     cbs.on_teletext_transparency_changed = on_player_teletext_transparency_changed;
     cbs.on_category_delay_changed = on_player_category_delay_changed;
     cbs.on_associated_subs_fps_changed = on_player_associated_subs_fps_changed;
+    cbs.on_subtitle_text_size_changed = on_player_subtitle_text_size_changed;
     cbs.on_renderer_changed = on_player_renderer_changed;
     cbs.on_recording_changed = on_player_record_changed;
     cbs.on_signal_changed = on_player_signal_changed;
@@ -1218,6 +1268,10 @@ PlayerControllerPrivate::PlayerControllerPrivate(PlayerController *playercontrol
         m_player_aout_listener = vlc_player_aout_AddListener( m_player, &player_aout_cbs, this );
         m_player_vout_listener = vlc_player_vout_AddListener( m_player, &player_vout_cbs, this );
         m_player_timer = vlc_player_AddTimer( m_player, VLC_TICK_FROM_MS(500), &player_timer_cbs, this );
+        m_subtitleFPS = vlc_player_GetAssociatedSubsFPS(m_player);
+        m_subtitleTextScale = vlc_player_GetSubtitleTextScale(m_player);
+        m_subtitleTextSizeMode = vlc_player_GetSubtitleTextSizeMode(m_player);
+        m_subtitleTextPixelSize = vlc_player_GetSubtitleTextPixelSize(m_player);
     }
 
     QObject::connect( &m_autoscale, &QVLCBool::valueChanged, q_ptr, &PlayerController::autoscaleChanged );
@@ -1256,13 +1310,584 @@ PlayerController::PlayerController( qt_intf_t *_p_intf )
 {
     connect( &d_ptr->m_position_timer, &QTimer::timeout, this, &PlayerController::updatePositionFromTimer );
     connect( &d_ptr->m_time_timer, &QTimer::timeout, this, &PlayerController::updateTimeFromTimer );
+    connect(this, &PlayerController::inputChanged, this, [this] {
+        d_ptr->resetSeekPreview();
+        d_ptr->updateSeekSampling();
+    });
+    auto* d = d_ptr.data();
+    d->m_seekSampleTimer.setSingleShot(true);
+    connect(&d->m_seekSampleTimer, &QTimer::timeout, this, [d] { d->sampleSeekPreview(); });
+    const auto updateSamples = [d] { d->updateSeekSampling(); };
+    connect(this, &PlayerController::lengthChanged, this, updateSamples);
+    connect(this, &PlayerController::seekableChanged, this, updateSamples);
+    connect(this, &PlayerController::hasVideoOutputChanged, this, updateSamples);
+    connect(this, &PlayerController::playingStateChanged, this, updateSamples);
+    connect(this, &PlayerController::bufferingChanged, this, updateSamples);
+    d->m_audioWaveformWorkers.setMaxThreadCount(1);
+    d->m_audioWaveformRefresh.setSingleShot(true);
+    d->m_audioWaveformRefresh.setInterval(100);
+    d->m_audioWaveformTimeout.setSingleShot(true);
+    d->m_audioWaveformTimeout.setInterval(15000);
+    connect(&d->m_audioWaveformRefresh, &QTimer::timeout, this, [d] { d->readAudioWaveform(); });
+    connect(&d->m_audioWaveformTimeout, &QTimer::timeout, this, [d] {
+        if (d->m_audioWaveformRequest) vlc_interrupt_kill(d->m_audioWaveformRequest->interrupt);
+    });
+    const auto refreshWaveform = [d] { d->resetAudioWaveform(); };
+    connect(this, &PlayerController::inputChanged, this, refreshWaveform);
+    connect(this, &PlayerController::lengthChanged, this, refreshWaveform);
+    connect(&d->m_audioTracks, &QAbstractItemModel::dataChanged, this, refreshWaveform);
+    connect(&d->m_audioTracks, &QAbstractItemModel::rowsInserted, this, refreshWaveform);
+    connect(&d->m_audioTracks, &QAbstractItemModel::rowsRemoved, this, refreshWaveform);
+    connect(&d->m_audioTracks, &QAbstractItemModel::modelReset, this, refreshWaveform);
+    d->m_subtitleTimelineWorkers.setMaxThreadCount(1);
+    d->m_subtitleTimelineRefresh.setSingleShot(true);
+    d->m_subtitleTimelineRefresh.setInterval(100);
+    d->m_subtitleTimelineTimeout.setSingleShot(true);
+    d->m_subtitleTimelineTimeout.setInterval(15000);
+    connect(&d->m_subtitleTimelineRefresh, &QTimer::timeout, this, [d] { d->readSubtitleTimeline(); });
+    connect(&d->m_subtitleTimelineTimeout, &QTimer::timeout, this, [d] {
+        if (d->m_subtitleTimelineRequest) vlc_interrupt_kill(d->m_subtitleTimelineRequest->interrupt);
+    });
+    const auto refreshTimeline = [d] { d->resetSubtitleTimeline(); };
+    connect(this, &PlayerController::inputChanged, this, refreshTimeline);
+    connect(this, &PlayerController::subtitleFPSChanged, this, refreshTimeline);
+    connect(&d->m_subtitleTracks, &QAbstractItemModel::dataChanged, this, refreshTimeline);
+    connect(&d->m_subtitleTracks, &QAbstractItemModel::rowsInserted, this, refreshTimeline);
+    connect(&d->m_subtitleTracks, &QAbstractItemModel::rowsRemoved, this, refreshTimeline);
+    connect(&d->m_subtitleTracks, &QAbstractItemModel::modelReset, this, refreshTimeline);
+    connect(&d->m_videoTracks, &QAbstractItemModel::dataChanged, this, refreshTimeline);
+    connect(&d->m_videoTracks, &QAbstractItemModel::rowsInserted, this, refreshTimeline);
 }
 
 PlayerController::~PlayerController()
 {
 }
 
+bool PlayerController::getSubtitleTimelineEnabled() const { return d_ptr->m_subtitleTimelineEnabled; }
+QVariantList PlayerController::getSubtitleTimelineCues() const { return d_ptr->m_subtitleTimelineCues; }
+QString PlayerController::getSubtitleTimelineState() const { return d_ptr->m_subtitleTimelineState; }
+double PlayerController::getLengthSeconds() const { return d_ptr->m_length.valid() ? d_ptr->m_length.toSecf() : 0; }
+
+void PlayerController::setSubtitleTimelineEnabled(bool enabled)
+{
+    Q_D(PlayerController);
+    if (d->m_subtitleTimelineEnabled == enabled) return;
+    d->m_subtitleTimelineEnabled = enabled;
+    d->resetSubtitleTimeline();
+    emit subtitleTimelineEnabledChanged();
+}
+
+void PlayerControllerPrivate::resetSubtitleTimeline()
+{
+    ++m_subtitleTimelineGeneration;
+    m_subtitleTimelineRefresh.stop();
+    m_subtitleTimelineTimeout.stop();
+    if (m_subtitleTimelineRequest) vlc_interrupt_kill(m_subtitleTimelineRequest->interrupt);
+    m_subtitleTimelineRequest.reset();
+    m_subtitleTimelineWorkers.clear();
+    m_subtitleTimelineCues.clear();
+    m_subtitleTimelineState = m_subtitleTimelineEnabled ? QStringLiteral("loading") : QStringLiteral("off");
+    emit q_ptr->subtitleTimelineChanged();
+    if (m_subtitleTimelineEnabled) m_subtitleTimelineRefresh.start();
+}
+
+void PlayerControllerPrivate::readSubtitleTimeline()
+{
+    SubtitleTimelineSource source;
+    bool external = false;
+    SharedInputItem media;
+    SharedEsId selectedId;
+    {
+        vlc_player_locker lock{m_player};
+        if (!isCurrentItemSynced() || !m_currentItem) {
+            m_subtitleTimelineState = QStringLiteral("no-track");
+            emit q_ptr->subtitleTimelineChanged();
+            return;
+        }
+        const vlc_player_track* selected = nullptr;
+        for (size_t i = 0; i < vlc_player_GetTrackCount(m_player, SPU_ES); ++i) {
+            const auto* track = vlc_player_GetTrackAt(m_player, SPU_ES, i);
+            if (track->selected && track->es_id != m_secondarySpuEsId.get()) { selected = track; break; }
+        }
+        if (!selected) {
+            m_subtitleTimelineState = QStringLiteral("no-track");
+            emit q_ptr->subtitleTimelineChanged();
+            return;
+        }
+        media = m_currentItem;
+        selectedId.reset(selected->es_id, true);
+        if (const char* uri = vlc_es_id_GetSourceUri(selected->es_id)) {
+            source.uri = uri;
+            external = true;
+        }
+        const QByteArray id = vlc_es_id_GetStrId(selected->es_id);
+        const qsizetype split = id.indexOf("/spu/");
+        const QByteArray prefix = split < 0 ? QByteArray() : id.first(split + 1);
+        if ((!prefix.isEmpty() && prefix.size() != 33) || (prefix.isEmpty() && !id.startsWith("spu/"))) {
+            m_subtitleTimelineState = QStringLiteral("unavailable");
+            emit q_ptr->subtitleTimelineChanged();
+            return; // Derived closed-caption IDs cannot be reopened as SPU tracks.
+        }
+        source.subtitleIndex = 0;
+        for (size_t i = 0; i < vlc_player_GetTrackCount(m_player, SPU_ES); ++i) {
+            const auto* track = vlc_player_GetTrackAt(m_player, SPU_ES, i);
+            if (track == selected) break;
+            const QByteArray other = vlc_es_id_GetStrId(track->es_id);
+            if (prefix.isEmpty() ? other.startsWith("spu/") : other.startsWith(QByteArray(prefix + "spu/")))
+                ++source.subtitleIndex;
+        }
+        source.duration = vlc_player_GetLength(m_player);
+        if (const auto* video = vlc_player_GetSelectedTrack(m_player, VIDEO_ES)) {
+            const auto& format = video->fmt.video;
+            source.videoWidth = format.i_visible_width;
+            source.videoHeight = format.i_visible_height;
+            if (format.i_frame_rate_base) source.originalFPS = double(format.i_frame_rate) / format.i_frame_rate_base;
+        }
+        {
+            vlc_mutex_locker itemLock{&m_currentItem->lock};
+            if (prefix.isEmpty()) source.uri = m_currentItem->psz_uri;
+            // Preserve trusted per-item settings. The two HTTP header options
+            // below are also explicitly safe in the native HTTP access module.
+            for (int i = 0; i < m_currentItem->i_options; ++i) {
+                QByteArray option = m_currentItem->ppsz_options[i];
+                if (option.startsWith(':')) option.remove(0, 1);
+                const auto equal = option.indexOf('=');
+                QByteArray name = equal < 0 ? option : option.first(equal);
+                const QByteArray value = equal < 0 ? QByteArray() : option.sliced(equal + 1);
+                bool negative = false;
+                int type = config_GetType(name.constData());
+                if (!type && equal < 0 && name.startsWith("no")) {
+                    name.remove(0, name.startsWith("no-") ? 3 : 2);
+                    type = config_GetType(name.constData()); negative = true;
+                }
+                const bool trusted = unsigned(i) < m_currentItem->optflagc
+                    && (m_currentItem->optflagv[i] & VLC_INPUT_OPTION_TRUSTED);
+                if (!type || (!trusted && name != "http-referrer" && name != "http-user-agent")) continue;
+                if (type != VLC_VAR_BOOL && value.isEmpty()) continue;
+                QVariant parsed;
+                switch (type) {
+                case VLC_VAR_BOOL: {
+                    bool number = false; const auto integer = value.toLongLong(&number, 0);
+                    parsed = equal < 0 ? !negative : number ? integer != 0 : value.toLower() == "true" || value.toLower() == "yes";
+                    break;
+                }
+                case VLC_VAR_INTEGER: parsed = value.toLongLong(nullptr, 0); break;
+                case VLC_VAR_FLOAT: parsed = value.toFloat(); break;
+                case VLC_VAR_STRING: parsed = QString::fromUtf8(value); break;
+                default: continue;
+                }
+                source.options.insert(QString::fromUtf8(name), parsed);
+            }
+        }
+        if (external) {
+            source.demux = "subtitle";
+            const float fps = vlc_player_GetAssociatedSubsFPS(m_player);
+            if (source.originalFPS > 1 && fps > 1) source.subtitleRate = source.originalFPS / fps;
+        } else {
+            const auto demux = source.options.value(QStringLiteral("demux")).toString().toUtf8();
+            if (!demux.isEmpty()) source.demux = demux;
+        }
+    }
+    if (source.uri.isEmpty()) {
+        m_subtitleTimelineState = QStringLiteral("unavailable");
+        emit q_ptr->subtitleTimelineChanged();
+        return;
+    }
+    auto request = std::make_shared<TimelineReadRequest>();
+    if (!request->interrupt) {
+        m_subtitleTimelineState = QStringLiteral("unavailable");
+        emit q_ptr->subtitleTimelineChanged();
+        return;
+    }
+    m_subtitleTimelineRequest = request;
+    m_subtitleTimelineTimeout.start();
+    source.deadline = vlc_tick_now() + VLC_TICK_FROM_SEC(15);
+    const auto generation = m_subtitleTimelineGeneration;
+    m_subtitleTimelineWorkers.start([this, request, source, external, generation, media, selectedId]() mutable {
+        auto result = scanSubtitleTimeline(VLC_OBJECT(p_intf), source, request->interrupt);
+        if (external && result.status == SubtitleTimelineScan::Failed) {
+            source.demux = "any";
+            result = scanSubtitleTimeline(VLC_OBJECT(p_intf), source, request->interrupt);
+        }
+        QVariantList cues;
+        if (result.status == SubtitleTimelineScan::Complete) {
+            cues.reserve(result.cues.size());
+            for (const auto& cue : result.cues)
+                cues.append(QVariantMap{{QStringLiteral("start"), double(cue.start) / CLOCK_FREQ},
+                                        {QStringLiteral("stop"), double(cue.stop) / CLOCK_FREQ}});
+        }
+        callAsync([this, generation, media, selectedId, status = result.status, cues = std::move(cues)] {
+            if (generation != m_subtitleTimelineGeneration) return;
+            {
+                vlc_player_locker lock{m_player};
+                const auto* selected = vlc_player_GetTrack(m_player, selectedId.get());
+                if (vlc_player_GetCurrentMedia(m_player) != media.get()
+                    || !selected || !selected->selected || selected->es_id == m_secondarySpuEsId.get()) {
+                    resetSubtitleTimeline();
+                    return;
+                }
+            }
+            m_subtitleTimelineTimeout.stop();
+            m_subtitleTimelineRequest.reset();
+            m_subtitleTimelineCues = std::move(cues);
+            m_subtitleTimelineState = status == SubtitleTimelineScan::Complete
+                ? m_subtitleTimelineCues.isEmpty() ? QStringLiteral("empty") : QStringLiteral("ready")
+                : QStringLiteral("unavailable");
+            msg_Dbg(p_intf, "Subtitle timeline: %lld cues, status %d", static_cast<long long>(m_subtitleTimelineCues.size()), int(status));
+            emit q_ptr->subtitleTimelineChanged();
+        });
+    });
+}
+
+bool PlayerController::getAudioWaveformEnabled() const { return d_ptr->m_audioWaveformEnabled; }
+QVariantList PlayerController::getAudioWaveformPeaks() const { return d_ptr->m_audioWaveformPeaks; }
+QString PlayerController::getAudioWaveformState() const { return d_ptr->m_audioWaveformState; }
+void PlayerController::setAudioWaveformEnabled(bool enabled)
+{
+    Q_D(PlayerController);
+    if (d->m_audioWaveformEnabled == enabled) return;
+    d->m_audioWaveformEnabled = enabled;
+    d->resetAudioWaveform();
+    emit audioWaveformEnabledChanged();
+}
+void PlayerControllerPrivate::resetAudioWaveform()
+{
+    ++m_audioWaveformGeneration;
+    m_audioWaveformRefresh.stop();m_audioWaveformTimeout.stop();
+    if (m_audioWaveformRequest) vlc_interrupt_kill(m_audioWaveformRequest->interrupt);
+    m_audioWaveformRequest.reset();m_audioWaveformWorkers.clear();
+    m_audioWaveformPeaks.clear();
+    m_audioWaveformState = m_audioWaveformEnabled ? QStringLiteral("loading") : QStringLiteral("off");
+    emit q_ptr->audioWaveformChanged();
+    if (m_audioWaveformEnabled) m_audioWaveformRefresh.start();
+}
+void PlayerControllerPrivate::readAudioWaveform()
+{
+    AudioWaveformSource source;
+    SharedInputItem media;SharedEsId selectedId;
+    {
+        vlc_player_locker lock{m_player};
+        const auto* selected = vlc_player_GetSelectedTrack(m_player, AUDIO_ES);
+        if (!isCurrentItemSynced() || !m_currentItem || !selected) {
+            m_audioWaveformState = QStringLiteral("unavailable");emit q_ptr->audioWaveformChanged();return;
+        }
+        media = m_currentItem;selectedId.reset(selected->es_id, true);
+        const QByteArray id = vlc_es_id_GetStrId(selected->es_id);
+        const qsizetype split = id.indexOf("/audio/");
+        const QByteArray prefix = split < 0 ? QByteArray() : id.first(split + 1);
+        if ((!prefix.isEmpty() && prefix.size() != 33) || (prefix.isEmpty() && !id.startsWith("audio/"))) {
+            m_audioWaveformState = QStringLiteral("unavailable");emit q_ptr->audioWaveformChanged();return;
+        }
+        if (const char* uri = vlc_es_id_GetSourceUri(selected->es_id)) source.uri = uri;
+        else { vlc_mutex_locker itemLock{&m_currentItem->lock};source.uri = m_currentItem->psz_uri; }
+        for (size_t i = 0; i < vlc_player_GetTrackCount(m_player, AUDIO_ES); ++i) {
+            const auto* track = vlc_player_GetTrackAt(m_player, AUDIO_ES, i);
+            if (track == selected) break;
+            const QByteArray other = vlc_es_id_GetStrId(track->es_id);
+            if (prefix.isEmpty() ? other.startsWith("audio/") : other.startsWith(QByteArray(prefix + "audio/"))) ++source.audioIndex;
+        }
+        source.duration = vlc_player_GetLength(m_player);
+    }
+    const auto url = QUrl::fromEncoded(source.uri);
+    // A waveform needs a finite local file. Do not replay a stream or device.
+    if (!url.isLocalFile() || !url.host().isEmpty() || source.duration <= 0) {
+        m_audioWaveformState = QStringLiteral("unavailable");emit q_ptr->audioWaveformChanged();return;
+    }
+    const QFileInfo info(url.toLocalFile());
+    if (!info.isFile()) { m_audioWaveformState = QStringLiteral("unavailable");emit q_ptr->audioWaveformChanged();return; }
+    const QString key = QString::fromUtf8(source.uri) + QLatin1Char('|') + QString::number(source.audioIndex)
+        + QLatin1Char('|') + QString::number(source.duration) + QLatin1Char('|') + QString::number(info.size())
+        + QLatin1Char('|') + QString::number(info.lastModified().toMSecsSinceEpoch());
+    if (key == m_audioWaveformCacheKey && !m_audioWaveformCachePeaks.isEmpty()) {
+        m_audioWaveformPeaks = m_audioWaveformCachePeaks;m_audioWaveformState = QStringLiteral("ready");emit q_ptr->audioWaveformChanged();return;
+    }
+    auto request = std::make_shared<TimelineReadRequest>();
+    if (!request->interrupt) { m_audioWaveformState = QStringLiteral("unavailable");emit q_ptr->audioWaveformChanged();return; }
+    m_audioWaveformRequest = request;m_audioWaveformTimeout.start();
+    source.deadline = vlc_tick_now() + VLC_TICK_FROM_SEC(15);
+    const auto generation = m_audioWaveformGeneration;
+    m_audioWaveformWorkers.start([this, request, source, generation, media, selectedId, key] {
+        const auto result = scanAudioWaveform(VLC_OBJECT(p_intf), source, request->interrupt);
+        QVariantList peaks;
+        if (result.status == AudioWaveformScan::Complete) { peaks.reserve(result.peaks.size());for (float peak : result.peaks) peaks.append(peak); }
+        callAsync([this, generation, media, selectedId, key, peaks = std::move(peaks)] {
+            if (generation != m_audioWaveformGeneration) return;
+            {
+                vlc_player_locker lock{m_player};
+                const auto* selected = vlc_player_GetTrack(m_player, selectedId.get());
+                if (vlc_player_GetCurrentMedia(m_player) != media.get() || !selected || !selected->selected) { resetAudioWaveform();return; }
+            }
+            m_audioWaveformTimeout.stop();m_audioWaveformRequest.reset();
+            m_audioWaveformPeaks = peaks;
+            m_audioWaveformState = peaks.isEmpty() ? QStringLiteral("unavailable") : QStringLiteral("ready");
+            if (!peaks.isEmpty()) { m_audioWaveformCacheKey = key;m_audioWaveformCachePeaks = peaks; }
+            emit q_ptr->audioWaveformChanged();
+        });
+    });
+}
+
 // PLAYBACK
+
+QUrl PlayerController::getSeekPreview() const
+{
+    Q_D(const PlayerController);
+    return d->m_seekPreview;
+}
+
+double PlayerController::getSeekPreviewPosition() const
+{
+    Q_D(const PlayerController);
+    return d->m_seekPreviewPosition;
+}
+
+bool PlayerController::getSeekPreviewEnabled() const
+{
+    Q_D(const PlayerController);
+    return d->m_seekPreviewEnabled;
+}
+
+void PlayerController::setSeekPreviewEnabled(bool enabled)
+{
+    Q_D(PlayerController);
+    if (d->m_seekPreviewEnabled == enabled) return;
+    d->m_seekPreviewEnabled = enabled;
+    if (enabled) d->updateSeekSampling();
+    else d->resetSeekPreview();
+    emit seekPreviewEnabledChanged();
+}
+
+void PlayerControllerPrivate::cancelSeekRequest()
+{
+    ++m_seekGeneration;
+    if (m_seekRequest) {
+        vlc_preparser_Cancel(m_seekPreparser, m_seekRequest);
+        vlc_preparser_req_Release(m_seekRequest);
+        m_seekRequest = nullptr;
+    }
+    m_seekRequestBackground = false;
+}
+
+void PlayerControllerPrivate::resetSeekPreview()
+{
+    Q_Q(PlayerController);
+    m_seekSampleTimer.stop();
+    m_seekPreviewActive = false;
+    m_pendingSeekPosition = -1;
+    cancelSeekRequest();
+    m_seekPreviewCache.clear();
+    m_seekSamplePoints.clear();
+    m_seekSampleLength = 0;
+    m_seekSampleFailures = 0;
+    m_seekPreviewPosition = -1;
+    if (!m_seekPreview.isEmpty()) {
+        m_seekPreview = QUrl();
+        emit q->seekPreviewChanged();
+    }
+}
+
+void PlayerControllerPrivate::updateSeekSampling()
+{
+    Q_Q(PlayerController);
+    const bool started = m_playing_status == PlayerController::PLAYING_STATE_STARTED
+        || m_playing_status == PlayerController::PLAYING_STATE_PLAYING
+        || m_playing_status == PlayerController::PLAYING_STATE_PAUSED;
+    if (!m_seekPreviewEnabled || !started) {
+        resetSeekPreview();
+        return;
+    }
+    if (!m_hasVideo || !q->isSeekable() || !m_length.valid() || m_length.toVLCTick() <= 0
+        || m_buffering < 1) {
+        m_seekSampleTimer.stop();
+        if (m_seekRequestBackground) cancelSeekRequest();
+        return;
+    }
+    const vlc_tick_t length = m_length.toVLCTick();
+    const bool first = m_seekSampleLength != length;
+    if (first) {
+        m_seekSamplePoints = SeekPreviewCache::samplesFor(length);
+        m_seekSampleLength = length;
+        m_seekSampleFailures = 0;
+    }
+    if (!m_seekPreviewActive && !m_seekRequest && !m_seekSamplePoints.empty()
+        && m_seekSampleFailures < 3 && !m_seekSampleTimer.isActive())
+        m_seekSampleTimer.start(first ? 1500 : 500);
+}
+
+void PlayerControllerPrivate::sampleSeekPreview()
+{
+    if (m_seekPreviewActive || m_seekRequest || m_seekSamplePoints.empty()) return;
+    if (!startSeekPreview(m_seekSamplePoints.front(), true)) {
+        m_seekSamplePoints.removeFirst();
+        ++m_seekSampleFailures;
+        updateSeekSampling();
+    }
+}
+
+void PlayerController::cancelSeekPreview()
+{
+    Q_D(PlayerController);
+    d->m_seekPreviewActive = false;
+    d->m_pendingSeekPosition = -1;
+    if (!d->m_seekRequestBackground) d->cancelSeekRequest();
+    d->m_seekPreviewPosition = -1;
+    if (!d->m_seekPreview.isEmpty()) {
+        d->m_seekPreview = QUrl();
+        emit seekPreviewChanged();
+    }
+    d->updateSeekSampling();
+}
+
+void PlayerController::requestSeekPreview(double position)
+{
+    Q_D(PlayerController);
+    if (!d->m_seekPreviewEnabled || !std::isfinite(position) || position < 0 || position > 1
+        || !d->m_length.valid() || d->m_length.toVLCTick() <= 0 || !isSeekable()) {
+        cancelSeekPreview();
+        return;
+    }
+    d->m_seekPreviewActive = true;
+    d->m_seekSampleTimer.stop();
+    const vlc_tick_t length = d->m_length.toVLCTick();
+    const vlc_tick_t time = std::min(length - 1, vlc_tick_t(position * length));
+    const vlc_tick_t bucket = time / SeekPreviewCache::Bucket * SeekPreviewCache::Bucket;
+    const auto exact = d->m_seekPreviewCache.exact(bucket);
+    const auto cached = exact ? exact : d->m_seekPreviewCache.nearest(bucket);
+    if (cached) {
+        d->m_seekPreview = cached->image;
+        d->m_seekPreviewPosition = double(cached->time) / length;
+        emit seekPreviewChanged();
+    }
+    if (exact) {
+        // An older in-flight frame must not replace this cached pointer target.
+        d->cancelSeekRequest();
+        d->m_pendingSeekPosition = -1;
+        return;
+    }
+    // Coarse work yields to the pointer. Finish an active precise decode so
+    // continuous movement cannot cancel every frame before it is available.
+    if (d->m_seekRequestBackground) d->cancelSeekRequest();
+    if (d->m_seekRequest) {
+        d->m_pendingSeekPosition = position;
+        return;
+    }
+    d->startSeekPreview(bucket, false);
+}
+
+bool PlayerControllerPrivate::startSeekPreview(vlc_tick_t bucket, bool background)
+{
+    auto* d = this;
+    if (!m_seekPreviewEnabled || m_seekRequest || !m_length.valid()) return false;
+    const vlc_tick_t length = m_length.toVLCTick();
+    if (length <= 0) return false;
+    SharedInputItem media;
+    {
+        vlc_player_locker lock{m_player};
+        if (!isCurrentItemSynced()) return false;
+        media = m_currentItem;
+    }
+    if (!media) return false;
+    ++m_seekGeneration;
+    if (!d->m_seekPreparser) {
+        vlc_preparser_cfg cfg{};
+        cfg.types = VLC_PREPARSER_TYPE_THUMBNAIL;
+        cfg.max_thumbnailer_threads = 1;
+        cfg.timeout = VLC_TICK_FROM_SEC(15);
+        cfg.external_process = false;
+        d->m_seekPreparser = vlc_preparser_New(VLC_OBJECT(d->p_intf), &cfg);
+        if (!d->m_seekPreparser) return false;
+    }
+
+    struct Request {
+        PlayerControllerPrivate* owner;
+        quint64 generation;
+        vlc_tick_t time;
+        vlc_tick_t length;
+        bool background;
+    };
+    static const vlc_thumbnailer_cbs callbacks = {
+        [](vlc_preparser_req*, int status, picture_t* picture, void* data) {
+            std::unique_ptr<Request> request(static_cast<Request*>(data));
+            auto* owner = request->owner;
+            QUrl imageUrl;
+            vlc_tick_t decodedTime = request->time;
+            if (status == VLC_SUCCESS && picture) {
+                msg_Dbg(owner->p_intf, "%s: requested %" PRId64 ", decoded %" PRId64,
+                        request->background ? "Seek preview sample" : "Seek preview",
+                        request->time, picture->date);
+                // Some demuxers return a nearby frame even for precise seeks.
+                // Label the decoded frame, rather than the requested position.
+                if (picture->date >= VLC_TICK_0)
+                    decodedTime = std::clamp(picture->date - VLC_TICK_0, vlc_tick_t(0), request->length);
+                block_t* pixels = nullptr;
+                video_format_t format{};
+                const auto& source = picture->format;
+                const double aspect = double(source.i_visible_width) / std::max(1u, source.i_visible_height)
+                    * (source.i_sar_num && source.i_sar_den ? double(source.i_sar_num) / source.i_sar_den : 1.0);
+                const bool portrait = aspect < 1;
+                if (picture_Export(VLC_OBJECT(owner->p_intf), &pixels, &format, picture,
+                                   VLC_CODEC_RGBA, portrait ? 0 : 252, portrait ? 252 : 0, false) == VLC_SUCCESS) {
+                    if (format.i_width > 0 && format.i_width <= 252
+                        && format.i_height > 0 && format.i_height <= 252
+                        && pixels->i_buffer >= size_t(format.i_width) * format.i_height * 4) {
+                        QImage image(pixels->p_buffer, format.i_width, format.i_height,
+                                     format.i_width * 4, QImage::Format_RGBA8888);
+                        QByteArray png;
+                        QBuffer buffer(&png);
+                        buffer.open(QIODevice::WriteOnly);
+                        if (image.save(&buffer, "PNG"))
+                            imageUrl = SeekPreviewImageProvider::url(png);
+                    }
+                    block_Release(pixels);
+                }
+            }
+            if (imageUrl.isEmpty())
+                msg_Dbg(owner->p_intf, "Seek preview unavailable: status %d at %" PRId64,
+                        status, request->time);
+            owner->callAsync([owner, generation = request->generation, time = request->time, decodedTime,
+                              length = request->length, background = request->background, imageUrl] {
+                if (owner->m_seekGeneration != generation) return;
+                vlc_preparser_req_Release(owner->m_seekRequest);
+                owner->m_seekRequest = nullptr;
+                owner->m_seekRequestBackground = false;
+                const bool saved = owner->m_seekPreviewCache.insert(time, imageUrl, decodedTime, background);
+                if (background) {
+                    owner->m_seekSamplePoints.removeOne(time);
+                    owner->m_seekSampleFailures = saved ? 0 : owner->m_seekSampleFailures + 1;
+                } else {
+                    if (saved) {
+                        owner->m_seekSampleFailures = 0;
+                        owner->m_seekPreview = imageUrl;
+                        owner->m_seekPreviewPosition = double(decodedTime) / length;
+                        emit owner->q_func()->seekPreviewChanged();
+                    }
+                    const double pending = std::exchange(owner->m_pendingSeekPosition, -1);
+                    if (pending >= 0) owner->q_func()->requestSeekPreview(pending);
+                }
+                owner->updateSeekSampling();
+            });
+        }
+    };
+    vlc_thumbnailer_arg args{};
+    args.seek.type = decltype(args.seek)::VLC_THUMBNAILER_SEEK_TIME;
+    args.seek.time = bucket;
+    args.seek.speed = background ? decltype(args.seek)::VLC_THUMBNAILER_SEEK_FAST
+                                 : decltype(args.seek)::VLC_THUMBNAILER_SEEK_PRECISE;
+    auto request = std::make_unique<Request>(Request{d, d->m_seekGeneration, bucket, length, background});
+    d->m_seekRequest = vlc_preparser_req_NewThumbnail(d->m_seekPreparser, media.get(), &args, &callbacks, request.get());
+    if (!d->m_seekRequest) return false;
+    d->m_seekRequestBackground = background;
+    msg_Dbg(p_intf, "Seek preview request: %s at %" PRId64, background ? "sample" : "precise", bucket);
+    // Callbacks may run before Submit returns, so transfer their context first.
+    Request* context = request.release();
+    if (vlc_preparser_Submit(d->m_seekPreparser, d->m_seekRequest) != VLC_SUCCESS) {
+        delete context;
+        vlc_preparser_req_Release(d->m_seekRequest);
+        d->m_seekRequest = nullptr;
+        d->m_seekRequestBackground = false;
+        return false;
+    }
+    return true;
+}
 
 vlc_player_t * PlayerController::getPlayer() const
 {
@@ -1378,6 +2003,9 @@ void PlayerController::setTime(VLCTime new_time)
 void PlayerController::setPosition(double position)
 {
     Q_D(PlayerController);
+    if (!std::isfinite(position))
+        return;
+    position = std::clamp(position, 0.0, 1.0);
     if (qFuzzyCompare(d->m_position, position))
         return;
 
@@ -1409,6 +2037,26 @@ void PlayerController::jumpBwd()
     vlc_player_JumpTime( d->m_player, vlc_tick_from_sec( -i_interval ) );
 }
 
+void PlayerController::replay()
+{
+    Q_D(PlayerController);
+    vlc_player_locker lock{ d->m_player };
+    if (!d->isCurrentItemSynced() || !vlc_player_IsStarted(d->m_player)
+        || !vlc_player_CanSeek(d->m_player))
+        return;
+    vlc_player_SetPosition(d->m_player, 0);
+    vlc_player_Resume(d->m_player);
+}
+
+void PlayerController::jumpSeconds(int seconds)
+{
+    Q_D(PlayerController);
+    vlc_player_locker lock{ d->m_player };
+    if (!d->isCurrentItemSynced())
+        return;
+    vlc_player_JumpTime(d->m_player, vlc_tick_from_sec(seconds));
+}
+
 void PlayerController::jumpTime(VLCTime i_time)
 {
     Q_D(PlayerController);
@@ -1422,14 +2070,71 @@ void PlayerController::jumpTime(VLCTime i_time)
 void PlayerController::jumpToPos( double new_pos )
 {
     Q_D(PlayerController);
+    if (!std::isfinite(new_pos))
+        return;
+    new_pos = std::clamp(new_pos, 0.0, 1.0);
     {
         vlc_player_locker lock{ d->m_player };
         if( !d->isCurrentItemSynced() )
             return;
         if( vlc_player_IsStarted( d->m_player ) )
-            vlc_player_SetPosition( d->m_player, new_pos );
+        {
+            const auto length = vlc_player_GetLength(d->m_player);
+            if (d->m_seekDragItem && length > 0)
+            {
+                /* Keep a decodable frame before EOF while the pointer is
+                 * held. The full position is committed on release. */
+                vlc_tick_t frame = VLC_TICK_FROM_MS(40);
+                for (size_t i = 0; i < vlc_player_GetTrackCount(d->m_player, VIDEO_ES); ++i)
+                {
+                    const auto* track = vlc_player_GetTrackAt(d->m_player, VIDEO_ES, i);
+                    const auto& format = track->fmt.video;
+                    if (track->selected && format.i_frame_rate && format.i_frame_rate_base)
+                    {
+                        frame = std::max(vlc_tick_t(1),
+                            vlc_tick_from_samples(format.i_frame_rate_base, format.i_frame_rate));
+                        break;
+                    }
+                }
+                const auto lastFrame = std::max(vlc_tick_t(0), length - frame);
+                vlc_player_SetTime(d->m_player,
+                    std::min(vlc_tick_t(length * new_pos), lastFrame));
+            }
+            else
+                vlc_player_SetPosition( d->m_player, new_pos );
+        }
     }
     emit seekRequested( new_pos );
+}
+
+void PlayerController::beginSeekDrag()
+{
+    Q_D(PlayerController);
+    vlc_player_locker lock{d->m_player};
+    if (d->m_seekDragItem || !d->isCurrentItemSynced()
+        || !vlc_player_IsStarted(d->m_player)
+        || !vlc_player_CanSeek(d->m_player) || !vlc_player_CanPause(d->m_player))
+        return;
+    d->m_seekDragItem = d->m_currentItem;
+    d->m_seekDragWasPlaying = !vlc_player_IsPaused(d->m_player);
+    if (d->m_seekDragWasPlaying)
+        vlc_player_Pause(d->m_player);
+}
+
+void PlayerController::finishSeekDrag(double position, bool commit)
+{
+    Q_D(PlayerController);
+    vlc_player_locker lock{d->m_player};
+    if (!d->m_seekDragItem)
+        return;
+    const bool sameItem = d->m_seekDragItem.get() == vlc_player_GetCurrentMedia(d->m_player);
+    d->m_seekDragItem.reset();
+    if (!sameItem || !d->isCurrentItemSynced() || !vlc_player_IsStarted(d->m_player))
+        return;
+    if (commit && std::isfinite(position) && vlc_player_CanSeek(d->m_player))
+        vlc_player_SetPosition(d->m_player, std::clamp(position, 0.0, 1.0));
+    if (d->m_seekDragWasPlaying)
+        vlc_player_Resume(d->m_player);
 }
 
 void PlayerController::frameNext()
@@ -1545,6 +2250,24 @@ void PlayerController::setSubtitleFPS(float fps)
     if( !d->isCurrentItemSynced() )
         return;
     vlc_player_SetAssociatedSubsFPS( d->m_player, fps );
+}
+
+QVariantMap PlayerController::getPlaybackStatistics() const
+{
+    Q_D(const PlayerController);
+    const auto& stats = d->m_stats;
+    const auto counter = [](uint64_t value) { return QVariant::fromValue<qulonglong>(value); };
+    return {{QStringLiteral("readBytes"), counter(stats.i_read_bytes)},
+        {QStringLiteral("inputBitrate"), stats.f_input_bitrate * 8000.},
+        {QStringLiteral("streamBitrate"), stats.f_demux_bitrate * 8000.},
+        {QStringLiteral("decodedVideo"), counter(stats.i_decoded_video)},
+        {QStringLiteral("displayedPictures"), counter(stats.i_displayed_pictures)},
+        {QStringLiteral("latePictures"), counter(stats.i_late_pictures)},
+        {QStringLiteral("lostPictures"), counter(stats.i_lost_pictures)},
+        {QStringLiteral("decodedAudio"), counter(stats.i_decoded_audio)},
+        {QStringLiteral("playedAudioBuffers"), counter(stats.i_played_abuffers)},
+        {QStringLiteral("lostAudioBuffers"), counter(stats.i_lost_abuffers)},
+        {QStringLiteral("corruptedPackets"), counter(stats.i_demux_corrupted)}};
 }
 
 //TITLE/CHAPTER/MENU
@@ -2285,6 +3008,9 @@ PRIMITIVETYPE_GETTER(bool, isPausable, m_capabilities & VLC_PLAYER_CAP_PAUSE)
 PRIMITIVETYPE_GETTER(bool, isRateChangable, m_capabilities & VLC_PLAYER_CAP_CHANGE_RATE)
 PRIMITIVETYPE_GETTER(bool, canRestorePlayback, m_canRestorePlayback);
 PRIMITIVETYPE_GETTER(float, getSubtitleFPS, m_subtitleFPS)
+PRIMITIVETYPE_GETTER(int, getSubtitleTextScale, m_subtitleTextScale)
+PRIMITIVETYPE_GETTER(int, getSubtitleTextSizeMode, m_subtitleTextSizeMode)
+PRIMITIVETYPE_GETTER(int, getSubtitleTextPixelSize, m_subtitleTextPixelSize)
 PRIMITIVETYPE_GETTER(bool, hasVideoOutput, m_hasVideo)
 PRIMITIVETYPE_GETTER(float, getBuffering, m_buffering)
 PRIMITIVETYPE_GETTER(float, getVolume, m_volume)

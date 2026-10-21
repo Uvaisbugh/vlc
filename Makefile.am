@@ -12,10 +12,25 @@ DIST_SUBDIRS = m4 $(SUBDIRS)
 EXTRA_DIST = \
 	buildsystem/cargo-test.py \
 	buildsystem/check_qml_module.py \
+	buildsystem/extract-qt-ui.py \
+	buildsystem/test_extract_qt_ui.py \
 	extras/include/x86/x86inc.asm \
 	extras/include/x86/x86util.asm \
 	extras/package/macosx/package.mak \
 	extras/package/win32/package.mak \
+	extras/package/release/version.py \
+	extras/package/release/package.py \
+	extras/package/release/build-native.sh \
+	extras/package/release/build-windows.sh \
+	extras/package/release/build-medialibrary.sh \
+	extras/package/release/package-linux.sh \
+	extras/package/release/bundle-linux-runtime.py \
+	extras/package/release/verify.py \
+	extras/package/release/Dockerfile.linux \
+	extras/package/release/tests/test_version.py \
+	extras/package/release/tests/test_verify.py \
+	extras/package/release/tests/test_package.py \
+	doc/RELEASING.md \
 	extras/package/npapi.am
 
 dist_noinst_SCRIPTS = bootstrap

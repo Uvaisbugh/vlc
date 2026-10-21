@@ -16,6 +16,7 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston MA 02110-1301, USA.
  *****************************************************************************/
 #include "interface_window_handler.hpp"
+#include "window_fullscreen.hpp"
 #include "mainctx.hpp"
 #include "compositor.hpp"
 #include <player/player_controller.hpp>
@@ -38,7 +39,7 @@ void setWindowState(QWindow *window, Qt::WindowState state)
     // so that our window handling code works.
     // see issue #28071
     const auto original = window->windowStates();
-    window->setWindowStates(original | state);
+    setWindowStatesPreservingGeometry(window, original | state);
 }
 
 }
@@ -69,7 +70,10 @@ InterfaceWindowHandler::InterfaceWindowHandler(qt_intf_t *_p_intf, MainCtx* main
     m_window->setIcon( QApplication::windowIcon() );
     m_window->setOpacity( var_InheritFloat( p_intf, "qt-opacity" ) );
 
-    QVLCTools::restoreWindowPosition( getSettings(), m_window, QSize(600, 420) );
+    if (var_InheritBool(p_intf, "qt-remember-window-geometry"))
+        QVLCTools::restoreWindowPosition(getSettings(), m_window, QSize(960, 540));
+    else
+        m_window->resize(960, 540);
 
     // this needs to be called asynchronously
     // otherwise QQuickWidget won't initialize properly
@@ -100,7 +104,7 @@ InterfaceWindowHandler::InterfaceWindowHandler(qt_intf_t *_p_intf, MainCtx* main
         }
 
         int margin = m_mainCtx->windowExtendedMargin() * 2;
-        int width = 320 + margin;
+        int width = 640 + margin;
         int height = 360 + margin;
 
         double intfScaleFactor = m_mainCtx->getIntfScaleFactor();
@@ -176,7 +180,8 @@ InterfaceWindowHandler::~InterfaceWindowHandler()
 {
     m_window->removeEventFilter(this);
     /* Save this size */
-    QVLCTools::saveWindowPosition(getSettings(), m_window);
+    if (var_InheritBool(p_intf, "qt-remember-window-geometry"))
+        QVLCTools::saveWindowPosition(getSettings(), m_window);
     assert(qApp);
     if (!qApp->property("isDying").toBool())
     {
@@ -370,6 +375,7 @@ void InterfaceWindowHandler::setInterfaceVisible(bool visible, bool _requestActi
 {
     if (visible)
     {
+        m_mainCtx->clearStartupHide();
         switch ( m_window->visibility() )
         {
         case QWindow::Hidden:
@@ -407,6 +413,7 @@ void InterfaceWindowHandler::setInterfaceFullScreen( bool fs )
 void InterfaceWindowHandler::setRaise()
 {
     assert(m_window);
+    m_mainCtx->clearStartupHide();
 
     switch ( m_window->visibility() )
     {
@@ -428,7 +435,8 @@ void InterfaceWindowHandler::setRaise()
 void InterfaceWindowHandler::setBoss()
 {
     THEMPL->pause();
-    if( m_mainCtx->getSysTray() )
+    const auto *tray = m_mainCtx->getSysTray();
+    if (tray && tray->isAvailableAndVisible())
     {
         setInterfaceHiden();
     }
@@ -471,6 +479,7 @@ void InterfaceWindowHandler::setInterfaceHiden()
 
 void InterfaceWindowHandler::setInterfaceShown()
 {
+    m_mainCtx->clearStartupHide();
     m_window->setVisible(true);
 }
 
@@ -481,12 +490,15 @@ void InterfaceWindowHandler::setInterfaceMinimized()
 
 void InterfaceWindowHandler::setInterfaceMaximized()
 {
+    m_mainCtx->clearStartupHide();
     setWindowState(m_window, Qt::WindowMaximized);
 }
 
 void InterfaceWindowHandler::setInterfaceNormal()
 {
-    m_window->showNormal();
+    m_mainCtx->clearStartupHide();
+    setWindowStatesPreservingGeometry(m_window, Qt::WindowNoState);
+    m_window->setVisible(true);
 }
 
 

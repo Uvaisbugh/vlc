@@ -19,6 +19,7 @@
 #include <QQuickItem>
 
 #include <memory>
+#include <atomic>
 
 #include "qt.hpp"
 #include "mlthreadpool.hpp"
@@ -41,10 +42,14 @@ public:
     Q_PROPERTY(int  parsingProgress READ parsingProgress NOTIFY parsingProgressChanged FINAL)
     Q_PROPERTY(QString discoveryEntryPoint READ discoveryEntryPoint NOTIFY discoveryEntryPointChanged FINAL)
     Q_PROPERTY(bool idle READ idle NOTIFY idleChanged FINAL)
+    Q_PROPERTY(QStringList folderRoots READ folderRoots NOTIFY folderRootsChanged FINAL)
 
 public:
     MediaLib(qt_intf_t* _intf, vlc::playlist::PlaylistController* playlistController, QObject* _parent = nullptr );
     ~MediaLib();
+    // Reuse roots already read by the library/settings model without probing devices.
+    QStringList folderRoots() const { return m_folderRoots; }
+    void setFolderRoots(QStringList roots);
 
     Q_INVOKABLE static MLItemId deserializeMlItemIdFromString(const QString& serialized_id);
 
@@ -60,8 +65,36 @@ public:
     Q_INVOKABLE void insertIntoPlaylist(size_t index, const QVariantList &itemIds /*QList<MLParentId>*/, const QStringList &options = {});
 
     Q_INVOKABLE void reload();
+    Q_INVOKABLE void resyncFolder(const QUrl& url, QJSValue callback);
 
     Q_INVOKABLE void mlInputItem(const QVector<MLItemId>& itemIdVector, QJSValue callback);
+    Q_INVOKABLE void mediaState(const QUrl& url, bool create, QJSValue callback);
+    Q_INVOKABLE void addLibraryFiles(const QList<QUrl>& urls, QJSValue callback);
+    Q_INVOKABLE void setMediaState(const QUrl& url, const QString& field, bool value, QJSValue callback);
+    Q_INVOKABLE void playlistState(const MLItemId& id, QJSValue callback);
+    Q_INVOKABLE void playlistTrackTargets(const MLItemId& id, QJSValue callback);
+    Q_INVOKABLE void trackAssignmentRows(const QVariantMap& target, bool subtitles, QJSValue callback);
+    Q_INVOKABLE void prepareTrackDrop(const QList<QUrl>& urls, bool subtitles, QJSValue callback);
+    Q_INVOKABLE void trackAssignmentSources(const QUrl& folder, bool subtitles, QJSValue callback);
+    QVariantMap matchTrackAssignments(const QList<QUrl>& media, const QList<QUrl>& tracks) const;
+    Q_INVOKABLE void requestTrackMatches(const QList<QUrl>& media, const QList<QUrl>& tracks, QJSValue callback);
+    Q_INVOKABLE void cancelTrackMatching();
+    Q_INVOKABLE void saveTrackAssignments(const QVariantList& rows, bool subtitles, QJSValue callback);
+    Q_INVOKABLE QString trackFolderRuleDefinition(const QVariantList& rows, const QUrl& folder,
+                                                  const QUrl& source, const QString& inherited = QString()) const;
+    Q_INVOKABLE void saveTrackAssignmentsWithRule(const QVariantList& rows, bool subtitles,
+                                                 const QVariantMap& rule, QJSValue callback);
+    Q_INVOKABLE void setPlaylistFavorite(const MLItemId& id, bool favorite, QJSValue callback);
+    Q_INVOKABLE void savePlaylistDetails(const MLItemId& id, const QString& name, const QUrl& cover, QJSValue callback);
+    Q_INVOKABLE void shuffleAndPlay(const MLItemId& id);
+    void exportPlaylist(const MLItemId& id, const QUrl& file, const QByteArray& format,
+                        QObject* receiver, std::function<void(const QString&)> callback);
+    struct TrackAddition {
+        QList<QUrl> added;
+        QString error;
+    };
+    void addMediaTracks(const QUrl& media, const QList<QUrl>& tracks, bool subtitles,
+                        QObject* receiver, std::function<void(const TrackAddition&)> callback);
 
     inline bool idle() const { return m_idle; }
     inline int discoveryPending() const { return m_discoveryPending; }
@@ -166,6 +199,9 @@ public:
     void cancelMLTask(const QObject* object, quint64 taskId);
 
 signals:
+    void folderRootsChanged();
+    void mediaStateChanged(const QString& id);
+    void playlistDetailsChanged(const MLItemId& id, const QString& name, const QUrl& cover);
     void discoveryStarted();
     void discoveryCompleted();
     void parsingProgressChanged( quint32 percent );
@@ -174,6 +210,11 @@ signals:
     void idleChanged();
 
 private:
+    void saveTrackAssignmentsImpl(const QVariantList& rows, bool subtitles,
+                                 const QVariantMap& rule, QJSValue callback);
+    enum class MediaStateAction { Read, Ensure, Played, Favorite };
+    void requestMediaState(const QUrl& url, MediaStateAction action, bool value, QJSValue callback);
+    void requestPlaylistState(const MLItemId& id, bool update, bool favorite, QJSValue callback);
     static void onMediaLibraryEvent( void* data, const vlc_ml_event_t* event );
 
 private:
@@ -184,12 +225,15 @@ private:
     bool m_discoveryPending = false;
     int m_parsingProgress = 0;
     QString m_discoveryEntryPoint;
+    QStringList m_folderRoots;
 
     /* Medialibrary */
     vlc_medialibrary_t* m_ml;
     std::unique_ptr<vlc_ml_event_callback_t, std::function<void(vlc_ml_event_callback_t*)>> m_event_cb;
     ThreadRunner* m_runner = nullptr;
 
+    quint64 m_trackMatchTask = 0;
+    std::shared_ptr<std::atomic_bool> m_trackMatchCancelled;
     QMap<QVector<MLItemId>, QVector<QJSValue>> m_inputItemQuery;
 };
 

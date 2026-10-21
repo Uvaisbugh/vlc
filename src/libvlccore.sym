@@ -9,6 +9,7 @@ aout_EnableFilter
 aout_Interleave
 aout_Deinterleave
 aout_filter_GetVout
+aout_filter_UpdateVoutFormat
 aout_FormatPrepare
 aout_FormatPrint
 aout_FormatPrintChannels
@@ -71,14 +72,22 @@ config_ChainParse
 config_ChainParseOptions
 config_ExistIntf
 config_FindConfig
+config_ExpandStartupOptions
+config_FreeStartupOptions
+config_ValidateStartupOptions
 config_GetFloat
 config_GetSysPath
 config_GetUserDir
 config_GetInt
+config_GetInterfaceLanguage
+config_GetSystemInterfaceLanguage
+config_ApplyInterfaceLanguage
 config_GetIntChoices
 config_GetPsz
 config_GetPszChoices
 config_GetType
+config_IsPersistent
+config_ForEachPersistent
 config_PutFloat
 config_PutInt
 config_PutPsz
@@ -144,6 +153,8 @@ vlc_filter_LoadModule
 vlc_filter_UnloadModule
 FromCharset
 vlc_find_iso639
+vlc_iso639_languages
+vlc_get_system_language
 vlc_http_auth_Init
 vlc_http_auth_Deinit
 vlc_http_auth_ParseWwwAuthenticateHeader
@@ -296,6 +307,8 @@ vlc_memstream_printf
 vlc_ntp_time
 vlc_Log
 vlc_LogSet
+vlc_LogSubscribe
+vlc_LogUnsubscribe
 vlc_vaLog
 vlc_tracer_Create
 vlc_tracer_Destroy
@@ -420,6 +433,9 @@ subpicture_Delete
 subpicture_New
 subpicture_NewFromPicture
 subpicture_Update
+subpicture_UpdateWithTextSize
+vlc_subpicture_InvalidateTextStyle
+vlc_subpicture_GetTextStyleRevision
 vlc_spu_regions_Clear
 vlc_render_subpicture_New
 vlc_render_subpicture_Delete
@@ -527,6 +543,7 @@ video_format_LogDifferences
 video_format_Setup
 video_format_Print
 vlc_actions_get_id
+vlc_actions_update
 vlc_actions_get_key_names
 vlc_actions_get_keycodes
 vlc_b64_decode
@@ -757,6 +774,8 @@ vlc_queue_DequeueAll
 vlc_gl_Create
 vlc_gl_CreateOffscreen
 vlc_gl_Delete
+vlc_gl_ResizeOffscreen
+vlc_gl_SetOffscreenResizeCallback
 vlc_gl_surface_Create
 vlc_gl_surface_CheckSize
 vlc_gl_surface_Destroy
@@ -841,6 +860,7 @@ vlc_es_id_Hold
 vlc_es_id_Release
 vlc_es_id_GetInputId
 vlc_es_id_GetCat
+vlc_es_id_GetSourceUri
 vlc_es_id_GetStrId
 vlc_es_id_IsStrIdStable
 vlc_encoder_Destroy
@@ -865,6 +885,7 @@ vlc_player_CycleTrack
 vlc_player_DisplayPosition
 vlc_player_DecrementRate
 vlc_player_Delete
+vlc_player_GetAssociatedSubsFPS
 vlc_player_GetAtoBLoop
 vlc_player_GetCapabilities
 vlc_player_GetCategoryDelay
@@ -888,6 +909,8 @@ vlc_player_GetSignal
 vlc_player_GetState
 vlc_player_GetStatistics
 vlc_player_GetSubtitleTextScale
+vlc_player_GetSubtitleTextSizeMode
+vlc_player_GetSubtitleTextPixelSize
 vlc_player_GetTeletextPage
 vlc_player_GetTime
 vlc_player_GetTitleList
@@ -949,6 +972,8 @@ vlc_player_SetStartPaused
 vlc_player_SetPlayAndPause
 vlc_player_SetRepeatCount
 vlc_player_SetSubtitleTextScale
+vlc_player_SetSubtitleTextSizeMode
+vlc_player_SetSubtitleTextPixelSize
 vlc_player_SetTeletextEnabled
 vlc_player_SetTeletextTransparency
 vlc_player_SetTrackCategoryEnabled
@@ -978,9 +1003,12 @@ vlc_playlist_item_Hold
 vlc_playlist_item_Release
 vlc_playlist_item_GetMedia
 vlc_playlist_item_GetId
+vlc_playlist_item_GetParent
 vlc_playlist_view_Count
 vlc_playlist_view_Get
 vlc_playlist_New
+vlc_playlist_GetPreparseDepth
+vlc_playlist_SetPreparseDepth
 vlc_playlist_Delete
 vlc_playlist_Lock
 vlc_playlist_Unlock

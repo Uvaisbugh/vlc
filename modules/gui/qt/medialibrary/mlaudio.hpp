@@ -29,8 +29,8 @@ class MLAudio : public MLMedia
 public:
     MLAudio(vlc_medialibrary_t *_ml, const vlc_ml_media_t *_data);
 
-    QString getAlbumTitle() const;
-    QString getArtist() const;
+    QString getAlbumTitle() const { return m_albumTitle; }
+    QString getArtist() const { return m_artist; }
     unsigned int getTrackNumber() const;
     unsigned int getDiscNumber() const;
     MLItemId getAlbumId() const;
@@ -38,7 +38,5 @@ public:
 private:
     QString m_albumTitle;
     QString m_artist;
-    unsigned int m_trackNumber;
-    unsigned int m_discNumber;
     int64_t m_albumId = INVALID_MLITEMID_ID;
 };

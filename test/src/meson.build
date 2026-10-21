@@ -1,4 +1,66 @@
 vlc_tests += {
+    'name': 'test_src_misc_file_logger',
+    'sources': files('misc/file_logger.c'),
+    'suite': ['src', 'test_src'],
+    'link_with': [libvlc, libvlccore],
+    'module_depends': ['file_logger'],
+}
+
+vlc_tests += {
+    'name': 'test_src_misc_log_observer',
+    'sources': files('misc/log_observer.c'),
+    'suite': ['src', 'test_src'],
+    'link_with': [libvlc, libvlccore],
+}
+
+vlc_tests += {
+    'name' : 'test_src_misc_iso_language',
+    'sources' : files('misc/iso_language.c'),
+    'suite' : ['src', 'test_src'],
+    'link_with' : [libvlccore],
+}
+
+if host_system == 'windows'
+    if not have_win_store
+        vlc_tests += {
+            'name': 'test_src_misc_win32_proxy',
+            'sources': files('misc/win32_proxy.c'),
+            'suite': ['src', 'test_src'],
+            'link_with': [libvlccore],
+            'dependencies': [cc.find_library('winhttp'), cc.find_library('ws2_32')],
+        }
+    endif
+    vlc_tests += {
+        'name': 'test_src_config_dirs_win32',
+        'sources': files('config/dirs_win32.c'),
+        'suite': ['src', 'test_src'],
+        'link_with': [libvlccore],
+        'dependencies': [cc.find_library('shell32'), cc.find_library('ole32'),
+                         cc.find_library('advapi32'), cc.find_library('uuid')],
+    }
+    vlc_tests += {
+        'name' : 'test_src_misc_win32_pipe',
+        'sources' : files('misc/win32_pipe.c'),
+        'suite' : ['src', 'test_src'],
+        'link_with' : [libvlccore],
+    }
+endif
+
+vlc_tests += {
+    'name': 'test_src_config_language',
+    'sources': files('config/language.c'),
+    'suite': ['src', 'test_src'],
+    'link_with': [libvlc, libvlccore],
+}
+
+vlc_tests += {
+    'name': 'test_src_config_startup',
+    'sources': files('config/startup.c'),
+    'suite': ['src', 'test_src'],
+    'link_with': [libvlc, libvlccore],
+}
+
+vlc_tests += {
     'name' : 'test_src_config_chain',
     'sources' : files('config/chain.c'),
     'suite' : ['src', 'test_src'],
@@ -41,6 +103,35 @@ vlc_tests += {
         'clock/clock_start.c',
         '../../src/clock/clock.c',
         '../../src/clock/clock_internal.c'),
+    'suite' : ['src', 'test_src'],
+    'link_with' : [libvlc, libvlccore],
+}
+
+vlc_tests += {
+    'name' : 'test_src_misc_actions',
+    'sources' : files('misc/actions.c'),
+    'suite' : ['src', 'test_src'],
+    'link_with' : [libvlc, libvlccore],
+}
+
+vlc_tests += {
+    'name' : 'test_src_misc_instance_policy',
+    'sources' : files('misc/instance_policy.c'),
+    'suite' : ['src', 'test_src'],
+    'link_with' : [libvlc, libvlccore],
+}
+
+vlc_tests += {
+    'name' : 'test_src_misc_instance_forward',
+    'sources' : files('misc/instance_forward.c'),
+    'suite' : ['src', 'test_src'],
+    'link_with' : [libvlc, libvlccore],
+    'module_depends' : dbus_dep.found() ? ['dbus'] : [],
+}
+
+vlc_tests += {
+    'name' : 'test_src_misc_addons',
+    'sources' : files('misc/addons.c'),
     'suite' : ['src', 'test_src'],
     'link_with' : [libvlc, libvlccore],
 }
@@ -107,6 +198,25 @@ vlc_tests += {
     'sources' : files('input/stream_fifo.c'),
     'suite' : ['src', 'test_src'],
     'link_with' : [libvlc, libvlccore],
+}
+
+vlc_tests += {
+    'name' : 'test_src_preparser_subtree_identity',
+    'sources' : files('preparser/subtree_identity.c'),
+    'suite' : ['src', 'test_src'],
+    'link_with' : [libvlc, libvlccore],
+    'module_depends' : ['demux_mock'],
+}
+
+vlc_tests += {
+    'name' : 'test_src_preparser_fetcher_shutdown',
+    'sources' : files('preparser/fetcher_shutdown.c',
+        '../../src/preparser/art.c', '../../src/misc/interrupt.c',
+        '../../src/misc/objects.c', '../../src/misc/variables.c',
+        '../../src/input/item.c', '../../src/text/strings.c'),
+    'suite' : ['src', 'test_src'],
+    'link_with' : [libvlc, libvlccore],
+    'include_directories' : include_directories('../../src'),
 }
 
 vlc_tests += {
@@ -204,6 +314,83 @@ vlc_tests += {
 }
 
 vlc_tests += {
+    'name' : 'test_src_player_delays',
+    'sources' : files('player/common.h', 'player/modules.c', 'player/delays.c'),
+    'suite' : ['src', 'test_src'],
+    'link_with' : [libvlc, libvlccore],
+    'module_depends' : vlc_plugins_targets.keys()
+}
+
+vlc_tests += {
+    'name' : 'test_src_playlist_preparse_depth',
+    'sources' : files('playlist/preparse_depth.c'),
+    'suite' : ['src', 'test_src'],
+    'link_with' : [libvlc, libvlccore],
+    'module_depends' : ['demux_mock'],
+}
+
+vlc_tests += {
+    'name' : 'test_src_playlist_export',
+    'sources' : files('playlist/export.c'),
+    'suite' : ['src', 'test_src'],
+    'link_with' : [libvlccore, libvlc],
+    'module_depends' : ['export'],
+}
+
+vlc_tests += {
+    'name' : 'test_src_input_item_update',
+    'sources' : files('input/item_update.c'),
+    'suite' : ['test_src'],
+    'link_with' : [libvlccore, libvlc],
+}
+
+vlc_tests += {
+    'name' : 'test_src_input_subtitle_ass_text',
+    'sources' : files('input/subtitle_ass_text.c'),
+    'suite' : ['src', 'test_src'],
+}
+
+vlc_tests += {
+    'name' : 'test_src_input_overlay_opacity',
+    'sources' : files('input/overlay_opacity.c'),
+    'suite' : ['src', 'test_src'],
+    'link_with' : [libvlc, libvlccore],
+    'module_depends' : ['marq']
+}
+
+vlc_tests += {
+    'name' : 'test_src_input_subtitle_encoding',
+    'sources' : files('input/subtitle_encoding.c'),
+    'suite' : ['src', 'test_src'],
+    'link_with' : [libvlc, libvlccore],
+    'module_depends' : ['subsdec']
+}
+
+vlc_tests += {
+    'name' : 'test_src_input_subtitle_duration',
+    'sources' : files('input/subtitle_duration.c'),
+    'suite' : ['src', 'test_src'],
+    'link_with' : [libvlc, libvlccore],
+    'module_depends' : ['subsdelay']
+}
+
+vlc_tests += {
+    'name' : 'test_src_input_subtitle_style',
+    'sources' : files('input/subtitle_style.c'),
+    'suite' : ['src', 'test_src'],
+    'link_with' : [libvlc, libvlccore],
+    'module_depends' : ['freetype']
+}
+
+vlc_tests += {
+    'name' : 'test_src_misc_media_library_startup',
+    'sources' : files('misc/media_library_startup.c'),
+    'suite' : ['src', 'test_src'],
+    'link_with' : [libvlc, libvlccore],
+    'module_depends' : ['medialibrary'],
+}
+
+vlc_tests += {
     'name' : 'test_src_player_lifecycle',
     'sources' : files(
         'player/common.h',
@@ -248,7 +435,17 @@ vlc_tests += {
 }
 
 vlc_tests += {
+    'name' : 'test_src_player_video_filters',
+    'sources' : files('player/common.h', 'player/modules.c', 'player/video_filters.c'),
+    'suite' : ['src', 'test_src'],
+    'link_with' : [libvlc, libvlccore],
+    'c_args' : ['-DVIDEO_FILTER_TEST'],
+    'module_depends' : vlc_plugins_targets.keys()
+}
+
+vlc_tests += {
     'name' : 'test_src_player_outputs',
+    'c_args' : ['-DOUTPUT_TEARDOWN_TEST'],
     'sources' : files(
         'player/common.h',
         'player/modules.c',
@@ -360,6 +557,15 @@ vlc_tests += {
 }
 
 vlc_tests += {
+    'name': 'test_src_video_output_filter_format',
+    'sources': files('video_output/filter_format.c'),
+    'suite': ['src', 'test_src'],
+    'link_with': [libvlc, libvlccore],
+    'module_depends': ['demux_mock', 'rawvideo'],
+    'env': ['VLC_PLUGIN_PATH=' + vlc_build_root / 'modules'],
+}
+
+vlc_tests += {
     'name' : 'test_src_video_output_inhibit',
     'sources' : files('video_output/inhibit.c'),
     'suite' : ['src', 'test_src'],
@@ -436,4 +642,35 @@ vlc_tests += {
     'sources' : files('video_output/spu.c'),
     'suite' : ['src', 'test_src'],
     'link_with' : [libvlc, libvlccore],
+}
+
+vlc_tests += {
+    'name' : 'test_src_video_output_osd',
+    'sources' : files('video_output/osd.c',
+                      '../../src/video_output/video_text.c',
+                      '../../src/video_output/video_widgets.c'),
+    'suite' : ['src', 'test_src'],
+    'c_args' : ['-Dvout_PutSubpicture=CaptureSubpicture'],
+    'link_with' : [libvlc, libvlccore],
+}
+
+vlc_tests += {
+    'name': 'test_src_playlist',
+    'sources': files(
+        '../../src/playlist/test.c',
+        '../../src/playlist/content.c',
+        '../../src/playlist/control.c',
+        '../../src/playlist/item.c',
+        '../../src/playlist/notify.c',
+        '../../src/playlist/player.c',
+        '../../src/playlist/playlist.c',
+        '../../src/playlist/preparse.c',
+        '../../src/playlist/randomizer.c',
+        '../../src/playlist/request.c',
+        '../../src/playlist/shuffle.c',
+        '../../src/playlist/sort.c'),
+    'c_args': ['-DTEST_PLAYLIST'],
+    'include_directories': include_directories('../../src'),
+    'suite': ['src', 'test_src'],
+    'link_with': [libvlccore],
 }

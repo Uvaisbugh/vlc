@@ -46,6 +46,44 @@ Item {
     Accessible.name: qsTr("Main interface")
     AccessibleCompat.id: "mainInterface"
 
+    RedesignPreferencesWindow { parent: g_mainInterface; videoBackdropContent: dialogBackdrop }
+    RedesignOnboardingWindow { }
+
+    Component {
+        id: dialogBackdrop
+        RedesignSurfaceBackdrop {
+            sourceItem: g_mainInterface
+            scaleFactor: VLCStyle.scale
+        }
+    }
+
+    Loader {
+        id: networkStreams
+        anchors.fill: parent
+        source: "qrc:///qt/qml/VLC/Player/RedesignNetworkStreams.qml"
+        onLoaded: item.videoBackdropContent = dialogBackdrop
+    }
+    Connections {
+        target: DialogsProvider
+        function onShowRedesignNetworkStreams() { if (networkStreams.item) networkStreams.item.begin() }
+        function onShowRedesignAddToPlaylist(media, type) { if (addToPlaylist.item) addToPlaylist.item.beginSelection(media, type) }
+        function onShowRedesignTrackAssignments(target, subtitles) { if (trackAssignments.item) trackAssignments.item.begin(target, subtitles) }
+    }
+    Loader {
+        id: addToPlaylist
+        anchors.fill: parent
+        active: MainCtx.mediaLibraryAvailable
+        source: active ? "qrc:///qt/qml/VLC/Player/RedesignAddToPlaylist.qml" : ""
+        onLoaded: item.videoBackdropContent = dialogBackdrop
+    }
+    Loader {
+        id: trackAssignments
+        anchors.fill: parent
+        active: MainCtx.mediaLibraryAvailable
+        source: active ? "qrc:///qt/qml/VLC/Player/RedesignTrackAssignments.qml" : ""
+        onLoaded: item.videoBackdropContent = dialogBackdrop
+    }
+
     property bool _extendedFrameVisible: MainCtx.windowSuportExtendedFrame
                                       && MainCtx.clientSideDecoration
                                       && (MainCtx.intfMainWindow.visibility === Window.Windowed)
@@ -320,13 +358,15 @@ Item {
 
                 switch (MainCtx.effectiveMainInterfaceMode) {
                 case MainCtx.MAININTERFACE_MODE_MINIMAL:
-                    return "qrc:///qt/qml/VLC/Player/MinimalView.qml"
+                    return Player.isInteractive ? "qrc:///qt/qml/VLC/Player/MinimalView.qml"
+                                                : "qrc:///qt/qml/VLC/Player/RedesignPlayer.qml"
                 case  MainCtx.MAININTERFACE_MODE_PLAYER:
-                    return "qrc:///qt/qml/VLC/Player/Player.qml"
+                    return Player.isInteractive ? "qrc:///qt/qml/VLC/Player/Player.qml"
+                                                : "qrc:///qt/qml/VLC/Player/RedesignPlayer.qml"
                 default:
                     console.error("unexpected interface mode", MainCtx.effectiveMainInterfaceMode)
                 case MainCtx.MAININTERFACE_MODE_MAINDISPLAY:
-                    return "qrc:///qt/qml/VLC/MainInterface/MainDisplay.qml"
+                    return "qrc:///qt/qml/VLC/Player/RedesignPlayer.qml"
                 }
             }
         }
