@@ -56,8 +56,9 @@ def stage_runtime(archive, checksums, output, run, packaging_commit, release_tag
         cache.unlink()
     (target / 'portable').mkdir(exist_ok=True)
     (target / 'SOURCE_COMMIT.txt').write_text(binary_commit + '\n', newline='\n')
-    for name in ('README.md', 'AUTHORS', 'THANKS'):
+    for name in ('AUTHORS', 'THANKS'):
         shutil.copy2(ROOT / name, target / name)
+    shutil.copy2(ROOT / 'doc/releases/reimagined-preview.md', target / 'README.md')
     shutil.copy2(ROOT / 'modules/gui/qt/pixmaps/redesign/CREDITS.md', target / 'DESIGN_CREDITS.md')
     (target / 'START_HERE.txt').write_text(
         'VLC Reimagined - unofficial Windows x64 preview\n\n'
