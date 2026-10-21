@@ -174,4 +174,4 @@ jobs:
           sha256sum --check SHA256SUMS.txt
           gh release create "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
             --prerelease --title 'VLC Reimagined - Windows x64 Preview' \
-            --notes-file RELEASE_NOTES.md -- *.exe *.zip *.gz BUILD_INFO.json SHA256SUMS.txt VALIDATION.txt
+            --notes-file RELEASE_NOTES.md -- *.exe *.zip *.gz BUILD_INFO.json SHA256SUMS.txt VALIDATION.txt RELEASE_NOTES.md
