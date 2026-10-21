@@ -1,5 +1,13 @@
 # Building this fork on Linux (Meson)
 
+> **VLC Reimagined scope:** this guide and its validation table were inherited
+> from [David Sojevic's implementation](https://github.com/dsojevic/juxtopposed-vlc).
+> Its CachyOS results and historical test counts are not current validation of
+> `Uvaisbugh/vlc`. The baseline below disables the media library. Start with the
+> [development guide](reimagined/DEVELOPMENT.md) for this fork's branch and patched
+> dependencies, and [status](reimagined/STATUS.md) for the separate 82-suite CI result.
+> No verified Linux desktop package is advertised by VLC Reimagined.
+
 > Status on CachyOS: configure, full default build,
 > headless playback, native Wayland playback, and a staged
 > install are validated (see "Validation" below). The Qt
