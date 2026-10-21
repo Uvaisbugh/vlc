@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Official VLC support
+    url: https://www.videolan.org/support/
+    about: For the official VideoLAN application; report VLC Reimagined fork issues here.

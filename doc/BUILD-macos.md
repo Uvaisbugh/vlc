@@ -1,5 +1,12 @@
 # Building this fork on macOS (Meson)
 
+> **VLC Reimagined scope:** this recipe and the machine-specific results below
+> were inherited from [David Sojevic's implementation](https://github.com/dsojevic/juxtopposed-vlc).
+> They have not been independently validated for this fork. This baseline
+> disables the media library and builds the Qt interface, not the separate Cocoa
+> interface. No verified macOS download is offered here. See the
+> [development guide](reimagined/DEVELOPMENT.md) and [current status](reimagined/STATUS.md).
+
 These steps build the redesigned Qt interface from source on macOS with
 Homebrew dependencies and run it from the build tree. They were tested on
 Apple Silicon (arm64) with macOS 27, the Xcode Command Line Tools (full

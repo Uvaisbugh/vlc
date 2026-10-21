@@ -1,6 +1,16 @@
 # Cutting a release
 
-The release pipeline builds four native targets. The next release is `4.0.0-beta.4`:
+> **VLC Reimagined scope:** this multi-platform tooling reference was inherited
+> from [David Sojevic's implementation](https://github.com/dsojevic/juxtopposed-vlc).
+> Its configured targets, prospective filenames and historical release sequence
+> are not a list of verified downloads from this fork. The published preview is
+> the [dated Windows x64 release](https://github.com/Uvaisbugh/vlc/releases/tag/redesign-preview-2026.10.20);
+> see [current evidence](reimagined/STATUS.md) and [beginner instructions](reimagined/GETTING_STARTED.md).
+> Existing package names remain unchanged. Publishing/tagging is a separate
+> maintainer action after candidate validation.
+
+The inherited release pipeline configures four native targets. Its source version
+is `4.0.0-beta.4`; these are expected output names, not a support matrix:
 
 | Target | Download |
 | --- | --- |
@@ -199,7 +209,14 @@ artifact. VLC and design/font attribution remain in `README.md` and the bundle.
 
 ## Update discovery and future installation
 
-The Qt interface checks this fork's public GitHub Releases API. Automatic checks
+The inherited Qt interface checks `dsojevic/juxtopposed-vlc`'s public GitHub
+Releases API, not `Uvaisbugh/vlc`. Its URL validation and asset-name matching also
+target that repository. VLC Reimagined's date-based preview tag and ZIP name do
+not follow the selector's semantic-version/package scheme below. Use manual
+downloads from this fork until the full updater contract has been aligned and
+tested; see the [roadmap](../ROADMAP.md).
+
+In the inherited implementation, automatic checks
 are enabled by default in update-enabled builds and run at startup when the last
 check date is at least the configured number of days ago (default: one day).
 Existing `qt-updates-days` settings are preserved. Background failures are quiet;
