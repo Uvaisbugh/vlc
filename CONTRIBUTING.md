@@ -43,20 +43,19 @@ cross-link the relevant report rather than filing duplicates.
 
 ## Make a change
 
-The active redesign branch is **`codex/vlc-redesign`**. The default `master`
-branch is not the redesign starting point. Fork the repository on GitHub, then
+The redesign is integrated into **`master`**. Fork the repository on GitHub, then
 replace `YOUR_USERNAME` in these commands with your account:
 
 ```sh
-git clone --branch codex/vlc-redesign https://github.com/YOUR_USERNAME/vlc.git vlc-reimagined
+git clone --branch master https://github.com/YOUR_USERNAME/vlc.git vlc-reimagined
 cd vlc-reimagined
 git remote add project https://github.com/Uvaisbugh/vlc.git
 git switch -c codex/my-change
 ```
 
-If your fork copied only the default branch, clone it normally, add the `project`
-remote above, then run `git fetch project codex/vlc-redesign` and
-`git switch -c codex/my-change FETCH_HEAD`. Keep complete history for dependency
+If your fork is behind, add the `project` remote above, then run
+`git fetch project master` and create your contribution branch from
+`project/master`. Keep complete history for dependency
 selection; if you used a shallow clone, run `git fetch --unshallow` first.
 
 See [DEVELOPMENT.md](doc/reimagined/DEVELOPMENT.md) for build, test, and debugging
@@ -94,7 +93,7 @@ Maintainers can arrange the relevant CI checks; newcomers need no release keys.
 ## Open a pull request
 
 Push your contribution branch to your own fork when ready, then open a PR with
-**base `Uvaisbugh/vlc:codex/vlc-redesign`**. Explain the user problem, the resulting
+**base `Uvaisbugh/vlc:master`**. Explain the user problem, the resulting
 behavior, and your validation. Link an issue if there is one; a small documentation
 fix does not need an issue first. Use the PR template and keep changes focused.
 

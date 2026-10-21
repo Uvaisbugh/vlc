@@ -68,9 +68,10 @@ say a later-verified step is pending; use dated results and exact job/source IDs
   [release_info.cpp](../../modules/gui/qt/util/release_info.cpp) also validates
   that repository's URLs and `vlc-juxtopposed-*` assets. The dated preview does
   not match its semantic tag scheme. Use manual downloads from this fork.
-- The main repository defaults to `master`; redesign development is on
-  `codex/vlc-redesign`. These documentation changes must be integrated into the
-  public landing branch before that page or its default issue chooser improves.
+- The redesign was merged into `master` in [PR #1](https://github.com/Uvaisbugh/vlc/pull/1),
+  merge commit `2416c97b`. Its tree matches the audited source `7f395288`.
+  New contributions target `master`. This documentation update must also reach
+  that branch before the landing page or default issue chooser improves.
 - Existing workflows lack general PR triggers. No checks on a PR means untested,
   not passed. New templates become available through GitHub after reaching the
   default branch; plain issues and the Markdown instructions remain alternatives.

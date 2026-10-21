@@ -15,7 +15,7 @@ Credit any reference assets and remove private content. -->
 
 ## Review notes
 
-- [ ] Base branch is `Uvaisbugh/vlc:codex/vlc-redesign`.
+- [ ] Base branch is `Uvaisbugh/vlc:master`.
 - [ ] Scope is focused; validation and any limitations are described above.
 - [ ] Existing credits/licenses are preserved; any new assets have source/license details.
 

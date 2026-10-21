@@ -54,11 +54,10 @@ limitations, and screenshot provenance. See the [roadmap](ROADMAP.md) for ways t
 
 ## Build from source
 
-The redesign currently lives on `codex/vlc-redesign`, not the repository's
-default `master` branch:
+The redesign is integrated into the repository's default `master` branch:
 
 ```sh
-git clone --branch codex/vlc-redesign https://github.com/Uvaisbugh/vlc.git vlc-reimagined
+git clone --branch master https://github.com/Uvaisbugh/vlc.git vlc-reimagined
 cd vlc-reimagined
 ```
 

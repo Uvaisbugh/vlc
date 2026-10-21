@@ -24,7 +24,7 @@ not a newly completed clean-machine build.
 In a Git-capable shell:
 
 ```sh
-git clone --branch codex/vlc-redesign https://github.com/Uvaisbugh/vlc.git vlc-reimagined
+git clone --branch master https://github.com/Uvaisbugh/vlc.git vlc-reimagined
 cd vlc-reimagined
 git rev-parse HEAD
 ```
@@ -32,7 +32,7 @@ git rev-parse HEAD
 Keep full history: dependency selection uses Git history. For an existing shallow
 clone, use `git fetch --unshallow`. To inspect the exact published binary source,
 use `git switch --detach redesign-preview-2026.10.20`; return to
-`codex/vlc-redesign` before creating a contribution branch. The tag's binary
+`master` before creating a contribution branch. The tag's binary
 source is `0279317bbd0e26bfaec7e6cc3b854d2b92801de8`.
 
 ## Architecture and source map
