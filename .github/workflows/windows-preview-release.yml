@@ -1,0 +1,177 @@
+name: Windows preview installer and release
+
+on:
+  workflow_dispatch:
+    inputs:
+      build_run:
+        description: Successful Windows x64 VLC build run from master
+        required: true
+        type: string
+      release_tag:
+        description: Unique preview tag (reimagined-preview-YYYY.MM.DD)
+        required: true
+        default: reimagined-preview-2026.10.21
+        type: string
+      publish:
+        description: Publish the tested installer and portable ZIP
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: windows-preview-release
+  cancel-in-progress: false
+
+jobs:
+  package-and-test:
+    runs-on: windows-2022
+    timeout-minutes: 40
+    env:
+      GH_TOKEN: ${{ github.token }}
+      BUILD_RUN: ${{ inputs.build_run }}
+      RELEASE_TAG: ${{ inputs.release_tag }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Verify source and build identity
+        shell: pwsh
+        run: |
+          if ($env:GITHUB_REF -ne 'refs/heads/master') { throw 'Release packaging must run from master.' }
+          if ($env:BUILD_RUN -notmatch '^\d+$') { throw 'Invalid build run ID.' }
+          if ($env:RELEASE_TAG -notmatch '^reimagined-preview-\d{4}\.\d{2}\.\d{2}(\.\d+)?$') { throw 'Invalid preview tag.' }
+          gh run view $env:BUILD_RUN --repo $env:GITHUB_REPOSITORY --json conclusion,headBranch,headSha,workflowName,url,jobs > build-run.json
+          if ($LASTEXITCODE -ne 0) { throw 'Cannot read build identity.' }
+          $run = Get-Content build-run.json -Raw | ConvertFrom-Json
+          python -c "import importlib.util,json; s=importlib.util.spec_from_file_location('p','extras/package/release/package-preview.py'); m=importlib.util.module_from_spec(s); s.loader.exec_module(m); m.verified_run(json.load(open('build-run.json',encoding='utf-8-sig')))"
+          if ($LASTEXITCODE -ne 0) { throw 'Native build and all validation jobs must pass.' }
+          git merge-base --is-ancestor $run.headSha HEAD
+          if ($LASTEXITCODE -ne 0) { throw 'Build source is not an ancestor of this release source.' }
+          git diff --exit-code $run.headSha HEAD -- modules src lib include compat contrib share po configure.ac meson.build meson_options.txt buildsystem m4 autotools extras/ci extras/package/win32/build.sh
+          if ($LASTEXITCODE -ne 0) { throw 'Application or dependency source changed after the native build. Build master again.' }
+          "BINARY_COMMIT=$($run.headSha)" >> $env:GITHUB_ENV
+
+      - name: Download verified native runtime and test fixture
+        shell: pwsh
+        run: |
+          gh run download $env:BUILD_RUN --repo $env:GITHUB_REPOSITORY --name "vlc-windows-x64-$env:BINARY_COMMIT" --dir incoming
+          if ($LASTEXITCODE -ne 0) { throw 'Runtime download failed.' }
+          gh run download $env:BUILD_RUN --repo $env:GITHUB_REPOSITORY --name "smoke-media-$env:BINARY_COMMIT" --dir fixture
+          if ($LASTEXITCODE -ne 0) { throw 'Fixture download failed.' }
+
+      - name: Test release tools and stage portable package
+        shell: pwsh
+        run: |
+          python -m unittest discover -s extras/package/release/tests
+          if ($LASTEXITCODE -ne 0) { throw 'Release-tool tests failed.' }
+          python extras/package/release/package-preview.py --runtime incoming/vlc-windows-x64.tar.gz --checksums incoming/SHA256SUMS --run-json build-run.json --output release --packaging-commit $env:GITHUB_SHA --release-tag $env:RELEASE_TAG
+          if ($LASTEXITCODE -ne 0) { throw 'Preview staging failed.' }
+
+      - name: Compile installer
+        shell: pwsh
+        run: |
+          $compiler = 'C:\Program Files (x86)\Inno Setup 6\ISCC.exe'
+          if (-not (Test-Path -LiteralPath $compiler)) { throw 'Inno Setup 6 compiler is missing.' }
+          $runtime = (Resolve-Path 'release/VLC Reimagined').Path
+          $output = (Resolve-Path release).Path
+          $version = $env:RELEASE_TAG -replace '^reimagined-preview-', ''
+          & $compiler "/DRuntimeDir=$runtime" "/DOutputDir=$output" "/DPreviewVersion=$version" extras/package/win32/reimagined-setup.iss
+          if ($LASTEXITCODE -ne 0) { throw 'Installer compilation failed.' }
+
+      - name: Test extracted portable package, installation, repair, and uninstall
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $portable = Join-Path $env:RUNNER_TEMP 'Portable preview with spaces'
+          Expand-Archive release/vlc-reimagined-windows-x64-portable.zip $portable
+          ./extras/package/win32/test-runtime.ps1 -RuntimeDirectory "$portable/VLC Reimagined" -EvidenceDirectory evidence/portable -VideoFixture fixture/sample.mkv
+          $install = Join-Path $env:RUNNER_TEMP 'Installed preview with spaces'
+          $setup = (Resolve-Path release/vlc-reimagined-windows-x64-setup.exe).Path
+          $arguments = @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/TASKS=""', ('/DIR="' + $install + '"'))
+          $process = Start-Process -FilePath $setup -ArgumentList $arguments -PassThru -Wait
+          if ($process.ExitCode -ne 0) { throw "Installer failed: $($process.ExitCode)" }
+          $shortcut = Join-Path $env:APPDATA 'Microsoft/Windows/Start Menu/Programs/VLC Reimagined.lnk'
+          if (-not (Test-Path -LiteralPath $shortcut)) { throw 'Start menu shortcut is missing.' }
+          ./extras/package/win32/test-runtime.ps1 -RuntimeDirectory $install -EvidenceDirectory evidence/installed -VideoFixture fixture/sample.mkv
+          $marker = Join-Path $install 'portable/keep-user-profile.txt'
+          'profile preservation check' | Set-Content -LiteralPath $marker
+          $process = Start-Process -FilePath $setup -ArgumentList $arguments -PassThru -Wait
+          if ($process.ExitCode -ne 0 -or -not (Test-Path -LiteralPath $marker)) { throw 'Repair did not preserve the profile.' }
+          $uninstaller = Join-Path $install 'unins000.exe'
+          $process = Start-Process -FilePath $uninstaller -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART' -PassThru -Wait
+          if ($process.ExitCode -ne 0) { throw 'Uninstaller failed.' }
+          # Inno's temporary uninstaller may finish cleanup just after the launcher exits.
+          for ($attempt = 0; $attempt -lt 20 -and (Test-Path "$install/vlc.exe"); $attempt++) { Start-Sleep -Seconds 1 }
+          if (Test-Path "$install/vlc.exe") { throw 'Uninstall left the executable behind.' }
+          if (Test-Path -LiteralPath $shortcut) { throw 'Uninstall left the Start menu shortcut behind.' }
+          if (-not (Test-Path -LiteralPath $marker)) { throw 'Uninstall removed user profile data.' }
+          'Passed on Windows Server 2022 x64: extracted portable startup/audio/video; installer installation, Start menu shortcut and installed startup/audio/video; repair preserves profile; uninstall removes program/shortcut and preserves profile. Unsigned. Hardware audio output, every codec, and consumer OS version coverage are not certified.' | Set-Content release/VALIDATION.txt
+
+      - name: Add matching source and checksums
+        shell: pwsh
+        run: |
+          git archive --format=tar.gz --prefix=vlc-reimagined-source/ --output=release/vlc-reimagined-source.tar.gz HEAD
+          if ($LASTEXITCODE -ne 0) { throw 'Source archive failed.' }
+          Copy-Item doc/releases/reimagined-preview.md release/RELEASE_NOTES.md
+          "`nBinary source: $env:BINARY_COMMIT`nPackaging/source snapshot: $env:GITHUB_SHA`nNative validation: https://github.com/$env:GITHUB_REPOSITORY/actions/runs/$env:BUILD_RUN`nInstaller validation: https://github.com/$env:GITHUB_REPOSITORY/actions/runs/$env:GITHUB_RUN_ID" | Add-Content release/RELEASE_NOTES.md
+          $files = Get-ChildItem release -File | Where-Object Name -ne 'SHA256SUMS.txt' | Sort-Object Name
+          $sums = foreach ($file in $files) { '{0}  {1}' -f (Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash.ToLower(), $file.Name }
+          $sums | Set-Content release/SHA256SUMS.txt -Encoding ascii
+
+      - name: Preserve validation diagnostics
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: preview-installer-evidence-${{ github.sha }}
+          path: |
+            evidence/
+            build-run.json
+          if-no-files-found: warn
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: reimagined-preview-release
+          path: |
+            release/*.exe
+            release/*.zip
+            release/*.gz
+            release/*.json
+            release/*.txt
+            release/*.md
+          if-no-files-found: error
+
+  publish:
+    needs: package-and-test
+    if: inputs.publish
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+      actions: read
+    env:
+      GH_TOKEN: ${{ github.token }}
+      RELEASE_TAG: ${{ inputs.release_tag }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: reimagined-preview-release
+          path: release
+      - name: Publish tested Windows preview
+        run: |
+          set -euo pipefail
+          cd release
+          sha256sum --check SHA256SUMS.txt
+          gh release create "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
+            --prerelease --title 'VLC Reimagined - Windows x64 Preview' \
+            --notes-file RELEASE_NOTES.md -- *.exe *.zip *.gz BUILD_INFO.json SHA256SUMS.txt VALIDATION.txt
