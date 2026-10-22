@@ -10,7 +10,7 @@ Try the [Windows preview](doc/reimagined/GETTING_STARTED.md), read the
 [known limitations](doc/reimagined/STATUS.md), or pick a task from the
 [roadmap](ROADMAP.md). Suggested first contributions include:
 
-- Walk through the ZIP instructions on one Windows x64 machine and record the
+- Walk through the setup or ZIP instructions on one Windows x64 machine and record the
   exact OS version, extraction path, and result.
 - Check keyboard navigation through one player panel; document focus order,
   visible focus, and any unreachable control.
