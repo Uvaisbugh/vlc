@@ -1,8 +1,35 @@
 # VLC Reimagined: status and evidence
 
-Reviewed 2026-10-21 against source `7f39528839a1473cf8919989f0603743101a207b`
-on `codex/vlc-redesign`. This page distinguishes prior validation from the
-documentation audit. [Download instructions](GETTING_STARTED.md) · [Roadmap](../../ROADMAP.md).
+Updated 2026-10-22. [Download instructions](GETTING_STARTED.md) · [Roadmap](../../ROADMAP.md).
+The original documentation audit below used source
+`7f39528839a1473cf8919989f0603743101a207b`; current release evidence is recorded separately.
+
+## Current Windows installer preview
+
+Release: [reimagined-preview-2026.10.22](https://github.com/Uvaisbugh/vlc/releases/tag/reimagined-preview-2026.10.22).
+The setup EXE is the recommended download; a portable ZIP is also provided.
+
+- [Main-branch native build and validation](https://github.com/Uvaisbugh/vlc/actions/runs/39577358051)
+  passed all four jobs: packaging tests, Windows compilation, Windows startup/audio/video,
+  and the native Qt suite (**82 passed, 0 failed**). Native application source:
+  `38e7f2198ea1388e84ff33b2205a476366d415cd`.
+- [Installer packaging and validation](https://github.com/Uvaisbugh/vlc/actions/runs/39731185402)
+  compiled the Inno Setup installer and checked portable playback, installation,
+  the Start menu shortcut, installed playback, repair/profile preservation, and
+  uninstall/program-and-shortcut removal with profile preservation on Windows Server 2022 x64.
+- Packaging/source snapshot: `51ac192e4ddab664f9d5480909bfacee69ac23b4`.
+  The workflow verified that application/dependency source had not changed since
+  the native build. The archive includes the matching application source plus
+  installer/packaging scripts; metadata records both source identities.
+- Release assets include the setup EXE, portable ZIP, source tarball,
+  `BUILD_INFO.json`, `VALIDATION.txt`, release notes, and SHA-256 checksums.
+  The per-user installer requests no administrator privileges, keeps a separate
+  profile, and does not register file associations.
+
+This remains an unsigned preview. Consumer Windows version coverage, every codec,
+hardware audio output, complete design parity and accessibility are not certified.
+Use manual downloads; the inherited updater still points to the earlier fork.
+See [the reproducible Windows release workflow](RELEASING_WINDOWS.md).
 
 ## Provenance
 
@@ -18,7 +45,7 @@ commits are present. This is not an exhaustive audit of VLC's full history.
 Compare with `git diff b876f75f HEAD` rather than attributing the entire redesign
 to this fork. [Integration details](../redesign/INTEGRATION.md).
 
-## Published preview and validation
+## Earlier portable preview and validation (2026-10-20)
 
 The GitHub API confirmed the public, non-draft prerelease
 [`redesign-preview-2026.10.20`](https://github.com/Uvaisbugh/vlc/releases/tag/redesign-preview-2026.10.20).
@@ -62,7 +89,8 @@ say a later-verified step is pending; use dated results and exact job/source IDs
 
 - Only Windows x64 is distributed and validated here. Exact consumer Windows
   version coverage is missing; Linux/macOS package validation remains open.
-- No publisher signature, notarized Mac release, or verified installer is offered.
+- The Windows installer lifecycle is tested on Windows Server 2022 x64. No
+  publisher signature or notarized Mac release is offered.
 - The updater defaults to `dsojevic/juxtopposed-vlc` in
   [github_release_service.hpp](../../modules/gui/qt/util/github_release_service.hpp).
   [release_info.cpp](../../modules/gui/qt/util/release_info.cpp) also validates
@@ -70,11 +98,11 @@ say a later-verified step is pending; use dated results and exact job/source IDs
   not match its semantic tag scheme. Use manual downloads from this fork.
 - The redesign was merged into `master` in [PR #1](https://github.com/Uvaisbugh/vlc/pull/1),
   merge commit `2416c97b`. Its tree matches the audited source `7f395288`.
-  New contributions target `master`. This documentation update must also reach
-  that branch before the landing page or default issue chooser improves.
+  New contributions target `master`. The community documentation and issue
+  templates were subsequently merged through PR #2.
 - Existing workflows lack general PR triggers. No checks on a PR means untested,
-  not passed. New templates become available through GitHub after reaching the
-  default branch; plain issues and the Markdown instructions remain alternatives.
+  not passed. Templates are available on the default branch; plain issues and
+  the Markdown instructions remain alternatives.
 - The Linux/macOS and multi-platform release guides came from the integrated
   project. Their old platform results, filenames and release plans are retained
   as reference, not presented as this fork's completed work.

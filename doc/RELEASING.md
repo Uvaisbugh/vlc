@@ -4,8 +4,9 @@
 > from [David Sojevic's implementation](https://github.com/dsojevic/juxtopposed-vlc).
 > Its configured targets, prospective filenames and historical release sequence
 > are not a list of verified downloads from this fork. The published preview is
-> the [dated Windows x64 release](https://github.com/Uvaisbugh/vlc/releases/tag/redesign-preview-2026.10.20);
+> the [Windows x64 setup and portable release](https://github.com/Uvaisbugh/vlc/releases/tag/reimagined-preview-2026.10.22);
 > see [current evidence](reimagined/STATUS.md) and [beginner instructions](reimagined/GETTING_STARTED.md).
+> For the current installer workflow, use [RELEASING_WINDOWS.md](reimagined/RELEASING_WINDOWS.md).
 > Existing package names remain unchanged. Publishing/tagging is a separate
 > maintainer action after candidate validation.
 

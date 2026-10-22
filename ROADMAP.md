@@ -1,6 +1,6 @@
 # VLC Reimagined community roadmap
 
-Status reviewed on 2026-10-21. This is a list of genuine remaining work, not a
+Status reviewed on 2026-10-22. This is a list of genuine remaining work, not a
 release schedule or a list of assigned issues. No completion dates are promised.
 The [status record](doc/reimagined/STATUS.md) separates source implementation,
 automated checks, and runtime evidence.
@@ -13,7 +13,7 @@ that a contributor is currently assigned. **Planned** work has no completion cla
 | --- | --- | --- | --- |
 | Visual design and usability | Native player, library, queue, settings, theme and customization components; focused tests | Complete the Figma frame/state inventory; compare actual captures at matching size/theme/scale and record deviations. Test empty/error/hover/focus states | P1 / audit in progress |
 | Playback and regression testing | Windows audio/video decode smoke checks; prior local play/pause, seek, subtitle, queue-display and fullscreen checks | Exercise queue advance, multiple tracks, rate, mute/volume, end-of-file, network failures, and representative media; report exact build and reproducible outcomes | P1 / broader coverage planned |
-| Installation and packaging | Published unsigned Windows x64 portable ZIP, matching source and checksum | Establish a Windows consumer-OS compatibility matrix; test fresh extraction and profile isolation; document update/rollback. Validate other platforms before advertising downloads | P1 / planned |
+| Installation and packaging | Windows x64 setup and portable ZIP; native build/playback and installer install/repair/uninstall checks; matching source and checksums | Expand the consumer Windows compatibility matrix and future-version migration checks. Validate other platforms before advertising downloads | P1 / broader coverage planned |
 | Accessibility and localization | Accessible properties and translatable strings exist in parts of the interface | Audit keyboard-only use, focus visibility, screen-reader announcements, reduced motion, text scaling and translated labels. Record each tested control/environment and failure | P1 / audit planned |
 | Documentation and developer experience | Beginner and contributor guides, existing build scripts and CI | Verify the documented setup on a fresh development machine; capture real screenshots and add a short captioned demo; document platform-specific obstacles | P2 / planned |
 | Bug fixes and platform compatibility | Integration fixes for text metrics, add-on metadata bindings and measured dialog opacity; native Qt suite passed on Linux | Reproduce new reports against the exact preview; verify mini-player/PIP transitions and library indexing/persistence; validate Linux/macOS runtime packages independently | P1 / verification planned |
@@ -52,6 +52,7 @@ matching source, logs and checksums. Visual parity and accessibility remain
 separate audits. Use [build/release validation](doc/redesign/BUILD_AND_RELEASE.md)
 and the [release tooling reference](doc/RELEASING.md).
 
-Signing/notarization, installers, additional architectures, and automatic
-installation are future decisions. Existing packaging scripts are not evidence
-that those products have shipped or been validated for VLC Reimagined.
+Signing/notarization, installers for other platforms, additional architectures,
+and automatic updates are future decisions. The current Windows setup and ZIP
+are covered by the [release evidence](doc/reimagined/STATUS.md); other packaging
+scripts are not evidence that more products have shipped or been validated.

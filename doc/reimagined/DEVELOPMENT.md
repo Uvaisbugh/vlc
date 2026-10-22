@@ -18,6 +18,7 @@ not a newly completed clean-machine build.
 | Explore Linux desktop dependencies | [Inherited Linux guide](../BUILD-linux.md); its baseline disables media library |
 | Explore macOS | [Inherited macOS guide](../BUILD-macos.md); no validated macOS distribution from this fork |
 | Understand portable packaging | [Release tooling reference](../RELEASING.md), distinct from current preview evidence |
+| Build the Windows setup installer and publish a preview | [Windows release guide](RELEASING_WINDOWS.md), with install/repair/uninstall gates |
 
 ## Get the right source
 
@@ -182,7 +183,8 @@ unstripped binaries are more useful than the stripped preview. The
 debugging and plugin/library paths. Record source SHA and dependency versions
 when comparing failures.
 
-From the repository root, the release-tool checks need Python 3 but no Qt build:
+From the repository root, use Python 3.12 or later for the release-tool checks;
+the preview packager uses tarfile's safe extraction filter. No Qt build is needed:
 
 ```sh
 python3 extras/package/release/version.py 4.0.0-beta.4

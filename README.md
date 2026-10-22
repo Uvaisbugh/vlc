@@ -18,23 +18,24 @@ not a fresh capture of this fork's Windows preview or proof of complete design p
 
 ## Download and try it
 
-**[Download the Windows x64 portable preview (ZIP, about 100 MB)](https://github.com/Uvaisbugh/vlc/releases/download/redesign-preview-2026.10.20/vlc-redesign-windows-x64-preview.zip)**
+**[Download Windows x64 Setup](https://github.com/Uvaisbugh/vlc/releases/download/reimagined-preview-2026.10.22/vlc-reimagined-windows-x64-setup.exe)** — recommended
 
-[Release notes, matching source, and checksums](https://github.com/Uvaisbugh/vlc/releases/tag/redesign-preview-2026.10.20)
+[Portable ZIP](https://github.com/Uvaisbugh/vlc/releases/download/reimagined-preview-2026.10.22/vlc-reimagined-windows-x64-portable.zip)
+· [Release notes, source, and checksums](https://github.com/Uvaisbugh/vlc/releases/tag/reimagined-preview-2026.10.22)
 · [Installation and troubleshooting](doc/reimagined/GETTING_STARTED.md)
 
-1. Download the ZIP and use **Extract All** into a writable folder.
-2. Open the extracted **VLC Redesign** folder, then double-click **vlc.exe**.
-3. Open a local audio or video file using the app's menu. No installer, build tools,
-   or administrator access is required. Keep the DLLs, plugins, and `portable`
-   folder together.
+1. Download **Windows x64 Setup** and run the EXE.
+2. Follow the wizard. It installs for your account without administrator access.
+3. Open **VLC Reimagined** from the Start menu, then choose a local media file.
 
-The published package still uses the name **VLC Redesign**. Its portable profile
-keeps settings separate from installed VLC. This is an **unsigned preview**.
-Windows x64 is the only distributed platform verified for this release; CI ran
-on Windows Server 2022, with additional local Windows testing recorded without
-an exact OS version. A consumer Windows version compatibility matrix is still
-needed. No verified Linux, macOS, Windows ARM64, or 32-bit download is offered here.
+The installer adds shortcuts and an uninstaller in a separate **VLC Reimagined**
+folder. It keeps a separate profile and leaves official VLC and file associations
+alone. For portable use, extract the entire ZIP and open **VLC Reimagined/vlc.exe**.
+
+This is an **unsigned Windows x64 preview**. Native build/tests, portable playback,
+installation, repair, and uninstall are checked on Windows Server 2022 x64.
+Consumer Windows version coverage is still being documented. No verified Linux,
+macOS, Windows ARM64, or 32-bit download is offered here.
 
 For updates, use this repository's release page manually. The inherited in-app
 updater still targets the earlier community fork.
