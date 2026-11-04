@@ -40,6 +40,27 @@ macOS, Windows ARM64, or 32-bit download is offered here.
 For updates, use this repository's release page manually. The inherited in-app
 updater still targets the earlier community fork.
 
+## Screenshots
+
+### Library sidebar
+
+Browse your media alongside the player with the expandable library sidebar.
+
+![Redesigned VLC player with the Videos library sidebar expanded](doc/images/redesign/sidebar.png)
+
+### Video settings
+
+Keep video controls close to playback, including flip, rotation, zoom, aspect
+ratio, and crop options.
+
+![Redesigned VLC player with the Video settings panel open](doc/images/redesign/video-settings.png)
+
+*Like the player screenshot above, these are real application captures inherited
+from [David Sojevic's implementation](https://github.com/dsojevic/juxtopposed-vlc).
+They illustrate the integrated interface; they are not fresh captures of this
+fork's Windows preview. See [screenshot provenance](doc/reimagined/STATUS.md#screenshots-and-attribution-review)
+for details.*
+
 ## What is here today?
 
 | Area | Current evidence |
