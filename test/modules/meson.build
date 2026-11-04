@@ -370,3 +370,11 @@ if have_wayland and egl_dep.found()
         }
     endforeach
 endif
+
+vlc_tests += {
+    'name' : 'test_modules_video_filter_blend',
+    'sources' : files('video_filter/blend.c'),
+    'suite' : ['modules', 'test_modules'],
+    'link_with' : [libvlc, libvlccore],
+    'module_depends' : ['blend']
+}

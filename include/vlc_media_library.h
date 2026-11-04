@@ -444,6 +444,8 @@ typedef enum vlc_ml_sorting_criteria_t
     VLC_ML_SORTING_ALBUM,
     VLC_ML_SORTING_FILENAME,
     VLC_ML_SORTING_TRACKNUMBER,
+    VLC_ML_SORTING_RATING,
+    VLC_ML_SORTING_TRACKNUMBER_ALBUM_RELEASE_YEAR,
 } vlc_ml_sorting_criteria_t;
 
 /**
@@ -666,6 +668,8 @@ enum vlc_ml_control
     VLC_ML_ALBUM_SET_FAVORITE, /**< arg1: album id; arg2: bool; can fail */
     VLC_ML_GENRE_SET_FAVORITE, /**< arg1: genre id; arg2: bool; can fail */
     VLC_ML_PLAYLIST_SET_FAVORITE, /**< arg1: playlist id; arg2: bool; can fail */
+
+    VLC_ML_CLEAR_HISTORY_BY_MEDIA_TYPE, /**< arg1: vlc_ml_media_type_t (audio or video); can fail */
 
     /** Save subtitle or soundtrack file choices for one media.
      * arg1: media id; arg2: vlc_ml_file_type_t; arg3: const char* const*;
@@ -1118,6 +1122,12 @@ static inline int vlc_ml_resume_background( vlc_medialibrary_t* p_ml )
 static inline int vlc_ml_clear_history( vlc_medialibrary_t* p_ml, vlc_ml_history_type_t type )
 {
     return vlc_ml_control( p_ml, VLC_ML_CLEAR_HISTORY, type );
+}
+
+static inline int vlc_ml_clear_history_by_media_type( vlc_medialibrary_t* p_ml,
+                                                      vlc_ml_media_type_t type )
+{
+    return vlc_ml_control( p_ml, VLC_ML_CLEAR_HISTORY_BY_MEDIA_TYPE, (int)type );
 }
 
 static inline vlc_ml_media_t* vlc_ml_new_external_media( vlc_medialibrary_t* p_ml, const char* psz_mrl )
